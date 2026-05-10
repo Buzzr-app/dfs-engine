@@ -1,0 +1,54 @@
+{
+  "name": "@buzzr/dfs-engine",
+  "version": "0.0.1",
+  "description": "Pure-functional DFS prop grading, payouts, and stat normalization for PrizePicks/Underdog-style contests.",
+  "license": "MIT",
+  "author": "Sarvesh Chidambaram",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run typecheck && npm test && npm run build"
+  },
+  "keywords": [
+    "dfs",
+    "daily-fantasy",
+    "prizepicks",
+    "underdog",
+    "sports-betting",
+    "parlay",
+    "props",
+    "grading",
+    "payouts"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.31.0",
+    "@types/node": "^22.19.18",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3",
+    "vitest": "^2.1.9"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
