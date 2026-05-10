@@ -13,6 +13,7 @@
 import type { DfsPropTypeKey } from '../prop-normalizer';
 import { asDfsPropTypeKey } from '../prop-normalizer';
 import type { PlayerGameLogEntryShape } from '../grading';
+import type { StatExtractionResult } from '../result';
 import type { DfsApp } from '../types';
 import { BASKETBALL_ADAPTERS } from './basketball';
 import { NFL_ADAPTERS } from './nfl';
@@ -108,4 +109,55 @@ export function extractStatForPropViaRegistry(
   if (!table) return null;
   const adapter = table[key];
   return adapter ? adapter(entry, app) : null;
+}
+
+/**
+ * Explained variant of {@link extractStatForPropViaRegistry}. Returns a
+ * discriminated union carrying a reason code on failure so callers can
+ * distinguish unknown-prop / unsupported-league / prop-not-supported-for-
+ * this-league / adapter-returned-null instead of treating every null
+ * identically.
+ *
+ * Use when surfacing manual-grading prompts in UI ("we can't grade
+ * Soccer's Yellow Cards yet" vs "this NBA Points leg needs more data").
+ */
+export function extractStatForPropExplained(
+  propType: string,
+  league: string,
+  entry: PlayerGameLogEntryShape,
+  app: DfsApp,
+): StatExtractionResult {
+  const key = asDfsPropTypeKey(propType);
+  if (!key) {
+    return {
+      ok: false,
+      reason: 'unknown_prop',
+      detail: `propType=${JSON.stringify(propType)} not in DfsPropTypeKey or alias table`,
+    };
+  }
+  const table = getStatAdapter(league);
+  if (!table) {
+    return {
+      ok: false,
+      reason: 'unsupported_league',
+      detail: `league=${JSON.stringify(league)} not registered`,
+    };
+  }
+  const adapter = table[key];
+  if (!adapter) {
+    return {
+      ok: false,
+      reason: 'prop_not_supported_for_league',
+      detail: `prop=${key} has no adapter for league=${league.toUpperCase()}`,
+    };
+  }
+  const value = adapter(entry, app);
+  if (value == null || !Number.isFinite(value)) {
+    return {
+      ok: false,
+      reason: 'adapter_returned_null',
+      detail: `prop=${key} league=${league.toUpperCase()} adapter returned ${String(value)}`,
+    };
+  }
+  return { ok: true, value };
 }

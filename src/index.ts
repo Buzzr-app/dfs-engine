@@ -53,6 +53,7 @@ export {
   detectMidGameDnp,
   reconcileMidGameDnpEntries,
   gradeLegFromActual,
+  gradeLegFromActualExplained,
   shouldRegradeLeg,
   findGameLogCandidates,
   matchGameLogEntry,
@@ -68,10 +69,19 @@ export type {
   MidGameDnpDecision,
 } from './grading';
 
+// Typed Result returns for `*Explained` variants.
+export type {
+  StatExtractionResult,
+  StatExtractionFailure,
+  LegGradingResult,
+  LegGradingFailure,
+} from './result';
+
 // Stat-adapter registry + per-sport tables.
 export {
   getStatAdapter,
   extractStatForPropViaRegistry,
+  extractStatForPropExplained,
   registerLeague,
   unregisterLeague,
   getRegisteredLeagues,
