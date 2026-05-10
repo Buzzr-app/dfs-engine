@@ -72,6 +72,9 @@ export type {
 export {
   getStatAdapter,
   extractStatForPropViaRegistry,
+  registerLeague,
+  unregisterLeague,
+  getRegisteredLeagues,
 } from './stat-adapters';
 export type { StatAdapter, AdapterTable } from './stat-adapters';
 export { BASKETBALL_ADAPTERS } from './stat-adapters/basketball';
