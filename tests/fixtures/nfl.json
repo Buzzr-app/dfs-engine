@@ -1,0 +1,127 @@
+{
+  "_comment": "Adapter-ready NFL gamelog fixtures (post-parseGamelog shape). Label sets mirror real ESPN responses verified against live `/athletes/{id}/gamelog` calls — passing has CMP/ATT/YDS/CMP%/AVG/TD/INT/LNG/SACK/RTG/QBR; rushing has CAR/YDS/AVG/TD/LNG; receiving has REC/TGTS/YDS/AVG/TD/LNG. Used by dfs-stat-adapters.test.ts to drive every NFL prop adapter against realistic data.",
+  "qb_pass_and_rush": {
+    "_player": "Jalen Hurts vs DAL — 2025-09-15 (3 pass TDs, 38 rush yds, 1 rush TD)",
+    "date": "2025-09-15",
+    "minutes": "-",
+    "points": "-",
+    "rebounds": "-",
+    "assists": "-",
+    "steals": "-",
+    "blocks": "-",
+    "turnovers": "-",
+    "threeP": "-",
+    "categories": {
+      "passing": {
+        "CMP": "22",
+        "ATT": "32",
+        "YDS": "275",
+        "CMP%": "68.8",
+        "AVG": "8.6",
+        "TD": "3",
+        "INT": "1",
+        "LNG": "55",
+        "SACK": "2",
+        "RTG": "112.4",
+        "QBR": "78.2"
+      },
+      "rushing": {
+        "CAR": "9",
+        "YDS": "38",
+        "AVG": "4.2",
+        "TD": "1",
+        "LNG": "12"
+      }
+    }
+  },
+  "rb_rush_and_rec": {
+    "_player": "Saquon Barkley vs NYG — 2025-10-12 (115 rush yds, 2 rush TD, 4 rec for 28 yds). Receiving comes after rushing for RBs.",
+    "date": "2025-10-12",
+    "minutes": "-",
+    "points": "-",
+    "rebounds": "-",
+    "assists": "-",
+    "steals": "-",
+    "blocks": "-",
+    "turnovers": "-",
+    "threeP": "-",
+    "categories": {
+      "rushing": {
+        "CAR": "22",
+        "YDS": "115",
+        "AVG": "5.2",
+        "TD": "2",
+        "LNG": "23"
+      },
+      "receiving": {
+        "REC": "4",
+        "TGTS": "5",
+        "YDS": "28",
+        "AVG": "7.0",
+        "TD": "0",
+        "LNG": "11"
+      }
+    }
+  },
+  "wr_receiving_first": {
+    "_player": "Justin Jefferson vs CHI — 2025-11-02 (8 rec for 142 yds, 1 TD; receiving comes BEFORE rushing in ESPN's ordering for WRs)",
+    "date": "2025-11-02",
+    "minutes": "-",
+    "points": "-",
+    "rebounds": "-",
+    "assists": "-",
+    "steals": "-",
+    "blocks": "-",
+    "turnovers": "-",
+    "threeP": "-",
+    "categories": {
+      "receiving": {
+        "REC": "8",
+        "TGTS": "11",
+        "YDS": "142",
+        "AVG": "17.8",
+        "TD": "1",
+        "LNG": "62"
+      }
+    }
+  },
+  "qb_no_rush": {
+    "_player": "Patrick Mahomes vs LAC — 2025-09-29 (380 pass yds, 4 TD, 0 INT, no rushing stats)",
+    "date": "2025-09-29",
+    "minutes": "-",
+    "points": "-",
+    "rebounds": "-",
+    "assists": "-",
+    "steals": "-",
+    "blocks": "-",
+    "turnovers": "-",
+    "threeP": "-",
+    "categories": {
+      "passing": {
+        "CMP": "30",
+        "ATT": "42",
+        "YDS": "380",
+        "CMP%": "71.4",
+        "AVG": "9.0",
+        "TD": "4",
+        "INT": "0",
+        "LNG": "75",
+        "SACK": "1",
+        "RTG": "133.6",
+        "QBR": "92.1"
+      }
+    }
+  },
+  "missing_categories": {
+    "_player": "Hypothetical row where ESPN didn't return categories — adapters should return null for all NFL props",
+    "date": "2025-09-15",
+    "minutes": "-",
+    "points": "-",
+    "rebounds": "-",
+    "assists": "-",
+    "steals": "-",
+    "blocks": "-",
+    "turnovers": "-",
+    "threeP": "-"
+  }
+}
