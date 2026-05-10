@@ -21,12 +21,30 @@ import { MLB_ADAPTERS } from './mlb';
 import { NHL_ADAPTERS } from './nhl';
 
 /**
- * Adapter receives the gamelog entry plus the slip's source app. Most
- * adapters ignore `app`; the MLB Hitter FS / Fantasy Score adapter is
- * the consumer today (per-book formula divergence). One uniform
- * signature beats two-shape dispatch + adapter-type routing.
+ * Per-call options threaded through to every adapter. Most adapters
+ * ignore this; specific ones (currently only MLB Hitter FS / Fantasy
+ * Score) gate on flags here. The shape is open — add new fields as
+ * adapters need them.
  */
-export type StatAdapter = (entry: PlayerGameLogEntryShape, app: DfsApp) => number | null;
+export interface StatAdapterOptions {
+  /**
+   * Enable PrizePicks Hitter FS / Underdog Fantasy Score auto-grading
+   * for MLB batters. Off by default because the formulas require fields
+   * (HBP for PrizePicks) that not all data feeds carry; flip it on once
+   * your upstream parser populates the needed mlbExtras keys.
+   */
+  hitterFsAutoGrade?: boolean;
+}
+
+/**
+ * Adapter receives the gamelog entry, the slip's source app, and an
+ * optional opts bag. Adapters are pure: same inputs → same output.
+ */
+export type StatAdapter = (
+  entry: PlayerGameLogEntryShape,
+  app: DfsApp,
+  opts?: StatAdapterOptions,
+) => number | null;
 export type AdapterTable = Partial<Record<DfsPropTypeKey, StatAdapter>>;
 
 const registry = new Map<string, AdapterTable>();
@@ -102,13 +120,14 @@ export function extractStatForPropViaRegistry(
   league: string,
   entry: PlayerGameLogEntryShape,
   app: DfsApp,
+  opts?: StatAdapterOptions,
 ): number | null {
   const key = asDfsPropTypeKey(propType);
   if (!key) return null;
   const table = getStatAdapter(league);
   if (!table) return null;
   const adapter = table[key];
-  return adapter ? adapter(entry, app) : null;
+  return adapter ? adapter(entry, app, opts) : null;
 }
 
 /**
@@ -126,6 +145,7 @@ export function extractStatForPropExplained(
   league: string,
   entry: PlayerGameLogEntryShape,
   app: DfsApp,
+  opts?: StatAdapterOptions,
 ): StatExtractionResult {
   const key = asDfsPropTypeKey(propType);
   if (!key) {
@@ -151,7 +171,7 @@ export function extractStatForPropExplained(
       detail: `prop=${key} has no adapter for league=${league.toUpperCase()}`,
     };
   }
-  const value = adapter(entry, app);
+  const value = adapter(entry, app, opts);
   if (value == null || !Number.isFinite(value)) {
     return {
       ok: false,

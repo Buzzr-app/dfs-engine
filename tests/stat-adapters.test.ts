@@ -500,30 +500,32 @@ function mlbBatterFull(opts: {
 }
 
 describe('MLB Hitter FS / Fantasy Score (Phase B.5)', () => {
-  const ORIGINAL_FLAG = process.env.HITTER_FS_AUTO_GRADE;
-
-  beforeEach(() => {
-    process.env.HITTER_FS_AUTO_GRADE = 'true';
-  });
-  afterEach(() => {
-    if (ORIGINAL_FLAG === undefined) delete process.env.HITTER_FS_AUTO_GRADE;
-    else process.env.HITTER_FS_AUTO_GRADE = ORIGINAL_FLAG;
-  });
+  // v0.2: the auto-grade gate moved from process.env to an explicit
+  // adapter option. All tests below pass it as `FS_OPTS`. The "gate off"
+  // tests omit it (or pass an empty bag).
+  const FS_OPTS = { hitterFsAutoGrade: true } as const;
 
   describe('feature-flag gate', () => {
-    test('returns null when HITTER_FS_AUTO_GRADE is unset', () => {
-      delete process.env.HITTER_FS_AUTO_GRADE;
+    test('returns null when opts is omitted entirely', () => {
       const e = mlbBatterFull();
       expect(extractStatForPropViaRegistry('Hitter FS', 'MLB', e, 'prizepicks')).toBeNull();
       expect(extractStatForPropViaRegistry('Fantasy Score', 'MLB', e, 'underdog')).toBeNull();
     });
 
-    test('returns null when flag is "false" or any non-"true" value', () => {
-      process.env.HITTER_FS_AUTO_GRADE = 'false';
+    test('returns null when opts.hitterFsAutoGrade is false', () => {
       const e = mlbBatterFull();
-      expect(extractStatForPropViaRegistry('Hitter FS', 'MLB', e, 'prizepicks')).toBeNull();
-      process.env.HITTER_FS_AUTO_GRADE = '1';
-      expect(extractStatForPropViaRegistry('Hitter FS', 'MLB', e, 'prizepicks')).toBeNull();
+      expect(
+        extractStatForPropViaRegistry('Hitter FS', 'MLB', e, 'prizepicks', {
+          hitterFsAutoGrade: false,
+        }),
+      ).toBeNull();
+    });
+
+    test('returns null when opts is an empty object', () => {
+      const e = mlbBatterFull();
+      expect(
+        extractStatForPropViaRegistry('Hitter FS', 'MLB', e, 'prizepicks', {}),
+      ).toBeNull();
     });
   });
 
@@ -533,7 +535,7 @@ describe('MLB Hitter FS / Fantasy Score (Phase B.5)', () => {
       // singles=2, doubles=1, triples=1, hr=1, runs=2, rbi=3, bb=1, hbp=1, sb=1
       // = 6 + 5 + 8 + 10 + 4 + 6 + 2 + 2 + 5 = 48
       expect(
-        extractStatForPropViaRegistry('Hitter FS', 'MLB', e, 'prizepicks'),
+        extractStatForPropViaRegistry('Hitter FS', 'MLB', e, 'prizepicks', FS_OPTS),
       ).toBe(48);
     });
 
@@ -555,14 +557,14 @@ describe('MLB Hitter FS / Fantasy Score (Phase B.5)', () => {
         },
       });
       expect(
-        extractStatForPropViaRegistry('Hitter FS', 'MLB', e, 'prizepicks'),
+        extractStatForPropViaRegistry('Hitter FS', 'MLB', e, 'prizepicks', FS_OPTS),
       ).toBe(0);
     });
 
     test('a missing component → null (any null kills the composite)', () => {
       const e = mlbBatterFull({ extrasOverrides: { hbp: '-' } });
       expect(
-        extractStatForPropViaRegistry('Hitter FS', 'MLB', e, 'prizepicks'),
+        extractStatForPropViaRegistry('Hitter FS', 'MLB', e, 'prizepicks', FS_OPTS),
       ).toBeNull();
     });
 
@@ -573,14 +575,14 @@ describe('MLB Hitter FS / Fantasy Score (Phase B.5)', () => {
       // contract so a future feed swap can't silently start grading.
       const e = mlbBatterFull({ extrasOverrides: { hbp: undefined } });
       expect(
-        extractStatForPropViaRegistry('Hitter FS', 'MLB', e, 'prizepicks'),
+        extractStatForPropViaRegistry('Hitter FS', 'MLB', e, 'prizepicks', FS_OPTS),
       ).toBeNull();
     });
 
     test('each component contributes its weighted value (single-component perturbation)', () => {
       const baseline = mlbBatterFull();
       expect(
-        extractStatForPropViaRegistry('Hitter FS', 'MLB', baseline, 'prizepicks'),
+        extractStatForPropViaRegistry('Hitter FS', 'MLB', baseline, 'prizepicks', FS_OPTS),
       ).toBe(48);
       // +1 single → +3
       expect(
@@ -589,6 +591,7 @@ describe('MLB Hitter FS / Fantasy Score (Phase B.5)', () => {
           'MLB',
           mlbBatterFull({ extrasOverrides: { singles: '3' } }),
           'prizepicks',
+          FS_OPTS,
         ),
       ).toBe(48 + 3);
       // +1 double → +5
@@ -598,6 +601,7 @@ describe('MLB Hitter FS / Fantasy Score (Phase B.5)', () => {
           'MLB',
           mlbBatterFull({ extrasOverrides: { doubles: '2' } }),
           'prizepicks',
+          FS_OPTS,
         ),
       ).toBe(48 + 5);
       // +1 HR → +10 (HR lives on the flat field via batter remap)
@@ -607,6 +611,7 @@ describe('MLB Hitter FS / Fantasy Score (Phase B.5)', () => {
           'MLB',
           mlbBatterFull({ flatOverrides: { rebounds: '2' } }),
           'prizepicks',
+          FS_OPTS,
         ),
       ).toBe(48 + 10);
       // +1 SB → +5 (SB lives on the flat field via batter remap)
@@ -616,6 +621,7 @@ describe('MLB Hitter FS / Fantasy Score (Phase B.5)', () => {
           'MLB',
           mlbBatterFull({ flatOverrides: { steals: '2' } }),
           'prizepicks',
+          FS_OPTS,
         ),
       ).toBe(48 + 5);
     });
@@ -627,7 +633,7 @@ describe('MLB Hitter FS / Fantasy Score (Phase B.5)', () => {
       // singles=2, doubles=1, triples=1, hr=1
       // = 2 + 2 + 3 + 4 = 11
       expect(
-        extractStatForPropViaRegistry('Fantasy Score', 'MLB', e, 'underdog'),
+        extractStatForPropViaRegistry('Fantasy Score', 'MLB', e, 'underdog', FS_OPTS),
       ).toBe(11);
     });
 
@@ -645,14 +651,14 @@ describe('MLB Hitter FS / Fantasy Score (Phase B.5)', () => {
         },
       });
       expect(
-        extractStatForPropViaRegistry('Fantasy Score', 'MLB', eA, 'underdog'),
-      ).toBe(extractStatForPropViaRegistry('Fantasy Score', 'MLB', eB, 'underdog'));
+        extractStatForPropViaRegistry('Fantasy Score', 'MLB', eA, 'underdog', FS_OPTS),
+      ).toBe(extractStatForPropViaRegistry('Fantasy Score', 'MLB', eB, 'underdog', FS_OPTS));
     });
 
     test('a missing TB component → null', () => {
       const e = mlbBatterFull({ extrasOverrides: { triples: '-' } });
       expect(
-        extractStatForPropViaRegistry('Fantasy Score', 'MLB', e, 'underdog'),
+        extractStatForPropViaRegistry('Fantasy Score', 'MLB', e, 'underdog', FS_OPTS),
       ).toBeNull();
     });
 
@@ -662,14 +668,14 @@ describe('MLB Hitter FS / Fantasy Score (Phase B.5)', () => {
         extrasOverrides: { runs: '-', hbp: '-' },
       });
       expect(
-        extractStatForPropViaRegistry('Fantasy Score', 'MLB', e, 'underdog'),
+        extractStatForPropViaRegistry('Fantasy Score', 'MLB', e, 'underdog', FS_OPTS),
       ).toBe(11);
     });
 
     test('production behaviour: HBP-absent shape is fine for Underdog (formula does not read it)', () => {
       const e = mlbBatterFull({ extrasOverrides: { hbp: undefined } });
       expect(
-        extractStatForPropViaRegistry('Fantasy Score', 'MLB', e, 'underdog'),
+        extractStatForPropViaRegistry('Fantasy Score', 'MLB', e, 'underdog', FS_OPTS),
       ).toBe(11);
     });
   });
@@ -677,8 +683,8 @@ describe('MLB Hitter FS / Fantasy Score (Phase B.5)', () => {
   describe('app parameter routes correctly', () => {
     test('same propType + same entry → different scores per app', () => {
       const e = mlbBatterFull();
-      const pp = extractStatForPropViaRegistry('Hitter FS', 'MLB', e, 'prizepicks');
-      const ud = extractStatForPropViaRegistry('Hitter FS', 'MLB', e, 'underdog');
+      const pp = extractStatForPropViaRegistry('Hitter FS', 'MLB', e, 'prizepicks', FS_OPTS);
+      const ud = extractStatForPropViaRegistry('Hitter FS', 'MLB', e, 'underdog', FS_OPTS);
       expect(pp).not.toBe(ud);
       expect(pp).toBe(48);
       expect(ud).toBe(11);
@@ -687,11 +693,11 @@ describe('MLB Hitter FS / Fantasy Score (Phase B.5)', () => {
     test('both keys route to the same dispatcher', () => {
       const e = mlbBatterFull();
       expect(
-        extractStatForPropViaRegistry('Hitter FS', 'MLB', e, 'prizepicks'),
-      ).toBe(extractStatForPropViaRegistry('Fantasy Score', 'MLB', e, 'prizepicks'));
+        extractStatForPropViaRegistry('Hitter FS', 'MLB', e, 'prizepicks', FS_OPTS),
+      ).toBe(extractStatForPropViaRegistry('Fantasy Score', 'MLB', e, 'prizepicks', FS_OPTS));
       expect(
-        extractStatForPropViaRegistry('Hitter FS', 'MLB', e, 'underdog'),
-      ).toBe(extractStatForPropViaRegistry('Fantasy Score', 'MLB', e, 'underdog'));
+        extractStatForPropViaRegistry('Hitter FS', 'MLB', e, 'underdog', FS_OPTS),
+      ).toBe(extractStatForPropViaRegistry('Fantasy Score', 'MLB', e, 'underdog', FS_OPTS));
     });
   });
 });

@@ -47,6 +47,7 @@
  */
 import type { DfsPropTypeKey } from '../prop-normalizer';
 import type { PlayerGameLogEntryShape } from '../grading';
+import type { StatAdapterOptions } from './index';
 import type { DfsApp } from '../types';
 
 type StatAdapter = (entry: PlayerGameLogEntryShape, app: DfsApp) => number | null;
@@ -98,14 +99,17 @@ function hitsRunsRbis(entry: PlayerGameLogEntryShape): number | null {
  * the entry isn't a batter OR any required component is missing OR the
  * app is unsupported. Caller sees null → leg stays manual-settle.
  *
- * Gate: env var HITTER_FS_AUTO_GRADE === 'true'. RN-side reads
- * process.env (never set on client bundles unless EXPO_PUBLIC_*, so
- * RN re-check path always returns null — only the Deno watcher
- * auto-grades). Deno-side reads the same var; flipped on the watcher
- * deployment to enable.
+ * v0.2: the gate is now an explicit option (`opts.hitterFsAutoGrade`)
+ * instead of a `process.env` read, so the adapter works in browser /
+ * React Native bundles and tests. Pass the flag through the public
+ * extract* functions when you want auto-grading enabled.
  */
-function computeFantasyScore(entry: PlayerGameLogEntryShape, app: DfsApp): number | null {
-  if (process.env.HITTER_FS_AUTO_GRADE !== 'true') return null;
+function computeFantasyScore(
+  entry: PlayerGameLogEntryShape,
+  app: DfsApp,
+  opts?: StatAdapterOptions,
+): number | null {
+  if (!opts?.hitterFsAutoGrade) return null;
   if (entry.mlbRole !== 'batter') return null;
 
   const extras = entry.mlbExtras;
@@ -176,6 +180,6 @@ export const MLB_ADAPTERS: Partial<Record<DfsPropTypeKey, StatAdapter>> = {
   // Per-book composite. Both keys route to the same dispatcher; the
   // verbatim slip propType stays on the leg so the UI displays whichever
   // name the user saw.
-  'Hitter FS': (e, app) => computeFantasyScore(e, app),
-  'Fantasy Score': (e, app) => computeFantasyScore(e, app),
+  'Hitter FS': computeFantasyScore,
+  'Fantasy Score': computeFantasyScore,
 };

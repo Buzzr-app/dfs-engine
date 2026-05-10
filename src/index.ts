@@ -86,7 +86,7 @@ export {
   unregisterLeague,
   getRegisteredLeagues,
 } from './stat-adapters';
-export type { StatAdapter, AdapterTable } from './stat-adapters';
+export type { StatAdapter, AdapterTable, StatAdapterOptions } from './stat-adapters';
 export { BASKETBALL_ADAPTERS } from './stat-adapters/basketball';
 export { NFL_ADAPTERS } from './stat-adapters/nfl';
 export { MLB_ADAPTERS } from './stat-adapters/mlb';

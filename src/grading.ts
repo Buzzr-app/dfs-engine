@@ -17,6 +17,7 @@
  */
 import { lookupStandardMultiplier, recalcMultiplierAfterDnp } from './payouts';
 import { extractStatForPropViaRegistry } from './stat-adapters';
+import type { StatAdapterOptions } from './stat-adapters';
 import type { LegGradingResult } from './result';
 import type {
   DfsApp,
@@ -139,8 +140,9 @@ export function extractStatForProp(
   league: string,
   entry: PlayerGameLogEntryShape,
   app: DfsApp,
+  opts?: StatAdapterOptions,
 ): number | null {
-  return extractStatForPropViaRegistry(propType, league, entry, app);
+  return extractStatForPropViaRegistry(propType, league, entry, app, opts);
 }
 
 /* ────────────────────────────────────────────────────────────────────
