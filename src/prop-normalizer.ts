@@ -265,7 +265,6 @@ const NHL_ALIASES: Record<string, DfsPropTypeKey> = {
   '+/-': 'Plus/Minus',
   'plus minus': 'Plus/Minus',
   plusminus: 'Plus/Minus',
-  '+/-': 'Plus/Minus',
 };
 
 const ALL_ALIASES: Record<string, DfsPropTypeKey> = (() => {

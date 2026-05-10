@@ -113,3 +113,10 @@ export {
   findAndConvertBoxScorePlayer,
 } from './boxscore-shape';
 export type { BoxScorePlayer, BoxScoreTeam } from './boxscore-shape';
+
+// Runtime validators for system-boundary inputs.
+export {
+  validatePlayerGameLogEntryShape,
+  validateDfsBetLeg,
+} from './validators';
+export type { ValidationResult } from './validators';
