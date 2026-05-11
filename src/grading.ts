@@ -17,6 +17,8 @@
  */
 import { lookupStandardMultiplier, recalcMultiplierAfterDnp } from './payouts';
 import { extractStatForPropViaRegistry } from './stat-adapters';
+import type { StatAdapterOptions } from './stat-adapters';
+import type { LegGradingResult } from './result';
 import type {
   DfsApp,
   DfsBetLeg,
@@ -138,8 +140,9 @@ export function extractStatForProp(
   league: string,
   entry: PlayerGameLogEntryShape,
   app: DfsApp,
+  opts?: StatAdapterOptions,
 ): number | null {
-  return extractStatForPropViaRegistry(propType, league, entry, app);
+  return extractStatForPropViaRegistry(propType, league, entry, app, opts);
 }
 
 /* ────────────────────────────────────────────────────────────────────
@@ -324,7 +327,12 @@ export function reconcileMidGameDnpEntries(opts: {
  *   - line === actual is treated as PUSH (DFS slips use x.5 lines almost
  *     exclusively, so equality means OCR misread or the user typed an
  *     integer line manually).
- *   - actual === null returns 'pending'.
+ *   - actual === null or non-finite (NaN/Infinity) returns 'pending'.
+ *
+ * v0.2 bug fix: prior versions would grade NaN/Infinity as 'lost' because
+ * the NaN comparison fell through to `actual > line` which is always
+ * false. Callers that relied on the broken behavior should switch to
+ * `gradeLegFromActualExplained` for the new `'unparseable_actual'` reason.
  */
 export function gradeLegFromActual(
   line: number,
@@ -332,9 +340,36 @@ export function gradeLegFromActual(
   actual: number | null,
 ): DfsLegStatus {
   if (actual == null) return 'pending';
+  if (!Number.isFinite(actual)) return 'pending';
   if (actual === line) return 'push';
   const overHit = direction === 'over' ? actual > line : actual < line;
   return overHit ? 'won' : 'lost';
+}
+
+/**
+ * Explained variant of {@link gradeLegFromActual}. Returns a discriminated
+ * union so callers can distinguish a clean grade (won/lost/push), a
+ * pending leg, and an unparseable actual that hints at an upstream bug.
+ *
+ * Use when the caller wants to surface the reason in UI ("settling…"
+ * vs "data error") instead of treating both as "pending" generically.
+ */
+export function gradeLegFromActualExplained(
+  line: number,
+  direction: 'over' | 'under',
+  actual: number | null,
+): LegGradingResult {
+  if (actual == null) return { ok: false, reason: 'pending' };
+  if (!Number.isFinite(actual)) {
+    return {
+      ok: false,
+      reason: 'unparseable_actual',
+      detail: `actual=${String(actual)} (expected finite number)`,
+    };
+  }
+  if (actual === line) return { ok: true, status: 'push' };
+  const overHit = direction === 'over' ? actual > line : actual < line;
+  return { ok: true, status: overHit ? 'won' : 'lost' };
 }
 
 /* ────────────────────────────────────────────────────────────────────
@@ -398,20 +433,29 @@ const GAMELOG_AMBIGUITY_MS = 12 * 60 * 60 * 1000;
  * same calendar date hours apart and a clean pick would be a guess.
  *
  * Return semantics:
- *   - []                 → no entry in window (game hasn't been played yet)
+ *   - []                 → no entry in window (game hasn't been played yet,
+ *                          or legGameDateHint is null/unparseable without
+ *                          `opts.assumeFirst: true`)
  *   - [a]                → unambiguous match
  *   - [a, b]             → ambiguous; caller should defer or surface picker
+ *
+ * v0.2 fix: previously, a null or unparseable `legGameDateHint` returned
+ * `[entries[0]]` — silently picking the first entry. That's the WRONG
+ * choice for doubleheaders (entries are typically sorted descending by
+ * date, so "first" = most recent, but a bet placed for tonight should
+ * match tonight's game, not last night's). The new default is `[]`.
+ * Pass `{ assumeFirst: true }` to opt into the legacy behavior.
  */
 export function findGameLogCandidates<T extends PlayerGameLogEntryShape>(
   legGameDateHint: string | null,
   entries: T[],
-  opts: { window?: number } = {},
+  opts: { window?: number; assumeFirst?: boolean } = {},
 ): T[] {
   if (entries.length === 0) return [];
-  if (!legGameDateHint) return [entries[0]];
+  if (!legGameDateHint) return opts.assumeFirst ? [entries[0]] : [];
 
   const target = new Date(legGameDateHint).getTime();
-  if (!Number.isFinite(target)) return [entries[0]];
+  if (!Number.isFinite(target)) return opts.assumeFirst ? [entries[0]] : [];
 
   const windowMs = opts.window ?? GAMELOG_WINDOW_MS;
   const scored: { entry: T; delta: number; signed: number }[] = [];
@@ -452,8 +496,9 @@ export function findGameLogCandidates<T extends PlayerGameLogEntryShape>(
 export function matchGameLogEntry<T extends PlayerGameLogEntryShape>(
   legGameDateHint: string | null,
   entries: T[],
+  opts: { window?: number; assumeFirst?: boolean } = {},
 ): T | null {
-  const candidates = findGameLogCandidates(legGameDateHint, entries);
+  const candidates = findGameLogCandidates(legGameDateHint, entries, opts);
   return candidates[0] ?? null;
 }
 

@@ -53,6 +53,7 @@ export {
   detectMidGameDnp,
   reconcileMidGameDnpEntries,
   gradeLegFromActual,
+  gradeLegFromActualExplained,
   shouldRegradeLeg,
   findGameLogCandidates,
   matchGameLogEntry,
@@ -68,13 +69,47 @@ export type {
   MidGameDnpDecision,
 } from './grading';
 
+// Typed Result returns for `*Explained` variants.
+export type {
+  StatExtractionResult,
+  StatExtractionFailure,
+  LegGradingResult,
+  LegGradingFailure,
+} from './result';
+
 // Stat-adapter registry + per-sport tables.
 export {
   getStatAdapter,
   extractStatForPropViaRegistry,
+  extractStatForPropExplained,
+  registerLeague,
+  unregisterLeague,
+  getRegisteredLeagues,
 } from './stat-adapters';
-export type { StatAdapter, AdapterTable } from './stat-adapters';
+export type { StatAdapter, AdapterTable, StatAdapterOptions } from './stat-adapters';
 export { BASKETBALL_ADAPTERS } from './stat-adapters/basketball';
 export { NFL_ADAPTERS } from './stat-adapters/nfl';
 export { MLB_ADAPTERS } from './stat-adapters/mlb';
 export { NHL_ADAPTERS } from './stat-adapters/nhl';
+
+// Reconciliation windows — per-league stat-correction TTLs.
+export {
+  RECONCILIATION_WINDOW_MS,
+  SUPPORTED_RECONCILIATION_LEAGUES,
+  MAX_RECONCILIATION_WINDOW_MS,
+  isWithinReconciliationWindow,
+} from './reconciliation-windows';
+
+// Live-update helpers — diff-guarded actual-value writes + alert titles.
+export {
+  shouldWriteLiveActual,
+  buildLiveSnapshot,
+  buildLiveLegAlertTitle,
+} from './live-helpers';
+
+// Boxscore → PlayerGameLogEntryShape adapter (NHL Hits/Blocked Shots).
+export {
+  boxScorePlayerToGameLogShape,
+  findAndConvertBoxScorePlayer,
+} from './boxscore-shape';
+export type { BoxScorePlayer, BoxScoreTeam } from './boxscore-shape';
