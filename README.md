@@ -5,6 +5,8 @@
 
 Pure-functional **DFS prop grading**, payout math, and stat normalization for PrizePicks- and Underdog-style daily-fantasy contests. Drop-in TypeScript, zero runtime dependencies, ESM + CJS + `.d.ts` shipped.
 
+**Sports covered:** NBA, WNBA, NCAAM/W, NFL, MLB, NHL, EPL, MLS, La Liga, NWSL, UEFA Champions League. ~70 props.
+
 ```bash
 npm install @buzzr/dfs-engine
 ```
@@ -193,7 +195,25 @@ if (!grade.ok) {
 
 The `PlayerGameLogEntryShape` the adapters consume is intentionally minimal — define your own gamelog rows that satisfy the shape (`{ date, minutes, points, ... }`) and pipe them in.
 
-See [CHANGELOG.md](./CHANGELOG.md) for what's new in each release. Looking to contribute? Start at [CONTRIBUTING.md](./CONTRIBUTING.md). Copy-paste-runnable demos live in [examples/](./examples/).
+See [CHANGELOG.md](./CHANGELOG.md) for what's new in each release. Looking to contribute? Start at [CONTRIBUTING.md](./CONTRIBUTING.md). Copy-paste-runnable demos live in [examples/](./examples/). Generated API docs: [sarveshsea.github.io/dfs-engine](https://sarveshsea.github.io/dfs-engine).
+
+## Performance
+
+Pure functions, zero deps, sub-microsecond on a Mac M-series (from `npm run bench`):
+
+| Function | ops/sec |
+|---|---|
+| `gradeLegFromActual` | ~24M |
+| `extractStatForPropViaRegistry` (NBA Points) | ~7.5M |
+| `gradeDfsBetFromGraded` (5-pick Power) | ~11.5M |
+| `recalcMultiplierAfterDnp` | ~20M |
+| `applyLegDnp` (6-pick) | ~5.8M |
+
+Floor numbers — every operation completes in microseconds. You will not be CPU-bound by this library.
+
+## Stability
+
+Starting at 1.0, the public API is frozen. Breaking changes only at major versions. New sports, props, and `*Explained` failure reasons can ship in minor releases without breaking consumers. See [CHANGELOG.md](./CHANGELOG.md) for the full stability contract.
 
 ## Validating untrusted inputs
 

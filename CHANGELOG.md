@@ -1,5 +1,63 @@
 # Changelog
 
+## 1.0.0 — Reach + stability commitment
+
+Adds Soccer (first non-US-major built-in sport), real benchmarks, a generated docs site, and a semver stability promise. No breaking changes from 0.3.
+
+### Added — Soccer
+
+First non-US-major built-in sport, demonstrating the v0.2 plugin registry actually works for sports that aren't part of the original NBA/NFL/MLB/NHL lineup. Coverage:
+
+- **Leagues:** EPL, MLS, La Liga, NWSL, UEFA Champions League (all share one `SOCCER_ADAPTERS` table; per-league dispatch is just for "which leagues do we know about?" surfacing).
+- **Props (6 new):** `Shots`, `Shots on Target`, `Passes Completed`, `Tackles`, `Yellow Cards` (binary; books grade at the 0.5 line), `Pass Accuracy` (parses both `"0.87"` and `"87"` → 87 on the 0..100 scale).
+- **Goals + Assists** reuse the canonical flat slots (`points`, `rebounds`) — same source field, per-league dispatch routes to the right table.
+- **`PlayerGameLogEntryShape.soccer?`** — new optional field for sport-specific extras (shots, SOT, passes, tackles, cards, accuracy). Adopting Soccer means populating this bag from your data source.
+
+### Added — benchmarks
+
+`vitest bench` suite at `bench/grading.bench.ts` (`npm run bench`). Reference numbers on a Mac M-series:
+
+| Function | ops/sec |
+|---|---|
+| `gradeLegFromActual` | ~24M |
+| `extractStatForPropViaRegistry` (NBA Points) | ~7.5M |
+| `gradeDfsBetFromGraded` (5-pick Power) | ~11.5M |
+| `recalcMultiplierAfterDnp` | ~20M |
+| `applyLegDnp` (6-pick) | ~5.8M |
+
+### Added — docs site
+
+`typedoc` config + GitHub Actions workflow that builds API docs on `v*` tags and deploys to `sarveshsea.github.io/dfs-engine` via GitHub Pages.
+
+### Added — JSDoc disambiguation
+
+Clarifies when to use which variant of duplicate APIs:
+- `extractStatForProp` vs `extractStatForPropViaRegistry` vs `extractStatForPropExplained`
+- `gradeLegFromActual` vs `gradeLegFromActualExplained`
+- `findGameLogCandidates` vs `matchGameLogEntry`
+
+### Stability commitment
+
+**Starting at 1.0, the public API is frozen.** Breaking changes only at major versions. Specifically:
+
+- The exported function signatures in `src/index.ts` won't change in minor/patch releases.
+- New sport adapters can be added without breaking changes.
+- New props can be appended to `DfsPropTypeKey` and `DFS_PROP_TYPE_KEYS` without breaking changes (consumers iterating those see new entries at the end).
+- The plugin registry contract is permanent — `registerLeague(league, adapters)` will keep working with `AdapterTable` shape across 1.x.
+- New optional fields can be added to `PlayerGameLogEntryShape` (and analogous interfaces) without breaking changes.
+
+What's NOT covered:
+- Payout schedules — books adjust these. Schedule corrections ship as patch releases with a note.
+- Behavior of `*Explained` failure reasons — new reason codes may be added to the union (additive change).
+
+### Tests
+
+314 passing across 15 files (was 281 / 14 in v0.3).
+
+### Migration notes
+
+No breaking changes. Consumers iterating `DFS_PROP_TYPE_KEYS` will see the 6 new Soccer keys appended at the end.
+
 ## 0.3.0 — Coverage + DX
 
 Adds 14 new props across the four built-in sports, runtime input validators, contributor onboarding (CONTRIBUTING.md + examples/), and ESLint/Prettier configs. No breaking changes.

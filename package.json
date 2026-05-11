@@ -1,6 +1,6 @@
 {
   "name": "@buzzr/dfs-engine",
-  "version": "0.3.0",
+  "version": "1.0.0",
   "description": "Pure-functional DFS prop grading, payouts, and stat normalization for PrizePicks/Underdog-style contests.",
   "license": "MIT",
   "author": "Sarvesh Chidambaram",
@@ -41,8 +41,24 @@
     "parlay",
     "props",
     "grading",
-    "payouts"
+    "payouts",
+    "nba",
+    "nfl",
+    "mlb",
+    "nhl",
+    "soccer",
+    "betting",
+    "settlement",
+    "typescript"
   ],
+  "homepage": "https://github.com/sarveshsea/dfs-engine",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sarveshsea/dfs-engine.git"
+  },
+  "bugs": {
+    "url": "https://github.com/sarveshsea/dfs-engine/issues"
+  },
   "engines": {
     "node": ">=18"
   },
