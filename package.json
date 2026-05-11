@@ -1,6 +1,6 @@
 {
   "name": "@buzzr/dfs-engine",
-  "version": "0.2.0",
+  "version": "1.0.0",
   "description": "Pure-functional DFS prop grading, payouts, and stat normalization for PrizePicks/Underdog-style contests.",
   "license": "MIT",
   "author": "Sarvesh Chidambaram",
@@ -25,7 +25,12 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "prepublishOnly": "npm run typecheck && npm test && npm run build"
+    "bench": "vitest bench --run",
+    "docs": "typedoc",
+    "lint": "eslint src tests",
+    "format": "prettier --write src tests examples",
+    "format:check": "prettier --check src tests examples",
+    "prepublishOnly": "npm run typecheck && npm run lint && npm test && npm run build"
   },
   "keywords": [
     "dfs",
@@ -36,16 +41,36 @@
     "parlay",
     "props",
     "grading",
-    "payouts"
+    "payouts",
+    "nba",
+    "nfl",
+    "mlb",
+    "nhl",
+    "soccer",
+    "betting",
+    "settlement",
+    "typescript"
   ],
+  "homepage": "https://github.com/sarveshsea/dfs-engine",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sarveshsea/dfs-engine.git"
+  },
+  "bugs": {
+    "url": "https://github.com/sarveshsea/dfs-engine/issues"
+  },
   "engines": {
     "node": ">=18"
   },
   "devDependencies": {
     "@changesets/cli": "^2.31.0",
     "@types/node": "^22.19.18",
+    "eslint": "^10.3.0",
+    "prettier": "^3.8.3",
     "tsup": "^8.5.1",
+    "typedoc": "^0.28.19",
     "typescript": "^5.9.3",
+    "typescript-eslint": "^8.59.2",
     "vitest": "^2.1.9"
   },
   "publishConfig": {

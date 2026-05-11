@@ -91,6 +91,8 @@ export { BASKETBALL_ADAPTERS } from './stat-adapters/basketball';
 export { NFL_ADAPTERS } from './stat-adapters/nfl';
 export { MLB_ADAPTERS } from './stat-adapters/mlb';
 export { NHL_ADAPTERS } from './stat-adapters/nhl';
+export { SOCCER_ADAPTERS } from './stat-adapters/soccer';
+export type { PlayerGameLogSoccerShape } from './grading';
 
 // Reconciliation windows — per-league stat-correction TTLs.
 export {
@@ -113,3 +115,10 @@ export {
   findAndConvertBoxScorePlayer,
 } from './boxscore-shape';
 export type { BoxScorePlayer, BoxScoreTeam } from './boxscore-shape';
+
+// Runtime validators for system-boundary inputs.
+export {
+  validatePlayerGameLogEntryShape,
+  validateDfsBetLeg,
+} from './validators';
+export type { ValidationResult } from './validators';

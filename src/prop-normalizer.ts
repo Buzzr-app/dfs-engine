@@ -30,6 +30,12 @@ export type DfsPropTypeKey =
   | 'Pts+Rebs'
   | 'Pts+Asts'
   | 'Rebs+Asts'
+  // basketball v0.3 additions
+  | 'Pts+Stls'
+  | 'Pts+Blks'
+  | 'Stls+Blks'
+  | 'Double-Double'
+  | 'Triple-Double'
   // NFL
   | 'Pass Yards'
   | 'Pass Completions'
@@ -47,6 +53,10 @@ export type DfsPropTypeKey =
   | 'Rush+Rec TDs'
   | 'Pass+Rush TDs'
   | 'Pass+Rush+Rec TDs'
+  // NFL v0.3 additions
+  | 'Longest Reception'
+  | 'Longest Rush'
+  | 'Longest Pass'
   // MLB — batter-side (Wave 4 H.mlb-extras consolidates Phase B's
   // legacy-regex props into the registry alongside the new ones)
   | 'Hits'
@@ -56,6 +66,11 @@ export type DfsPropTypeKey =
   | 'Stolen Bases'
   | 'Total Bases'
   | 'Hits+Runs+RBIs'
+  // MLB batter v0.3 additions
+  | 'Singles'
+  | 'Doubles'
+  | 'Triples'
+  | 'Runs'
   // MLB — pitcher-side (role-discriminated; mlbRole === 'pitcher')
   | 'Strikeouts'
   | 'Earned Runs'
@@ -63,6 +78,8 @@ export type DfsPropTypeKey =
   | 'Walks Allowed'
   | 'Hits Allowed'
   | 'Pitches Thrown'
+  // MLB pitcher v0.3 additions
+  | 'Pitching Outs'
   // MLB composite (Phase B.5). Both literals are canonical because the
   // verbatim slip text differs by book — PrizePicks displays "Hitter FS",
   // Underdog displays "Fantasy Score" — and the verify card surfaces the
@@ -86,7 +103,17 @@ export type DfsPropTypeKey =
   | 'Power Play Points'
   | 'Saves'
   | 'Goals Against'
-  | 'Saves Percentage';
+  | 'Saves Percentage'
+  // NHL v0.3 additions
+  | 'Plus/Minus'
+  // Soccer v1.0 — Goals and Assists are already canonical (reused from
+  // basketball/NHL via per-league dispatch). These are soccer-specific.
+  | 'Shots'
+  | 'Shots on Target'
+  | 'Passes Completed'
+  | 'Tackles'
+  | 'Yellow Cards'
+  | 'Pass Accuracy';
 
 export const DFS_PROP_TYPE_KEYS: readonly DfsPropTypeKey[] = [
   'Points',
@@ -139,6 +166,29 @@ export const DFS_PROP_TYPE_KEYS: readonly DfsPropTypeKey[] = [
   'Saves',
   'Goals Against',
   'Saves Percentage',
+  // v0.3 additions (kept at the bottom so consumers iterating with
+  // assumptions about the v0.0.1 ordering aren't broken)
+  'Pts+Stls',
+  'Pts+Blks',
+  'Stls+Blks',
+  'Double-Double',
+  'Triple-Double',
+  'Longest Reception',
+  'Longest Rush',
+  'Longest Pass',
+  'Singles',
+  'Doubles',
+  'Triples',
+  'Runs',
+  'Pitching Outs',
+  'Plus/Minus',
+  // Soccer v1.0
+  'Shots',
+  'Shots on Target',
+  'Passes Completed',
+  'Tackles',
+  'Yellow Cards',
+  'Pass Accuracy',
 ] as const;
 
 /**
@@ -174,6 +224,21 @@ const BASKETBALL_ALIASES: Record<string, DfsPropTypeKey> = {
   'points + assists': 'Pts+Asts',
   'rebs + asts': 'Rebs+Asts',
   'rebounds + assists': 'Rebs+Asts',
+  // v0.3: defensive combos + double / triple double
+  'pts + stls': 'Pts+Stls',
+  'points + steals': 'Pts+Stls',
+  'pts + blks': 'Pts+Blks',
+  'points + blocks': 'Pts+Blks',
+  'stls + blks': 'Stls+Blks',
+  'steals + blocks': 'Stls+Blks',
+  'defensive stats': 'Stls+Blks',
+  'def stats': 'Stls+Blks',
+  dd: 'Double-Double',
+  'double double': 'Double-Double',
+  'double-double': 'Double-Double',
+  td: 'Triple-Double',
+  'triple double': 'Triple-Double',
+  'triple-double': 'Triple-Double',
 };
 
 /**
@@ -210,6 +275,44 @@ const NHL_ALIASES: Record<string, DfsPropTypeKey> = {
   'save percentage': 'Saves Percentage',
   'saves percentage': 'Saves Percentage',
   'saves%': 'Saves Percentage',
+  // v0.3 — Plus/Minus variants. Slip text omits the slash on PrizePicks
+  // ("Plus Minus") and uses the symbol on Underdog ("+/-").
+  '+/-': 'Plus/Minus',
+  'plus minus': 'Plus/Minus',
+  plusminus: 'Plus/Minus',
+};
+
+/**
+ * Soccer slip variants observed on PrizePicks / Underdog soccer cards.
+ */
+const SOCCER_ALIASES: Record<string, DfsPropTypeKey> = {
+  // Shots
+  shots: 'Shots',
+  'total shots': 'Shots',
+  'shot attempts': 'Shots',
+  // Shots on Target
+  'shots on target': 'Shots on Target',
+  sot: 'Shots on Target',
+  // (Do NOT alias 'shots on goal' here — that's already canonical for
+  // NHL via DFS_PROP_TYPE_KEYS. Soccer slips that say "shots on goal"
+  // are rare; users should use SOT or "shots on target". Aliasing it
+  // here would silently misroute NHL bets.)
+  // Passes
+  passes: 'Passes Completed',
+  'completed passes': 'Passes Completed',
+  // (Do NOT alias 'pass completions' here — that's already canonical for
+  // NFL as 'Pass Completions'. Soccer slips use "Passes" or "Completed
+  // Passes"; "Pass Completions" stays NFL-specific.)
+  // Tackles
+  tackles: 'Tackles',
+  tkl: 'Tackles',
+  // Cards
+  'yellow cards': 'Yellow Cards',
+  yc: 'Yellow Cards',
+  // Pass accuracy
+  'pass accuracy': 'Pass Accuracy',
+  'pass %': 'Pass Accuracy',
+  'pass pct': 'Pass Accuracy',
 };
 
 const ALL_ALIASES: Record<string, DfsPropTypeKey> = (() => {
@@ -221,6 +324,9 @@ const ALL_ALIASES: Record<string, DfsPropTypeKey> = (() => {
     out[alias] = key;
   }
   for (const [alias, key] of Object.entries(NHL_ALIASES)) {
+    out[alias] = key;
+  }
+  for (const [alias, key] of Object.entries(SOCCER_ALIASES)) {
     out[alias] = key;
   }
   return out;
@@ -295,6 +401,9 @@ function canonicalizeStatToken(raw: string): string {
   if (t === 'pt' || t === 'pts' || t === 'point' || t === 'points') return 'pts';
   if (t === 'reb' || t === 'rebs' || t === 'rebound' || t === 'rebounds') return 'rebs';
   if (t === 'ast' || t === 'asts' || t === 'assist' || t === 'assists') return 'asts';
+  // v0.3: defensive stat tokens for Pts+Stls / Pts+Blks / Stls+Blks combos.
+  if (t === 'stl' || t === 'stls' || t === 'steal' || t === 'steals') return 'stls';
+  if (t === 'blk' || t === 'blks' || t === 'block' || t === 'blocks') return 'blks';
   // NFL combo prefixes — kept lowercase, no plural normalization.
   if (t === 'pass' || t === 'passing') return 'pass';
   if (t === 'rush' || t === 'rushing') return 'rush';

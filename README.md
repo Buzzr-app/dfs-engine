@@ -5,6 +5,8 @@
 
 Pure-functional **DFS prop grading**, payout math, and stat normalization for PrizePicks- and Underdog-style daily-fantasy contests. Drop-in TypeScript, zero runtime dependencies, ESM + CJS + `.d.ts` shipped.
 
+**Sports covered:** NBA, WNBA, NCAAM/W, NFL, MLB, NHL, EPL, MLS, La Liga, NWSL, UEFA Champions League. ~70 props.
+
 ```bash
 npm install @buzzr/dfs-engine
 ```
@@ -101,7 +103,7 @@ extractStatForProp('3-Pointers Made', 'NBA', entry, 'prizepicks'); // 3
 extractStatForProp('Rebounds', 'NBA', entry, 'prizepicks');        // 4
 ```
 
-Slip-text aliases are normalized — `"3PT Made"`, `"3-pt made"`, `"3ptm"`, `"3pm"`, `"threes"` all resolve to `'3-Pointers Made'`. See `DFS_PROP_TYPE_KEYS` for the full canonical list (50+ props across NBA/NFL/MLB/NHL).
+Slip-text aliases are normalized — `"3PT Made"`, `"3-pt made"`, `"3ptm"`, `"3pm"`, `"threes"` all resolve to `'3-Pointers Made'`. v0.3 adds 14 new props (Double-Double, Triple-Double, Pts+Stls, Longest Reception/Rush/Pass, MLB Singles/Doubles/Triples/Runs, Pitching Outs, NHL Plus/Minus). See `DFS_PROP_TYPE_KEYS` for the full canonical list (60+ props across NBA / WNBA / NCAAM/W / NFL / MLB / NHL).
 
 ### 4. Grade a full entry end-to-end
 
@@ -193,7 +195,40 @@ if (!grade.ok) {
 
 The `PlayerGameLogEntryShape` the adapters consume is intentionally minimal — define your own gamelog rows that satisfy the shape (`{ date, minutes, points, ... }`) and pipe them in.
 
-See [CHANGELOG.md](./CHANGELOG.md) for what's new in each release.
+See [CHANGELOG.md](./CHANGELOG.md) for what's new in each release. Looking to contribute? Start at [CONTRIBUTING.md](./CONTRIBUTING.md). Copy-paste-runnable demos live in [examples/](./examples/). Generated API docs: [sarveshsea.github.io/dfs-engine](https://sarveshsea.github.io/dfs-engine).
+
+## Performance
+
+Pure functions, zero deps, sub-microsecond on a Mac M-series (from `npm run bench`):
+
+| Function | ops/sec |
+|---|---|
+| `gradeLegFromActual` | ~24M |
+| `extractStatForPropViaRegistry` (NBA Points) | ~7.5M |
+| `gradeDfsBetFromGraded` (5-pick Power) | ~11.5M |
+| `recalcMultiplierAfterDnp` | ~20M |
+| `applyLegDnp` (6-pick) | ~5.8M |
+
+Floor numbers — every operation completes in microseconds. You will not be CPU-bound by this library.
+
+## Stability
+
+Starting at 1.0, the public API is frozen. Breaking changes only at major versions. New sports, props, and `*Explained` failure reasons can ship in minor releases without breaking consumers. See [CHANGELOG.md](./CHANGELOG.md) for the full stability contract.
+
+## Validating untrusted inputs
+
+When an LLM, webhook, or cross-process source hands you a slip leg or gamelog entry, run it through the validator before grading:
+
+```ts
+import { validatePlayerGameLogEntryShape, validateDfsBetLeg } from '@buzzr/dfs-engine';
+
+const v = validatePlayerGameLogEntryShape(maybeEntry);
+if (!v.ok) {
+  console.error('Bad gamelog entry:', v.errors);
+  return;
+}
+// v.value is now typed as PlayerGameLogEntryShape
+```
 
 ## Status & caveats
 

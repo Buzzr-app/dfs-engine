@@ -109,6 +109,33 @@ export interface PlayerGameLogEntryShape {
    * against a goalie row.
    */
   nhlPosition?: 'skater' | 'goalie' | null;
+  /**
+   * Soccer-specific extras (v1.0). Soccer match data shape differs
+   * enough from US-major sports that it gets its own bag rather than
+   * remapping onto the flat fields. Adapters read from here for
+   * `Shots`, `Shots on Target`, `Passes Completed`, `Tackles`,
+   * `Yellow Cards`, `Pass Accuracy`. Goals + Assists reuse the
+   * canonical flat slots (points, rebounds) for consistency with
+   * other sports — see SOCCER_ADAPTERS.
+   */
+  soccer?: PlayerGameLogSoccerShape;
+}
+
+/**
+ * Soccer-specific stats (v1.0). Populate from your match-data source
+ * (FotMob, Sofascore, ESPN soccer endpoint, etc). All optional; the
+ * adapter null-returns when a queried field is missing.
+ */
+export interface PlayerGameLogSoccerShape {
+  shots?: string;
+  shotsOnTarget?: string;
+  passesCompleted?: string;
+  passesAttempted?: string;
+  tackles?: string;
+  yellowCards?: string;
+  redCards?: string;
+  /** As a 0..1 decimal (".87") or a 0..100 percent ("87"). Adapter parses both. */
+  passAccuracy?: string;
 }
 
 /**
@@ -125,8 +152,14 @@ export type BetStatus = 'pending' | 'won' | 'lost' | 'void' | 'cashed_out' | 'pu
 
 /**
  * Map a DFS prop type string (verbatim from the slip) to the numeric
- * value to compare against the line. Returns null when the prop type
- * isn't supported by our gamelog source — those legs require manual
+ * value to compare against the line.
+ *
+ * **When to use this vs alternatives:**
+ *   - {@link extractStatForProp} (this fn) — concise; returns `number | null`. Use when you just want the value.
+ *   - {@link extractStatForPropViaRegistry} — identical, exported from the registry module. Alias.
+ *   - `extractStatForPropExplained` — returns a discriminated union with a reason code on failure. Use when you need to distinguish "unknown prop" from "player DNP" from "league not supported" in UI.
+ *
+ * Returns null when the prop type isn't supported by our gamelog source — those legs require manual
  * grading.
  *
  * Single-stage dispatch via the per-league adapter registry. Inputs
@@ -322,7 +355,11 @@ export function reconcileMidGameDnpEntries(opts: {
  * ────────────────────────────────────────────────────────────────── */
 
 /**
- * Pure leg grader. Caller resolves the actual stat via extractStatForProp.
+ * Pure leg grader. Caller resolves the actual stat via {@link extractStatForProp}.
+ *
+ * **When to use this vs the Explained variant:**
+ *   - {@link gradeLegFromActual} (this fn) — returns `'won' | 'lost' | 'push' | 'pending'`. Use when you just want the status.
+ *   - {@link gradeLegFromActualExplained} — returns a discriminated union with `'unparseable_actual'` as a separate state from `'pending'`. Use when surfacing a "data error" UI distinct from "still settling".
  *
  *   - line === actual is treated as PUSH (DFS slips use x.5 lines almost
  *     exclusively, so equality means OCR misread or the user typed an
@@ -489,9 +526,15 @@ export function findGameLogCandidates<T extends PlayerGameLogEntryShape>(
 /**
  * Pick the gamelog entry that best matches a leg's bet date. ±36h
  * window. Returns null when nothing matches; on ambiguity returns the
- * forward-biased closest. Watchers should prefer `findGameLogCandidates`
- * so they can detect ambiguity and defer; this helper is for callers
- * (verifyDfsBet's legacy path, tests) that just want a single answer.
+ * forward-biased closest.
+ *
+ * **When to use this vs {@link findGameLogCandidates}:**
+ *   - {@link findGameLogCandidates} returns `[]` / `[a]` / `[a, b]` so
+ *     callers can detect doubleheader ambiguity and defer to a picker.
+ *     Use this in settlement watchers / cron jobs.
+ *   - {@link matchGameLogEntry} (this fn) collapses ambiguity by picking
+ *     the closest forward-biased candidate. Use in UI verification flows
+ *     or tests where "give me a single answer" is OK.
  */
 export function matchGameLogEntry<T extends PlayerGameLogEntryShape>(
   legGameDateHint: string | null,
