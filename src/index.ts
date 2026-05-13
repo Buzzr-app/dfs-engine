@@ -122,3 +122,37 @@ export {
   validateDfsBetLeg,
 } from './validators';
 export type { ValidationResult } from './validators';
+
+// v2 Settlement OS — instance-safe engine, provider contracts, and Buzzr migration adapter.
+export {
+  adaptBuzzrBetInput,
+  createDfsEngine,
+  defineBookPolicy,
+  defineLeagueAdapter,
+  definePayoutTable,
+  defineStatProvider,
+} from './engine';
+export type {
+  DfsAuditEvent,
+  DfsAuditEventType,
+  DfsBookPolicy,
+  DfsEngine,
+  DfsEngineConfig,
+  DfsEntryInput,
+  DfsLegDecision,
+  DfsLegInput,
+  DfsLegStatFailureReason,
+  DfsLegStatResult,
+  DfsLeagueAdapterDefinition,
+  DfsPayoutTableDefinition,
+  DfsProvenance,
+  DfsSettlementAdjustment,
+  DfsSettlementContext,
+  DfsSettlementResult,
+  GameProvider,
+  PlayerResolver,
+  SettlementStore,
+  StatProvider,
+  StatProviderActualInput,
+  StatProviderGameLogInput,
+} from './engine';
