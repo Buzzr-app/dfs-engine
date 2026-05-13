@@ -1,5 +1,31 @@
 # Changelog
 
+## 3.0.0 — Book Policy Registry
+
+Turns the Settlement OS into a book-policy registry instead of a PrizePicks/Underdog-only settlement wrapper.
+
+### Added
+
+- **Generic book IDs:** the v3 entry model uses `bookId` and `playTypeId`; custom books can settle without type casts or forks.
+- **Complete book policies:** `defineBookPolicy(...)` now models metadata, sources, play types, payout model, tie behavior, DNP/push/rescue behavior, validation, and payout split strategy.
+- **Policy payout lookup:** `engine.lookupPayout(...)` and `engine.validateEntry(...)` resolve through the registered policy for that engine instance.
+- **Flexible payout models:** fixed table, displayed-multiplier, and custom payout resolvers.
+- **Policy-aware settlement metadata:** results include `policyVersion`, `sourceRefs`, `confidence`, and machine-readable `explanationCodes`.
+- **Migration adapter:** `adaptV2EntryInput(...)` converts legacy `app` / `playType` settlement entries to v3 `bookId` / `playTypeId`.
+- **Draft future-book fixtures:** Sleeper, Dabble, ParlayPlay, and DraftKings Pick6 are exported as draft source fixtures through `DRAFT_BOOK_POLICY_FIXTURES`; they are not registered by default.
+
+### Changed
+
+- `DfsEntryInput` now prefers `bookId` and `playTypeId`.
+- PrizePicks and Underdog are still stable built-ins, but their payout/tie/DNP behavior now flows through the policy registry.
+- `adaptBuzzrBetInput(...)` emits the v3 entry shape while preserving the current Buzzr `CreateDfsBetInput` migration path.
+- `@buzzr/dfs-testkit` fixture entries now use valid v3 book/play IDs.
+
+### Compatibility
+
+- Legacy payout helpers (`lookupStandardMultiplier`, `recalcMultiplierAfterDnp`, `lookupBaseMultiplier`) remain available.
+- `getGameLog` stat providers, `actualsByLegId`, and legacy leg `legStatus` inputs are still accepted as migration shims where practical.
+
 ## 2.0.0 — Settlement OS
 
 Turns `@buzzr/dfs-engine` into the core package in a small Settlement OS monorepo.

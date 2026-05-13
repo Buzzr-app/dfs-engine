@@ -1,7 +1,7 @@
 {
   "name": "@buzzr/dfs-engine",
-  "version": "2.0.0",
-  "description": "Buzzr DFS Settlement OS core: pure grading, policy-aware payouts, and provider-ready settlement orchestration.",
+  "version": "3.0.0",
+  "description": "Buzzr DFS Settlement OS core: extensible book policies, pure grading, and provider-ready settlement orchestration.",
   "license": "MIT",
   "author": "Sarvesh Chidambaram",
   "type": "module",

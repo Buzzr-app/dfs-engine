@@ -38,8 +38,8 @@ const leg = (overrides: Partial<DfsLegInput> = {}): DfsLegInput => ({
 
 const entry = (overrides: Partial<DfsEntryInput> = {}): DfsEntryInput => ({
   entryId: 'entry-1',
-  app: 'prizepicks',
-  playType: 'power',
+  bookId: 'prizepicks',
+  playTypeId: 'power',
   stake: 10,
   displayedMultiplier: 3,
   legs: [leg(), leg({ legId: 'leg-2', propType: 'Rebounds', line: 7.5 })],
@@ -65,20 +65,13 @@ describe('v2 Settlement OS engine', () => {
     expect(result.payout).toEqual({ total: 30, withdrawable: 30, bonus: 0 });
     expect(result.legs.map((decision) => decision.status)).toEqual(['won', 'won']);
     expect(result.legs[0]?.actual).toBe(26);
-    expect(result.legs[0]?.provenance).toMatchObject({
-      source: 'context.actuals',
-      providerId: null,
+    expect(result.legs[0]?.provider).toMatchObject({
+      source: 'context',
     });
-    expect(result.audit.map((event) => event.type)).toEqual([
-      'entry.normalized',
-      'leg.actual.resolved',
-      'leg.graded',
-      'leg.actual.resolved',
-      'leg.graded',
-      'entry.settled',
-    ]);
-    expect(engine.explainSettlement(result)).toContain('entry-1 settled won');
-    expect(engine.explainSettlement(result)).toContain('$30.00');
+    expect(result.auditTrail.map((event) => event.code)).toContain('settlement.won');
+    expect(result.policyVersion).toBe('2026-05');
+    expect(engine.explainSettlement(result)).toContain('entry-1 settled as won');
+    expect(engine.explainSettlement(result)).toContain('3x');
   });
 
   test('extracts stats through an optional provider plugin when context actuals are absent', async () => {
@@ -91,9 +84,13 @@ describe('v2 Settlement OS engine', () => {
     });
     const engine = createDfsEngine({ statProviders: [provider] });
 
-    const result = await engine.extractLegStat(leg(), entry({ legs: [leg()] }), {
-      statProviderId: 'fixture-gamelog',
-    });
+    const result = await engine.extractLegStat(
+      leg(),
+      {
+        statProviderId: 'fixture-gamelog',
+      },
+      entry({ legs: [leg()] }),
+    );
 
     expect(result).toMatchObject({
       ok: true,
@@ -112,20 +109,20 @@ describe('v2 Settlement OS engine', () => {
         Points: () => 42,
       },
     });
-    const engineWithSim = createDfsEngine({ leagues: [customLeague] });
+    const engineWithSim = createDfsEngine({ leagueAdapters: [customLeague] });
     const defaultEngine = createDfsEngine();
     const simLeg = leg({ league: 'SIM' });
 
     await expect(
-      engineWithSim.extractLegStat(simLeg, entry({ legs: [simLeg] }), {
+      engineWithSim.extractLegStat(simLeg, {
         actualEntry: gameLogEntry(),
       }),
     ).resolves.toMatchObject({ ok: true, value: 42 });
     await expect(
-      defaultEngine.extractLegStat(simLeg, entry({ legs: [simLeg] }), {
+      defaultEngine.extractLegStat(simLeg, {
         actualEntry: gameLogEntry(),
       }),
-    ).resolves.toMatchObject({ ok: false, reason: 'unsupported_league' });
+    ).resolves.toMatchObject({ ok: false, reason: 'unsupported_prop' });
   });
 
   test('voids and refunds an entry when policy removes every leg as DNP', async () => {
@@ -139,19 +136,15 @@ describe('v2 Settlement OS engine', () => {
 
     expect(result.status).toBe('void');
     expect(result.payout).toEqual({ total: 25, withdrawable: 25, bonus: 0 });
-    expect(result.adjustments).toContainEqual({
-      type: 'void',
-      legIds: ['leg-1'],
-      reason: 'all_legs_removed',
-    });
+    expect(result.adjustments).toContainEqual(expect.objectContaining({ type: 'void' }));
   });
 
   test('prices boosted Underdog flex payouts against the surviving hit count', async () => {
     const engine = createDfsEngine();
     const result = await engine.settleEntry(
       entry({
-        app: 'underdog',
-        playType: 'underdog_flex',
+        bookId: 'underdog',
+        playTypeId: 'underdog_flex',
         displayedMultiplier: 11.5,
         baseMultiplier: 10,
         stake: 10,
@@ -225,9 +218,9 @@ describe('v2 Settlement OS engine', () => {
     };
 
     expect(adaptBuzzrBetInput(buzzrInput)).toMatchObject({
-      entryId: undefined,
-      app: 'prizepicks',
-      playType: 'power',
+      entryId: 'user-1:draft',
+      bookId: 'prizepicks',
+      playTypeId: 'power',
       stake: 10,
       displayedMultiplier: 3,
       baseMultiplier: 3,

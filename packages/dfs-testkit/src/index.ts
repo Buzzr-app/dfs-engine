@@ -40,8 +40,8 @@ export function makeDfsLeg(overrides: Partial<DfsLegInput> = {}): DfsLegInput {
 export function makeDfsEntry(overrides: Partial<DfsEntryInput> = {}): DfsEntryInput {
   return {
     entryId: 'fixture-entry',
-    app: 'prizepicks',
-    playType: 'power',
+    bookId: 'prizepicks',
+    playTypeId: 'power',
     stake: 10,
     displayedMultiplier: 3,
     legs: [makeDfsLeg()],

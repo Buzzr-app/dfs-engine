@@ -1,23 +1,6 @@
-import {
-  computeBoostSplit,
-  gradeDfsBetFromGraded,
-  gradeLegFromActual,
-  findGameLogCandidates,
-} from './grading';
+import { computeBoostSplit, extractStatForProp, gradeLegFromActual } from './grading';
 import type { BetStatus, PlayerGameLogEntryShape } from './grading';
-import {
-  lookupBaseMultiplier,
-  lookupStandardMultiplier,
-  recalcMultiplierAfterDnp,
-} from './payouts';
-import { asDfsPropTypeKey, normalizeDfsPropType } from './prop-normalizer';
-import type { DfsPropTypeKey } from './prop-normalizer';
-import { BASKETBALL_ADAPTERS } from './stat-adapters/basketball';
-import { MLB_ADAPTERS } from './stat-adapters/mlb';
-import { NFL_ADAPTERS } from './stat-adapters/nfl';
-import { NHL_ADAPTERS } from './stat-adapters/nhl';
-import { SOCCER_ADAPTERS } from './stat-adapters/soccer';
-import type { AdapterTable, StatAdapterOptions } from './stat-adapters';
+import { normalizeDfsPropType } from './prop-normalizer';
 import type {
   CreateDfsBetInput,
   DfsApp,
@@ -27,177 +10,218 @@ import type {
   DfsPlayType,
 } from './types';
 
-export type DfsStatProviderSource =
-  | 'context.actuals'
-  | 'context.entry'
-  | 'entry.actualValue'
-  | 'stat-provider';
+export type Clock = () => Date;
 
-export type DfsProvenance = {
-  source: DfsStatProviderSource;
-  providerId: string | null;
-  detail: string | null;
+export type BuiltInBookId = 'prizepicks' | 'underdog';
+export type DfsBookId = BuiltInBookId | string;
+export type DfsPlayTypeId = string;
+export type DfsPolicyStatus = 'stable' | 'draft' | 'experimental';
+export type DfsPayoutModel = 'fixed-table' | 'displayed-multiplier' | 'custom';
+export type DfsSettlementConfidence = 'high' | 'medium' | 'low';
+export type DfsValidationSeverity = 'allow' | 'warn' | 'error';
+export type DfsLegOutcome = DfsLegStatus | 'void' | 'rescued' | 'canceled' | 'manual';
+
+export type DfsBookSourceRef = {
+  label: string;
+  url?: string;
+  retrievedAt?: string;
+  note?: string;
 };
 
-export type DfsLegInput = {
-  legId: string;
-  playerName: string;
-  playerId?: string | null;
-  league: string;
-  propType: string;
-  line: number;
-  direction: 'over' | 'under';
-  gameId?: string | null;
-  gameDate?: string | null;
-  actualValue?: number | null;
-  legStatus?: DfsLegStatus;
-  boostType?: string | null;
+export type DfsBookPlayType = {
+  id: DfsPlayTypeId;
+  displayName: string;
+  payoutModel: DfsPayoutModel;
+  pickCount: {
+    min: number;
+    max: number;
+  };
+  allOrNothing?: boolean;
+  flex?: boolean;
+  scaleDisplayedMultiplier?: boolean;
 };
 
-export type DfsEntryInput = {
-  entryId?: string;
-  app: DfsApp;
-  playType: DfsPlayType;
+export type DfsTiePolicy =
+  | { type: 'push' }
+  | { type: 'more_wins_less_loses' }
+  | { type: 'loss' }
+  | {
+      type: 'custom';
+      gradeTie: (input: {
+        leg: DfsLegInput;
+        entry: DfsEntryInput;
+        context: DfsSettlementContext;
+      }) => DfsLegOutcome;
+    };
+
+export type DfsDnpPolicy =
+  | { type: 'remove_leg'; voidIfNoSurvivors?: boolean }
+  | { type: 'loss' }
+  | { type: 'manual'; reasonCode?: string }
+  | {
+      type: 'custom';
+      resolve: (input: {
+        leg: DfsLegInput;
+        entry: DfsEntryInput;
+        context: DfsSettlementContext;
+      }) => DfsLegOutcome;
+    };
+
+export type DfsPushPolicy =
+  | { type: 'remove_leg'; refundIfNoSurvivors?: boolean }
+  | { type: 'loss' }
+  | { type: 'manual'; reasonCode?: string }
+  | {
+      type: 'custom';
+      resolve: (input: {
+        leg: DfsLegInput;
+        entry: DfsEntryInput;
+        context: DfsSettlementContext;
+      }) => DfsLegOutcome;
+    };
+
+export type DfsRescuePolicy =
+  | { type: 'none' }
+  | { type: 'void_entry' }
+  | { type: 'remove_leg' }
+  | {
+      type: 'custom';
+      resolve: (input: {
+        leg: DfsLegInput;
+        entry: DfsEntryInput;
+        context: DfsSettlementContext;
+      }) => DfsLegOutcome;
+    };
+
+export type DfsPayoutSplitStrategy =
+  | { type: 'all_withdrawable' }
+  | { type: 'underdog_bonus_split' }
+  | {
+      type: 'custom';
+      split: (input: {
+        stake: number;
+        multiplier: number;
+        totalPayout: number;
+        baseMultiplier?: number | null;
+        profitBoostPct?: number | null;
+      }) => DfsPayoutSplit;
+    };
+
+export type DfsBookValidationRules = {
+  duplicatePlayers?: DfsValidationSeverity;
+  sameTeam?: DfsValidationSeverity;
+  sameGame?: DfsValidationSeverity;
+  leagues?: readonly string[];
+};
+
+export type DfsValidationIssue = {
+  code: string;
+  message: string;
+  severity: 'warning' | 'error';
+  legIds?: string[];
+};
+
+export type DfsValidationResult = {
+  ok: boolean;
+  errors: DfsValidationIssue[];
+  warnings: DfsValidationIssue[];
+};
+
+export type DfsPayoutResolverInput = {
+  bookId: DfsBookId;
+  playTypeId: DfsPlayTypeId;
   stake: number;
-  displayedMultiplier: number;
+  displayedMultiplier?: number | null;
   baseMultiplier?: number | null;
   profitBoostPct?: number | null;
-  placedAt?: string | null;
-  legs: DfsLegInput[];
+  pickCount: number;
+  hits: number;
+  losses: number;
+  pushes: number;
+  removedCount: number;
+  entry: DfsEntryInput;
+  decisions: readonly DfsLegDecision[];
 };
 
-export type DfsSettlementContext = {
-  actualsByLegId?: Record<string, number | null | undefined>;
-  actualEntry?: PlayerGameLogEntryShape;
-  statProviderId?: string;
-  now?: Date | string | number;
-  auditRunId?: string;
-  statAdapterOptions?: StatAdapterOptions;
-  metadata?: Record<string, unknown>;
+export type DfsPayoutResolverResult = {
+  multiplier: number;
+  payout?: DfsPayoutSplit;
+  explanationCode?: string;
+  confidence?: DfsSettlementConfidence;
 };
 
-export type DfsLegStatFailureReason =
-  | 'unknown_prop'
-  | 'unsupported_league'
-  | 'prop_not_supported_for_league'
-  | 'adapter_returned_null'
-  | 'stats_missing'
-  | 'ambiguous_game'
-  | 'provider_not_found'
-  | 'provider_failed';
+export type DfsPayoutResolution = {
+  status: BetStatus;
+  multiplier: number;
+  payout: DfsPayoutSplit;
+  explanationCode: string;
+  confidence: DfsSettlementConfidence;
+};
 
-export type DfsLegStatResult =
+export type DfsBookPolicy = {
+  id: DfsBookId;
+  displayName: string;
+  version: string;
+  effectiveFrom: string;
+  status: DfsPolicyStatus;
+  sources: readonly DfsBookSourceRef[];
+  playTypes: readonly DfsBookPlayType[];
+  tiePolicy: DfsTiePolicy;
+  dnpPolicy: DfsDnpPolicy;
+  pushPolicy: DfsPushPolicy;
+  rescuePolicy?: DfsRescuePolicy;
+  payoutSplit: DfsPayoutSplitStrategy;
+  validation?: DfsBookValidationRules;
+  payoutResolver?: (input: DfsPayoutResolverInput) => DfsPayoutResolverResult;
+};
+
+export type DfsPayoutTableEntry = {
+  picks?: number;
+  pickCount?: number;
+  hits: number;
+  multiplier: number;
+};
+
+export type DfsPayoutTableDefinition = {
+  bookId: DfsBookId;
+  playTypeId: DfsPlayTypeId;
+  version?: string;
+  effectiveFrom: string;
+  sourceNotes?: readonly string[];
+  entries: readonly DfsPayoutTableEntry[];
+};
+
+export type StatProviderRequest = {
+  leg: DfsLegInput;
+  context: DfsSettlementContext;
+};
+
+export type StatProviderResult =
   | {
       ok: true;
-      value: number;
-      normalizedPropType: DfsPropTypeKey;
-      provenance: DfsProvenance;
+      actual: number;
+      source?: string;
+      sourceRef?: string;
+      observedAt?: string;
+      confidence?: number;
+      raw?: unknown;
     }
   | {
       ok: false;
       reason: DfsLegStatFailureReason;
-      detail: string;
-      normalizedPropType: string | null;
-      provenance?: DfsProvenance;
+      source?: string;
+      sourceRef?: string;
+      observedAt?: string;
+      raw?: unknown;
     };
 
-export type DfsLegDecision = {
-  legId: string;
-  status: DfsLegStatus;
-  line: number;
-  direction: 'over' | 'under';
-  actual: number | null;
-  propType: string;
-  normalizedPropType: string;
-  pendingReason: DfsLegStatFailureReason | null;
-  provenance: DfsProvenance | null;
-};
-
-export type DfsSettlementAdjustment =
-  | {
-      type: 'dnp';
-      legIds: string[];
-      reason: 'leg_marked_dnp';
-    }
-  | {
-      type: 'push';
-      legIds: string[];
-      reason: 'leg_pushed';
-    }
-  | {
-      type: 'void';
-      legIds: string[];
-      reason: 'all_legs_removed';
-    }
-  | {
-      type: 'reprice';
-      legIds: string[];
-      reason: 'removed_legs';
-      multiplier: number;
-      usedFallback: boolean;
-    };
-
-export type DfsAuditEventType =
-  | 'entry.normalized'
-  | 'leg.actual.resolved'
-  | 'leg.actual.pending'
-  | 'leg.graded'
-  | 'entry.adjusted'
-  | 'entry.settled';
-
-export type DfsAuditEvent = {
-  type: DfsAuditEventType;
-  at: string;
-  entryId: string | null;
-  legId?: string;
-  detail: string;
-  runId: string | null;
-};
-
-export type DfsSettlementResult = {
-  entryId: string | null;
-  app: DfsApp;
-  playType: DfsPlayType;
-  status: BetStatus;
-  effectiveMultiplier: number;
-  payout: DfsPayoutSplit;
-  legs: DfsLegDecision[];
-  adjustments: DfsSettlementAdjustment[];
-  audit: DfsAuditEvent[];
-};
-
-export type DfsLeagueAdapterDefinition = {
-  league: string;
-  aliases?: readonly string[];
-  adapters: AdapterTable;
-};
-
-export type DfsBookPolicy = {
-  app: DfsApp;
-  version: string;
-  effectiveFrom: string;
-  sourceNotes: readonly string[];
-  dnp: {
-    removeLeg: boolean;
-    voidIfNoSurvivors: boolean;
-  };
-  push: {
-    removeLeg: boolean;
-    refundIfNoSurvivors: boolean;
-  };
-};
-
-export type DfsPayoutTableDefinition = {
-  app: DfsApp;
-  playType: DfsPlayType;
-  effectiveFrom: string;
-  sourceNotes?: readonly string[];
-  entries: ReadonlyArray<{
-    pickCount: number;
-    hits: number;
-    multiplier: number;
-  }>;
-};
+export interface StatProvider {
+  readonly id: string;
+  extractStat?(request: StatProviderRequest): Promise<StatProviderResult> | StatProviderResult;
+  getGameLog?(
+    request: StatProviderGameLogInput,
+  ): Promise<PlayerGameLogEntryShape[]> | PlayerGameLogEntryShape[];
+}
 
 export type StatProviderGameLogInput = {
   leg: DfsLegInput;
@@ -205,720 +229,1729 @@ export type StatProviderGameLogInput = {
   context: DfsSettlementContext;
 };
 
-export type StatProviderActualInput = StatProviderGameLogInput & {
-  normalizedPropType: DfsPropTypeKey;
+export type StatProviderActualInput = StatProviderRequest;
+
+export type GameProviderRequest = {
+  leg: DfsLegInput;
+  context: DfsSettlementContext;
 };
 
-export type StatProvider = {
-  id: string;
-  getActual?: (input: StatProviderActualInput) => number | null | Promise<number | null>;
-  getGameLog?: (
-    input: StatProviderGameLogInput,
-  ) => PlayerGameLogEntryShape[] | Promise<PlayerGameLogEntryShape[]>;
+export type GameProviderResult =
+  | {
+      ok: true;
+      gameId?: string;
+      gameDate?: string;
+      startedAt?: string;
+      status?: string;
+      source?: string;
+      raw?: unknown;
+    }
+  | {
+      ok: false;
+      reason: string;
+      source?: string;
+      raw?: unknown;
+    };
+
+export interface GameProvider {
+  readonly id: string;
+  resolveGame(request: GameProviderRequest): Promise<GameProviderResult> | GameProviderResult;
+}
+
+export type PlayerResolverRequest = {
+  leg: DfsLegInput;
+  context: DfsSettlementContext;
 };
 
-export type GameProvider = {
-  id: string;
-};
+export type PlayerResolverResult =
+  | { ok: true; playerId: string; source?: string; raw?: unknown }
+  | { ok: false; reason: string; source?: string; raw?: unknown };
 
-export type PlayerResolver = {
-  id: string;
-};
+export interface PlayerResolver {
+  readonly id: string;
+  resolvePlayer(
+    request: PlayerResolverRequest,
+  ): Promise<PlayerResolverResult> | PlayerResolverResult;
+}
 
-export type SettlementStore = {
-  id: string;
+export interface SettlementStore {
+  readonly id: string;
+  saveSettlement?(
+    result: DfsSettlementResult,
+  ): Promise<void | { revision?: string }> | void | { revision?: string };
+  loadSettlement?(
+    entryId: string,
+  ): Promise<DfsSettlementResult | null> | DfsSettlementResult | null;
+}
+
+export type DfsEngineAuditMetadata = {
+  engineVersion?: string;
+  releaseChannel?: string;
+  environment?: string;
+  tags?: readonly string[];
+  [key: string]: unknown;
 };
 
 export type DfsEngineConfig = {
-  leagues?: readonly DfsLeagueAdapterDefinition[];
   bookPolicies?: readonly DfsBookPolicy[];
   payoutTables?: readonly DfsPayoutTableDefinition[];
+  leagueAdapters?: readonly DfsLeagueAdapterDefinition[];
   statProviders?: readonly StatProvider[];
   gameProviders?: readonly GameProvider[];
   playerResolvers?: readonly PlayerResolver[];
-  settlementStores?: readonly SettlementStore[];
-  clock?: () => Date;
-  auditMetadata?: Record<string, unknown>;
+  settlementStore?: SettlementStore;
+  clock?: Clock;
+  audit?: DfsEngineAuditMetadata;
 };
 
-export type DfsEngine = {
+export type DfsLegInput = {
+  legId: string;
+  playerId?: string | null;
+  playerName: string;
+  team?: string | null;
+  opponent?: string | null;
+  gameId?: string | null;
+  gameDate?: string | null;
+  league: string;
+  propType: string;
+  line: number;
+  direction: 'over' | 'under';
+  stat?: number | null;
+  status?: DfsLegOutcome | 'dnp' | null;
+  legStatus?: DfsLegOutcome | 'dnp' | null;
+  providerData?: PlayerGameLogEntryShape | null;
+  metadata?: Record<string, unknown>;
+};
+
+export type DfsEntryInput = {
+  entryId: string;
+  bookId: DfsBookId;
+  playTypeId: DfsPlayTypeId;
+  stake: number;
+  displayedMultiplier: number;
+  baseMultiplier?: number | null;
+  profitBoostPct?: number | null;
+  legs: readonly DfsLegInput[];
+  placedAt?: string | null;
+  metadata?: Record<string, unknown>;
+};
+
+export type DfsV2EntryInput = Omit<DfsEntryInput, 'bookId' | 'playTypeId'> & {
+  app: DfsApp | string;
+  playType: DfsPlayType | string;
+};
+
+export type DfsSettlementContext = {
+  settledAt?: string;
+  statsByLegId?: Record<string, number | null | undefined>;
+  actualsByLegId?: Record<string, number | null | undefined>;
+  legStatusesByLegId?: Record<string, DfsLegOutcome | 'dnp' | null | undefined>;
+  legStatusByLegId?: Record<string, DfsLegOutcome | 'dnp' | null | undefined>;
+  providerDataByLegId?: Record<string, PlayerGameLogEntryShape | null | undefined>;
+  actualEntry?: PlayerGameLogEntryShape | null;
+  providerId?: string;
+  statProviderId?: string;
+  auditId?: string;
+  auditRunId?: string;
+  metadata?: Record<string, unknown>;
+};
+
+export type DfsLegStatFailureReason =
+  | 'missing_provider_data'
+  | 'missing_stat'
+  | 'unsupported_prop'
+  | 'provider_error';
+
+export type DfsLegStatResult =
+  | {
+      ok: true;
+      actual: number;
+      value: number;
+      source: 'input' | 'context' | 'provider_data' | 'stat_provider';
+      providerId?: string;
+      provenance: DfsProviderProvenance;
+    }
+  | {
+      ok: false;
+      reason: DfsLegStatFailureReason;
+      source: 'input' | 'context' | 'provider_data' | 'stat_provider';
+      providerId?: string;
+      provenance: DfsProviderProvenance;
+    };
+
+export type DfsProviderProvenance = {
+  source: string;
+  providerId?: string | null;
+  sourceRef?: string;
+  observedAt?: string;
+  confidence?: number;
+  raw?: unknown;
+};
+
+export type DfsLegDecision = {
+  legId: string;
+  status: DfsLegOutcome;
+  actual: number | null;
+  line: number;
+  direction: 'over' | 'under';
+  playerName: string;
+  propType: string;
+  provider: DfsProviderProvenance;
+  pendingReason?: DfsLegStatFailureReason | null;
+};
+
+export type DfsSettlementAdjustment = {
+  type: 'dnp' | 'push' | 'void' | 'rescued' | 'canceled' | 'manual';
+  legId?: string;
+  message: string;
+};
+
+export type DfsSettlementResult = {
+  entryId: string;
+  bookId: DfsBookId;
+  playTypeId: DfsPlayTypeId;
+  status: BetStatus;
+  multiplier: number;
+  effectiveMultiplier: number;
+  payout: DfsPayoutSplit;
+  stake: number;
+  displayedMultiplier: number;
+  baseMultiplier?: number | null;
+  profitBoostPct?: number | null;
+  legs: DfsLegDecision[];
+  adjustments: DfsSettlementAdjustment[];
+  pendingReasons: string[];
+  policyVersion: string | null;
+  sourceRefs: DfsBookSourceRef[];
+  confidence: DfsSettlementConfidence;
+  explanationCodes: string[];
+  provenance: {
+    providers: DfsProviderProvenance[];
+    settledAt: string;
+    auditId?: string;
+  };
+  auditTrail: Array<{
+    at: string;
+    code: string;
+    message: string;
+    metadata?: Record<string, unknown>;
+  }>;
+};
+
+export type DfsLeagueAdapterDefinition = {
+  league: string;
+  propAliases?: Record<string, string>;
+  adapters?: Record<string, (entry: PlayerGameLogEntryShape, leg: DfsLegInput) => number | null>;
+};
+
+export interface DfsEngine {
   normalizeEntry(input: DfsEntryInput): DfsEntryInput;
   extractLegStat(
     leg: DfsLegInput,
-    entry: DfsEntryInput,
     context?: DfsSettlementContext,
+    entry?: DfsEntryInput,
   ): Promise<DfsLegStatResult>;
-  gradeLeg(
-    leg: DfsLegInput,
-    actual: number | null,
-    provenance?: DfsProvenance | null,
-  ): DfsLegDecision;
+  gradeLeg(leg: DfsLegInput, actual: number, entry?: DfsEntryInput): DfsLegOutcome;
+  lookupPayout(input: DfsPayoutLookupInput): DfsPayoutResolution | null;
+  validateEntry(input: DfsEntryInput): DfsValidationResult;
   settleEntry(input: DfsEntryInput, context?: DfsSettlementContext): Promise<DfsSettlementResult>;
   explainSettlement(result: DfsSettlementResult): string;
-  registerLeague(adapter: DfsLeagueAdapterDefinition): void;
-  getRegisteredLeagues(): readonly string[];
+  registerBookPolicy(policy: DfsBookPolicy): void;
+  registerPayoutTable(table: DfsPayoutTableDefinition): void;
+  registerLeagueAdapter(adapter: DfsLeagueAdapterDefinition): void;
   registerStatProvider(provider: StatProvider): void;
+  getRegisteredBooks(): DfsBookId[];
+}
+
+export type DfsPayoutLookupInput = {
+  bookId: DfsBookId;
+  playTypeId: DfsPlayTypeId;
+  stake: number;
+  displayedMultiplier?: number | null;
+  baseMultiplier?: number | null;
+  profitBoostPct?: number | null;
+  pickCount: number;
+  hits: number;
+  losses?: number;
+  pushes?: number;
+  removedCount?: number;
+  entry?: DfsEntryInput;
+  decisions?: readonly DfsLegDecision[];
 };
+
+const EMPTY_PAYOUT: DfsPayoutSplit = { total: 0, withdrawable: 0, bonus: 0 };
+
+const PRIZEPICKS_POWER: readonly DfsPayoutTableEntry[] = [
+  { picks: 2, hits: 2, multiplier: 3 },
+  { picks: 3, hits: 3, multiplier: 5 },
+  { picks: 4, hits: 4, multiplier: 10 },
+  { picks: 5, hits: 5, multiplier: 20 },
+  { picks: 6, hits: 6, multiplier: 37.5 },
+];
+
+const PRIZEPICKS_FLEX: readonly DfsPayoutTableEntry[] = [
+  { picks: 3, hits: 3, multiplier: 2.25 },
+  { picks: 3, hits: 2, multiplier: 1.25 },
+  { picks: 4, hits: 4, multiplier: 5 },
+  { picks: 4, hits: 3, multiplier: 1.5 },
+  { picks: 5, hits: 5, multiplier: 10 },
+  { picks: 5, hits: 4, multiplier: 2 },
+  { picks: 5, hits: 3, multiplier: 0.4 },
+  { picks: 6, hits: 6, multiplier: 25 },
+  { picks: 6, hits: 5, multiplier: 1.75 },
+  { picks: 6, hits: 4, multiplier: 0.4 },
+];
+
+const UNDERDOG_STANDARD: readonly DfsPayoutTableEntry[] = [
+  { picks: 2, hits: 2, multiplier: 3 },
+  { picks: 3, hits: 3, multiplier: 6 },
+  { picks: 4, hits: 4, multiplier: 10 },
+  { picks: 5, hits: 5, multiplier: 20 },
+  { picks: 6, hits: 6, multiplier: 35 },
+  { picks: 7, hits: 7, multiplier: 60 },
+  { picks: 8, hits: 8, multiplier: 100 },
+];
+
+const UNDERDOG_FLEX: readonly DfsPayoutTableEntry[] = [
+  { picks: 3, hits: 3, multiplier: 2.25 },
+  { picks: 3, hits: 2, multiplier: 1.25 },
+  { picks: 4, hits: 4, multiplier: 6 },
+  { picks: 4, hits: 3, multiplier: 1.5 },
+  { picks: 5, hits: 5, multiplier: 10 },
+  { picks: 5, hits: 4, multiplier: 2 },
+  { picks: 5, hits: 3, multiplier: 0.4 },
+  { picks: 6, hits: 6, multiplier: 25 },
+  { picks: 6, hits: 5, multiplier: 2 },
+  { picks: 6, hits: 4, multiplier: 0.4 },
+  { picks: 7, hits: 7, multiplier: 50 },
+  { picks: 7, hits: 6, multiplier: 5 },
+  { picks: 7, hits: 5, multiplier: 1.5 },
+  { picks: 8, hits: 8, multiplier: 80 },
+  { picks: 8, hits: 7, multiplier: 10 },
+  { picks: 8, hits: 6, multiplier: 2 },
+];
+
+const BUILT_IN_SOURCES: Record<BuiltInBookId, readonly DfsBookSourceRef[]> = {
+  prizepicks: [
+    {
+      label: 'PrizePicks payout and settlement compatibility profile',
+      note: 'Stable built-in profile matching @buzzr/dfs-engine v2 behavior.',
+    },
+  ],
+  underdog: [
+    {
+      label: 'Underdog payout and settlement compatibility profile',
+      note: 'Stable built-in profile matching @buzzr/dfs-engine v2 behavior.',
+    },
+  ],
+};
+
+const DEFAULT_PAYOUT_TABLES: readonly DfsPayoutTableDefinition[] = [
+  {
+    bookId: 'prizepicks',
+    playTypeId: 'power',
+    version: '2026-05',
+    effectiveFrom: '2026-05-01',
+    entries: PRIZEPICKS_POWER,
+  },
+  {
+    bookId: 'prizepicks',
+    playTypeId: 'flex',
+    version: '2026-05',
+    effectiveFrom: '2026-05-01',
+    entries: PRIZEPICKS_FLEX,
+  },
+  {
+    bookId: 'underdog',
+    playTypeId: 'underdog_standard',
+    version: '2026-05',
+    effectiveFrom: '2026-05-01',
+    entries: UNDERDOG_STANDARD,
+  },
+  {
+    bookId: 'underdog',
+    playTypeId: 'underdog_flex',
+    version: '2026-05',
+    effectiveFrom: '2026-05-01',
+    entries: UNDERDOG_FLEX,
+  },
+];
+
+const DEFAULT_BOOK_POLICIES: readonly DfsBookPolicy[] = [
+  defineBookPolicy({
+    id: 'prizepicks',
+    displayName: 'PrizePicks',
+    version: '2026-05',
+    effectiveFrom: '2026-05-01',
+    status: 'stable',
+    sources: BUILT_IN_SOURCES.prizepicks,
+    playTypes: [
+      {
+        id: 'power',
+        displayName: 'Power Play',
+        payoutModel: 'fixed-table',
+        pickCount: { min: 2, max: 6 },
+        allOrNothing: true,
+        scaleDisplayedMultiplier: true,
+      },
+      {
+        id: 'flex',
+        displayName: 'Flex Play',
+        payoutModel: 'fixed-table',
+        pickCount: { min: 3, max: 6 },
+        flex: true,
+        scaleDisplayedMultiplier: true,
+      },
+    ],
+    tiePolicy: { type: 'push' },
+    dnpPolicy: { type: 'remove_leg', voidIfNoSurvivors: true },
+    pushPolicy: { type: 'remove_leg', refundIfNoSurvivors: true },
+    payoutSplit: { type: 'all_withdrawable' },
+    validation: {
+      duplicatePlayers: 'warn',
+      sameTeam: 'allow',
+      sameGame: 'allow',
+    },
+  }),
+  defineBookPolicy({
+    id: 'underdog',
+    displayName: 'Underdog',
+    version: '2026-05',
+    effectiveFrom: '2026-05-01',
+    status: 'stable',
+    sources: BUILT_IN_SOURCES.underdog,
+    playTypes: [
+      {
+        id: 'underdog_standard',
+        displayName: 'Standard',
+        payoutModel: 'fixed-table',
+        pickCount: { min: 2, max: 8 },
+        allOrNothing: true,
+        scaleDisplayedMultiplier: true,
+      },
+      {
+        id: 'underdog_flex',
+        displayName: 'Flex',
+        payoutModel: 'fixed-table',
+        pickCount: { min: 3, max: 8 },
+        flex: true,
+        scaleDisplayedMultiplier: true,
+      },
+    ],
+    tiePolicy: { type: 'push' },
+    dnpPolicy: { type: 'remove_leg', voidIfNoSurvivors: true },
+    pushPolicy: { type: 'remove_leg', refundIfNoSurvivors: true },
+    payoutSplit: { type: 'underdog_bonus_split' },
+    validation: {
+      duplicatePlayers: 'warn',
+      sameTeam: 'allow',
+      sameGame: 'allow',
+    },
+  }),
+];
+
+export const DRAFT_BOOK_POLICY_FIXTURES: readonly DfsBookPolicy[] = [
+  defineBookPolicy({
+    id: 'sleeper',
+    displayName: 'Sleeper',
+    version: 'draft-2026-05',
+    effectiveFrom: '2026-05-01',
+    status: 'draft',
+    sources: [
+      {
+        label: 'Sleeper Over/Under rules',
+        url: 'https://support.sleeper.com/en/articles/5556096-over-under-rules',
+        note: 'Draft fixture only; not registered by default.',
+      },
+    ],
+    playTypes: [
+      {
+        id: 'over_under',
+        displayName: 'Over/Under',
+        payoutModel: 'displayed-multiplier',
+        pickCount: { min: 2, max: 8 },
+        scaleDisplayedMultiplier: true,
+      },
+    ],
+    tiePolicy: { type: 'push' },
+    dnpPolicy: { type: 'remove_leg', voidIfNoSurvivors: true },
+    pushPolicy: { type: 'remove_leg', refundIfNoSurvivors: true },
+    payoutSplit: { type: 'all_withdrawable' },
+    validation: { duplicatePlayers: 'warn', sameTeam: 'allow', sameGame: 'allow' },
+  }),
+  defineBookPolicy({
+    id: 'dabble',
+    displayName: 'Dabble',
+    version: 'draft-2026-05',
+    effectiveFrom: '2026-05-01',
+    status: 'draft',
+    sources: [
+      {
+        label: 'Dabble void recalculation rules',
+        url: 'https://helpdesk.dabble.com/en/articles/12124970-how-does-dabble-calculate-payouts-when-picks-are-voided-or-adjusted',
+        note: 'Draft fixture only; not registered by default.',
+      },
+    ],
+    playTypes: [
+      {
+        id: 'pick_em',
+        displayName: 'Pick Em',
+        payoutModel: 'displayed-multiplier',
+        pickCount: { min: 2, max: 10 },
+        scaleDisplayedMultiplier: true,
+      },
+    ],
+    tiePolicy: { type: 'push' },
+    dnpPolicy: { type: 'remove_leg', voidIfNoSurvivors: true },
+    pushPolicy: { type: 'remove_leg', refundIfNoSurvivors: true },
+    payoutSplit: { type: 'all_withdrawable' },
+    validation: { duplicatePlayers: 'warn', sameTeam: 'allow', sameGame: 'allow' },
+  }),
+  defineBookPolicy({
+    id: 'parlayplay',
+    displayName: 'ParlayPlay',
+    version: 'draft-2026-05',
+    effectiveFrom: '2026-05-01',
+    status: 'draft',
+    sources: [
+      {
+        label: 'ParlayPlay game rules',
+        url: 'https://cdn.parlayplay.io/static/pdfs/game_rules.pdf',
+        note: 'Draft fixture only; not registered by default.',
+      },
+    ],
+    playTypes: [
+      {
+        id: 'more_less',
+        displayName: 'More/Less',
+        payoutModel: 'displayed-multiplier',
+        pickCount: { min: 2, max: 12 },
+        scaleDisplayedMultiplier: true,
+      },
+    ],
+    tiePolicy: { type: 'push' },
+    dnpPolicy: { type: 'remove_leg', voidIfNoSurvivors: true },
+    pushPolicy: { type: 'remove_leg', refundIfNoSurvivors: true },
+    payoutSplit: { type: 'all_withdrawable' },
+    validation: { duplicatePlayers: 'warn', sameTeam: 'allow', sameGame: 'allow' },
+  }),
+  defineBookPolicy({
+    id: 'draftkings_pick6',
+    displayName: 'DraftKings Pick6',
+    version: 'draft-2026-05',
+    effectiveFrom: '2026-05-01',
+    status: 'draft',
+    sources: [
+      {
+        label: 'DraftKings Pick6 rules and scoring',
+        url: 'https://pick6.draftkings.com/pick6-rules-and-scoring',
+        note: 'Draft fixture only; not registered by default.',
+      },
+    ],
+    playTypes: [
+      {
+        id: 'pick6',
+        displayName: 'Pick6',
+        payoutModel: 'custom',
+        pickCount: { min: 2, max: 6 },
+      },
+    ],
+    tiePolicy: { type: 'more_wins_less_loses' },
+    dnpPolicy: { type: 'remove_leg', voidIfNoSurvivors: true },
+    pushPolicy: { type: 'loss' },
+    payoutSplit: { type: 'all_withdrawable' },
+    validation: { duplicatePlayers: 'warn', sameTeam: 'allow', sameGame: 'allow' },
+    payoutResolver: ({ stake, hits, pickCount }) => ({
+      multiplier: hits === pickCount ? 10 : 0,
+      payout: {
+        total: hits === pickCount ? stake * 10 : 0,
+        withdrawable: hits === pickCount ? stake * 10 : 0,
+        bonus: 0,
+      },
+      explanationCode: 'settlement.draft_fixture_custom_payout',
+      confidence: 'low',
+    }),
+  }),
+];
+
+export function defineBookPolicy(policy: DfsBookPolicy): DfsBookPolicy {
+  if (!policy.id || !String(policy.id).trim()) {
+    throw new Error('defineBookPolicy: id is required');
+  }
+  if (!policy.displayName || !policy.displayName.trim()) {
+    throw new Error('defineBookPolicy: displayName is required');
+  }
+  if (!policy.version || !policy.version.trim()) {
+    throw new Error('defineBookPolicy: version is required');
+  }
+  if (!policy.effectiveFrom || !policy.effectiveFrom.trim()) {
+    throw new Error('defineBookPolicy: effectiveFrom is required');
+  }
+  if (!policy.playTypes.length) {
+    throw new Error('defineBookPolicy: at least one play type is required');
+  }
+  if (policy.playTypes.some((playType) => !playType.id || !playType.displayName)) {
+    throw new Error('defineBookPolicy: every play type needs an id and displayName');
+  }
+  return Object.freeze({
+    ...policy,
+    sources: Object.freeze([...policy.sources]),
+    playTypes: Object.freeze(policy.playTypes.map((playType) => Object.freeze({ ...playType }))),
+  });
+}
+
+export function definePayoutTable(table: DfsPayoutTableDefinition): DfsPayoutTableDefinition {
+  if (!table.bookId || !String(table.bookId).trim()) {
+    throw new Error('definePayoutTable: bookId is required');
+  }
+  if (!table.playTypeId || !String(table.playTypeId).trim()) {
+    throw new Error('definePayoutTable: playTypeId is required');
+  }
+  if (!table.entries.length) {
+    throw new Error('definePayoutTable: entries are required');
+  }
+  return Object.freeze({
+    ...table,
+    entries: Object.freeze(table.entries.map((entry) => Object.freeze({ ...entry }))),
+  });
+}
 
 export function defineLeagueAdapter(
   adapter: DfsLeagueAdapterDefinition,
 ): DfsLeagueAdapterDefinition {
-  if (!adapter.league.trim()) throw new Error('defineLeagueAdapter: league must be non-empty');
-  return adapter;
-}
-
-export function defineBookPolicy(policy: DfsBookPolicy): DfsBookPolicy {
-  if (!policy.app) throw new Error('defineBookPolicy: app is required');
-  if (!policy.version.trim()) throw new Error('defineBookPolicy: version must be non-empty');
-  return policy;
-}
-
-export function definePayoutTable(table: DfsPayoutTableDefinition): DfsPayoutTableDefinition {
-  if (table.entries.length === 0) throw new Error('definePayoutTable: entries must be non-empty');
-  return table;
+  if (!adapter.league || !adapter.league.trim()) {
+    throw new Error('defineLeagueAdapter: league is required');
+  }
+  return Object.freeze({
+    ...adapter,
+    propAliases: adapter.propAliases ? Object.freeze({ ...adapter.propAliases }) : undefined,
+    adapters: adapter.adapters ? Object.freeze({ ...adapter.adapters }) : undefined,
+  });
 }
 
 export function defineStatProvider(provider: StatProvider): StatProvider {
-  if (!provider.id.trim()) throw new Error('defineStatProvider: id must be non-empty');
-  if (!provider.getActual && !provider.getGameLog) {
-    throw new Error('defineStatProvider: provide getActual or getGameLog');
+  if (!provider.id || !provider.id.trim()) {
+    throw new Error('defineStatProvider: id is required');
+  }
+  if (!provider.extractStat && !provider.getGameLog) {
+    throw new Error('defineStatProvider: extractStat or getGameLog is required');
   }
   return provider;
 }
 
-const DEFAULT_BOOK_POLICIES: DfsBookPolicy[] = [
-  {
-    app: 'prizepicks',
-    version: '2026-05',
-    effectiveFrom: '2026-05-01',
-    sourceNotes: ['Default v2 policy profile extracted from the v1 payout and DNP behavior.'],
-    dnp: { removeLeg: true, voidIfNoSurvivors: true },
-    push: { removeLeg: true, refundIfNoSurvivors: true },
-  },
-  {
-    app: 'underdog',
-    version: '2026-05',
-    effectiveFrom: '2026-05-01',
-    sourceNotes: [
-      'Default v2 policy profile; provider-specific rescued-pick inputs are modeled as DNP removals.',
-    ],
-    dnp: { removeLeg: true, voidIfNoSurvivors: true },
-    push: { removeLeg: true, refundIfNoSurvivors: true },
-  },
-];
+export function adaptV2EntryInput(
+  input: DfsV2EntryInput,
+): DfsEntryInput & { app?: undefined; playType?: undefined } {
+  const { app: legacyApp, playType: legacyPlayType, ...rest } = input;
+  return {
+    ...rest,
+    bookId: legacyApp,
+    playTypeId: legacyPlayType,
+    app: undefined,
+    playType: undefined,
+  };
+}
 
-const DEFAULT_LEAGUES: DfsLeagueAdapterDefinition[] = [
-  { league: 'NBA', adapters: BASKETBALL_ADAPTERS },
-  { league: 'WNBA', adapters: BASKETBALL_ADAPTERS },
-  { league: 'NCAAM', adapters: BASKETBALL_ADAPTERS },
-  { league: 'NCAAW', adapters: BASKETBALL_ADAPTERS },
-  { league: 'NFL', adapters: NFL_ADAPTERS },
-  { league: 'MLB', adapters: MLB_ADAPTERS },
-  { league: 'NHL', adapters: NHL_ADAPTERS },
-  { league: 'EPL', adapters: SOCCER_ADAPTERS },
-  { league: 'MLS', adapters: SOCCER_ADAPTERS },
-  { league: 'LALIGA', adapters: SOCCER_ADAPTERS },
-  { league: 'NWSL', adapters: SOCCER_ADAPTERS },
-  { league: 'UCL', adapters: SOCCER_ADAPTERS },
-];
+export function adaptBuzzrBetInput(input: CreateDfsBetInput): DfsEntryInput {
+  return {
+    entryId: input.parsedImageHash ?? `${input.userId}:${input.placedAt ?? 'draft'}`,
+    bookId: input.app,
+    playTypeId: input.playType,
+    stake: input.stakeAmount,
+    displayedMultiplier: input.multiplier,
+    baseMultiplier: input.baseMultiplier,
+    profitBoostPct: input.profitBoostPct,
+    placedAt: input.placedAt,
+    legs: input.legs.map((leg) => adaptBuzzrLeg(leg)),
+    metadata: {
+      userId: input.userId,
+      source: input.source,
+      visibility: input.visibility,
+      initialStatus: input.initialStatus,
+      settlementSource: input.settlementSource,
+    },
+  };
+}
+
+function adaptBuzzrLeg(leg: DfsBetLeg): DfsLegInput {
+  return {
+    legId: leg.legId,
+    playerId: leg.playerAthleteId,
+    playerName: leg.playerName,
+    team: leg.playerTeam,
+    league: leg.league,
+    propType: normalizeDfsPropType(leg.propType),
+    line: leg.line,
+    direction: leg.direction,
+    stat: leg.actualValue,
+    status: leg.legStatus,
+    gameId: leg.gameContext.gameId,
+    gameDate: leg.gameContext.gameDate,
+    metadata: {
+      gameContext: leg.gameContext,
+      linkage: leg.linkage,
+      boostType: leg.boostType,
+      gradingSnapshot: leg.gradingSnapshot,
+    },
+  };
+}
 
 export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
-  const leagues = new Map<string, AdapterTable>();
-  const policies = new Map<DfsApp, DfsBookPolicy>();
-  const payoutTables = [...(config.payoutTables ?? [])];
-  const statProviders = new Map<string, StatProvider>();
   const clock = config.clock ?? (() => new Date());
+  const bookPolicies = new Map<DfsBookId, DfsBookPolicy>();
+  const payoutTables: DfsPayoutTableDefinition[] = DEFAULT_PAYOUT_TABLES.map((table) => ({
+    ...table,
+    entries: [...table.entries],
+  }));
+  const leagueAdapters = new Map<string, DfsLeagueAdapterDefinition>();
+  const statProviders = new Map<string, StatProvider>();
 
-  const registerLeague = (adapter: DfsLeagueAdapterDefinition): void => {
-    const normalized = adapter.league.toUpperCase();
-    leagues.set(normalized, adapter.adapters);
-    for (const alias of adapter.aliases ?? []) {
-      leagues.set(alias.toUpperCase(), adapter.adapters);
+  for (const policy of DEFAULT_BOOK_POLICIES) {
+    bookPolicies.set(policy.id, policy);
+  }
+  for (const policy of config.bookPolicies ?? []) {
+    bookPolicies.set(policy.id, policy);
+  }
+  for (const table of config.payoutTables ?? []) {
+    payoutTables.push(table);
+  }
+  for (const adapter of config.leagueAdapters ?? []) {
+    leagueAdapters.set(normalizeLeague(adapter.league), adapter);
+  }
+  for (const provider of config.statProviders ?? []) {
+    statProviders.set(provider.id, provider);
+  }
+
+  const auditMetadata = config.audit ?? {};
+
+  function registerBookPolicy(policy: DfsBookPolicy): void {
+    bookPolicies.set(policy.id, defineBookPolicy(policy));
+  }
+
+  function registerPayoutTable(table: DfsPayoutTableDefinition): void {
+    payoutTables.push(definePayoutTable(table));
+  }
+
+  function registerLeagueAdapter(adapter: DfsLeagueAdapterDefinition): void {
+    const defined = defineLeagueAdapter(adapter);
+    leagueAdapters.set(normalizeLeague(defined.league), defined);
+  }
+
+  function registerStatProvider(provider: StatProvider): void {
+    const defined = defineStatProvider(provider);
+    statProviders.set(defined.id, defined);
+  }
+
+  function getRegisteredBooks(): DfsBookId[] {
+    return [...bookPolicies.keys()];
+  }
+
+  function resolvePolicy(
+    entry: Pick<DfsEntryInput, 'bookId' | 'playTypeId'>,
+  ): { policy: DfsBookPolicy; playType: DfsBookPlayType } | null {
+    const policy = bookPolicies.get(entry.bookId);
+    if (!policy) {
+      return null;
     }
-  };
-
-  for (const adapter of DEFAULT_LEAGUES) registerLeague(adapter);
-  for (const adapter of config.leagues ?? []) registerLeague(defineLeagueAdapter(adapter));
-  for (const policy of DEFAULT_BOOK_POLICIES) policies.set(policy.app, policy);
-  for (const policy of config.bookPolicies ?? [])
-    policies.set(policy.app, defineBookPolicy(policy));
-  for (const provider of config.statProviders ?? [])
-    statProviders.set(provider.id, defineStatProvider(provider));
-
-  const nowIso = (context?: DfsSettlementContext): string => {
-    const value = context?.now ?? clock();
-    const date = value instanceof Date ? value : new Date(value);
-    return Number.isFinite(date.getTime()) ? date.toISOString() : clock().toISOString();
-  };
-
-  const audit = (
-    events: DfsAuditEvent[],
-    type: DfsAuditEventType,
-    entryId: string | null,
-    detail: string,
-    context?: DfsSettlementContext,
-    legId?: string,
-  ): void => {
-    events.push({
-      type,
-      at: nowIso(context),
-      entryId,
-      legId,
-      detail,
-      runId: context?.auditRunId ?? null,
-    });
-  };
-
-  const lookupConfiguredMultiplier = (opts: {
-    app: DfsApp;
-    playType: DfsPlayType;
-    pickCount: number;
-    hits: number;
-  }): number | null => {
-    for (let i = payoutTables.length - 1; i >= 0; i -= 1) {
-      const table = payoutTables[i];
-      if (table?.app !== opts.app || table.playType !== opts.playType) continue;
-      const entry = table.entries.find(
-        (row) => row.pickCount === opts.pickCount && row.hits === opts.hits,
-      );
-      if (entry) return entry.multiplier;
+    const playType = policy.playTypes.find((candidate) => candidate.id === entry.playTypeId);
+    if (!playType) {
+      return null;
     }
-    return lookupStandardMultiplier(opts);
-  };
+    return { policy, playType };
+  }
 
-  const normalizeEntry = (input: DfsEntryInput): DfsEntryInput => {
+  function findPayoutTable(
+    bookId: DfsBookId,
+    playTypeId: DfsPlayTypeId,
+  ): DfsPayoutTableDefinition | null {
+    return (
+      [...payoutTables]
+        .reverse()
+        .find((table) => table.bookId === bookId && table.playTypeId === playTypeId) ?? null
+    );
+  }
+
+  function lookupTableMultiplier(
+    bookId: DfsBookId,
+    playTypeId: DfsPlayTypeId,
+    picks: number,
+    hits: number,
+  ): number | null {
+    const table = findPayoutTable(bookId, playTypeId);
+    if (!table) {
+      return null;
+    }
+    return (
+      table.entries.find((entry) => tableEntryPicks(entry) === picks && entry.hits === hits)
+        ?.multiplier ?? null
+    );
+  }
+
+  function resolveBaseMultiplier(input: DfsPayoutLookupInput): number | null {
+    if (input.baseMultiplier != null) {
+      return input.baseMultiplier;
+    }
+    return lookupTableMultiplier(input.bookId, input.playTypeId, input.pickCount, input.pickCount);
+  }
+
+  function normalizeEntry(input: DfsEntryInput): DfsEntryInput {
     const baseMultiplier =
       input.baseMultiplier ??
-      lookupBaseMultiplier({
-        app: input.app,
-        playType: input.playType,
-        pickCount:
-          input.legs.filter((candidate) => candidate.legStatus !== 'dnp').length ||
-          input.legs.length,
-      });
+      lookupTableMultiplier(input.bookId, input.playTypeId, input.legs.length, input.legs.length);
     return {
       ...input,
       baseMultiplier,
       profitBoostPct: input.profitBoostPct ?? null,
       placedAt: input.placedAt ?? null,
-      legs: input.legs.map((inputLeg) => ({
-        ...inputLeg,
-        propType: normalizeDfsPropType(inputLeg.propType),
-        playerId: inputLeg.playerId ?? null,
-        gameId: inputLeg.gameId ?? null,
-        gameDate: inputLeg.gameDate ?? null,
-        actualValue: inputLeg.actualValue ?? null,
-        legStatus: inputLeg.legStatus ?? 'pending',
+      legs: input.legs.map((leg) => ({
+        ...leg,
+        league: normalizeLeague(leg.league),
+        propType: normalizeDfsPropType(leg.propType),
       })),
     };
-  };
+  }
 
-  const runAdapter = (
+  async function extractLegStat(
     leg: DfsLegInput,
-    actualEntry: PlayerGameLogEntryShape,
-    app: DfsApp,
-    provenance: DfsProvenance,
-    opts?: StatAdapterOptions,
-  ): DfsLegStatResult => {
-    const key = asDfsPropTypeKey(leg.propType);
-    if (!key) {
-      return {
-        ok: false,
-        reason: 'unknown_prop',
-        detail: `propType=${JSON.stringify(leg.propType)} not in DfsPropTypeKey or alias table`,
-        normalizedPropType: null,
-        provenance,
-      };
-    }
-    const table = leagues.get(leg.league.toUpperCase());
-    if (!table) {
-      return {
-        ok: false,
-        reason: 'unsupported_league',
-        detail: `league=${JSON.stringify(leg.league)} not registered`,
-        normalizedPropType: key,
-        provenance,
-      };
-    }
-    const adapter = table[key];
-    if (!adapter) {
-      return {
-        ok: false,
-        reason: 'prop_not_supported_for_league',
-        detail: `prop=${key} has no adapter for league=${leg.league.toUpperCase()}`,
-        normalizedPropType: key,
-        provenance,
-      };
-    }
-    const value = adapter(actualEntry, app, opts);
-    if (value == null || !Number.isFinite(value)) {
-      return {
-        ok: false,
-        reason: 'adapter_returned_null',
-        detail: `prop=${key} league=${leg.league.toUpperCase()} adapter returned ${String(value)}`,
-        normalizedPropType: key,
-        provenance,
-      };
-    }
-    return {
-      ok: true,
-      value,
-      normalizedPropType: key,
-      provenance,
-    };
-  };
-
-  const extractFromProvider = async (
-    provider: StatProvider,
-    leg: DfsLegInput,
-    entry: DfsEntryInput,
-    context: DfsSettlementContext,
-    normalizedPropType: DfsPropTypeKey,
-  ): Promise<DfsLegStatResult> => {
-    const provenance: DfsProvenance = {
-      source: 'stat-provider',
-      providerId: provider.id,
-      detail: null,
-    };
-    try {
-      if (provider.getActual) {
-        const value = await provider.getActual({ leg, entry, context, normalizedPropType });
-        if (value != null && Number.isFinite(value)) {
-          return { ok: true, value, normalizedPropType, provenance };
-        }
-      }
-      if (!provider.getGameLog) {
-        return {
-          ok: false,
-          reason: 'stats_missing',
-          detail: `provider=${provider.id} did not return an actual value`,
-          normalizedPropType,
-          provenance,
-        };
-      }
-      const entries = await provider.getGameLog({ leg, entry, context });
-      const candidates = findGameLogCandidates(leg.gameDate ?? entry.placedAt ?? null, entries);
-      if (candidates.length === 0) {
-        return {
-          ok: false,
-          reason: 'stats_missing',
-          detail: `provider=${provider.id} returned no gamelog entry for leg=${leg.legId}`,
-          normalizedPropType,
-          provenance,
-        };
-      }
-      if (candidates.length > 1) {
-        return {
-          ok: false,
-          reason: 'ambiguous_game',
-          detail: `provider=${provider.id} returned ${candidates.length} plausible gamelog entries`,
-          normalizedPropType,
-          provenance,
-        };
-      }
-      return runAdapter(leg, candidates[0]!, entry.app, provenance, context.statAdapterOptions);
-    } catch (error) {
-      return {
-        ok: false,
-        reason: 'provider_failed',
-        detail: error instanceof Error ? error.message : String(error),
-        normalizedPropType,
-        provenance,
-      };
-    }
-  };
-
-  const extractLegStat = async (
-    rawLeg: DfsLegInput,
-    rawEntry: DfsEntryInput,
     context: DfsSettlementContext = {},
-  ): Promise<DfsLegStatResult> => {
-    const entry = normalizeEntry(rawEntry);
-    const leg = normalizeEntry({ ...entry, legs: [rawLeg] }).legs[0]!;
-    const key = asDfsPropTypeKey(leg.propType);
-    const hasContextActual = Object.prototype.hasOwnProperty.call(
-      context.actualsByLegId ?? {},
-      leg.legId,
-    );
-
-    if (hasContextActual) {
-      const value = context.actualsByLegId?.[leg.legId];
-      if (value != null && Number.isFinite(value) && key) {
-        return {
-          ok: true,
-          value,
-          normalizedPropType: key,
-          provenance: { source: 'context.actuals', providerId: null, detail: null },
-        };
-      }
-      return {
-        ok: false,
-        reason: 'stats_missing',
-        detail: `context actual for leg=${leg.legId} is ${String(value)}`,
-        normalizedPropType: key,
-        provenance: { source: 'context.actuals', providerId: null, detail: null },
-      };
-    }
-
-    if (context.actualEntry) {
-      return runAdapter(
-        leg,
-        context.actualEntry,
-        entry.app,
-        { source: 'context.entry', providerId: null, detail: null },
-        context.statAdapterOptions,
-      );
-    }
-
-    if (leg.actualValue != null && Number.isFinite(leg.actualValue) && key) {
+    entry?: DfsEntryInput,
+  ): Promise<DfsLegStatResult> {
+    const contextStat = (context.statsByLegId ?? context.actualsByLegId)?.[leg.legId];
+    if (typeof contextStat === 'number' && Number.isFinite(contextStat)) {
       return {
         ok: true,
-        value: leg.actualValue,
-        normalizedPropType: key,
-        provenance: { source: 'entry.actualValue', providerId: null, detail: null },
+        actual: contextStat,
+        value: contextStat,
+        source: 'context',
+        providerId: context.providerId ?? context.statProviderId,
+        provenance: provenance(
+          'context',
+          context.providerId ?? context.statProviderId,
+          context.settledAt,
+        ),
       };
     }
 
-    if (!key) {
+    if (typeof leg.stat === 'number' && Number.isFinite(leg.stat)) {
+      return {
+        ok: true,
+        actual: leg.stat,
+        value: leg.stat,
+        source: 'input',
+        provenance: provenance('input', undefined, context.settledAt),
+      };
+    }
+
+    for (const provider of statProviders.values()) {
+      if (context.statProviderId && provider.id !== context.statProviderId) {
+        continue;
+      }
+      try {
+        if (provider.extractStat) {
+          const result = await provider.extractStat({ leg, context });
+          if (result.ok) {
+            return {
+              ok: true,
+              actual: result.actual,
+              value: result.actual,
+              source: 'stat_provider',
+              providerId: provider.id,
+              provenance: {
+                source: result.source ?? provider.id,
+                providerId: provider.id,
+                sourceRef: result.sourceRef,
+                observedAt: result.observedAt,
+                confidence: result.confidence,
+                raw: result.raw,
+              },
+            };
+          }
+        }
+        if (provider.getGameLog && entry) {
+          const rows = await provider.getGameLog({ leg, entry, context });
+          for (const row of rows) {
+            const actual = runAdapter(leg, row, entry.bookId);
+            if (actual != null) {
+              return {
+                ok: true,
+                actual,
+                value: actual,
+                source: 'stat_provider',
+                providerId: provider.id,
+                provenance: {
+                  source: 'stat-provider',
+                  providerId: provider.id,
+                  observedAt: context.settledAt,
+                  confidence: 1,
+                  raw: row,
+                },
+              };
+            }
+          }
+        }
+      } catch (error) {
+        return {
+          ok: false,
+          reason: 'provider_error',
+          source: 'stat_provider',
+          providerId: provider.id,
+          provenance: {
+            source: provider.id,
+            raw: error instanceof Error ? error.message : String(error),
+          },
+        };
+      }
+    }
+
+    const providerData =
+      context.providerDataByLegId?.[leg.legId] ?? context.actualEntry ?? leg.providerData;
+    if (!providerData) {
       return {
         ok: false,
-        reason: 'unknown_prop',
-        detail: `propType=${JSON.stringify(leg.propType)} not in DfsPropTypeKey or alias table`,
-        normalizedPropType: null,
+        reason: 'missing_provider_data',
+        source: 'provider_data',
+        provenance: provenance('provider_data', undefined, context.settledAt),
       };
     }
 
-    const provider =
-      context.statProviderId != null
-        ? statProviders.get(context.statProviderId)
-        : (Array.from(statProviders.values())[0] ?? null);
-    if (!provider) {
+    const actual = runAdapter(leg, providerData, entry?.bookId ?? 'prizepicks');
+    const localAdapter = leagueAdapters.get(normalizeLeague(leg.league));
+    const localExtractor =
+      localAdapter?.adapters?.[normalizeDfsPropType(leg.propType)] ??
+      localAdapter?.adapters?.[leg.propType];
+    if (localExtractor) {
+      const localActual = localExtractor(providerData, leg);
+      if (typeof localActual === 'number' && Number.isFinite(localActual)) {
+        return {
+          ok: true,
+          actual: localActual,
+          value: localActual,
+          source: 'provider_data',
+          provenance: {
+            ...provenance('league_adapter', undefined, context.settledAt),
+            raw: providerData,
+          },
+        };
+      }
+    }
+    if (actual == null) {
       return {
         ok: false,
-        reason: context.statProviderId ? 'provider_not_found' : 'stats_missing',
-        detail: context.statProviderId
-          ? `statProviderId=${context.statProviderId} not registered`
-          : `no actual value or stat provider available for leg=${leg.legId}`,
-        normalizedPropType: key,
+        reason: 'unsupported_prop',
+        source: 'provider_data',
+        provenance: {
+          ...provenance('provider_data', undefined, context.settledAt),
+          raw: providerData,
+        },
       };
     }
-    return extractFromProvider(provider, leg, entry, context, key);
-  };
 
-  const gradeLeg = (
-    inputLeg: DfsLegInput,
-    actual: number | null,
-    provenance: DfsProvenance | null = null,
-  ): DfsLegDecision => {
-    const normalizedPropType = normalizeDfsPropType(inputLeg.propType);
-    const status = gradeLegFromActual(inputLeg.line, inputLeg.direction, actual);
     return {
-      legId: inputLeg.legId,
-      status,
-      line: inputLeg.line,
-      direction: inputLeg.direction,
+      ok: true,
       actual,
-      propType: inputLeg.propType,
-      normalizedPropType,
-      pendingReason: status === 'pending' ? 'stats_missing' : null,
-      provenance,
+      value: actual,
+      source: 'provider_data',
+      provenance: {
+        ...provenance('provider_data', undefined, context.settledAt),
+        raw: providerData,
+      },
     };
-  };
+  }
 
-  const settleEntry = async (
+  function gradeLeg(leg: DfsLegInput, actual: number, entry?: DfsEntryInput): DfsLegOutcome {
+    const normalized = {
+      ...leg,
+      propType: normalizeDfsPropType(leg.propType),
+      league: normalizeLeague(leg.league),
+    };
+    const resolution = entry ? resolvePolicy(entry) : null;
+    const tiePolicy = resolution?.policy.tiePolicy ?? { type: 'push' };
+    return gradeLegWithTiePolicy(normalized, actual, tiePolicy, entry, {});
+  }
+
+  function lookupPayout(input: DfsPayoutLookupInput): DfsPayoutResolution | null {
+    const pseudoEntry =
+      input.entry ??
+      ({
+        entryId: 'lookup',
+        bookId: input.bookId,
+        playTypeId: input.playTypeId,
+        stake: input.stake,
+        displayedMultiplier: input.displayedMultiplier ?? 0,
+        baseMultiplier: input.baseMultiplier,
+        profitBoostPct: input.profitBoostPct,
+        legs: [],
+      } satisfies DfsEntryInput);
+    const resolved = resolvePolicy(pseudoEntry);
+    if (!resolved) {
+      return null;
+    }
+    return lookupPayoutForPolicy(
+      {
+        ...input,
+        entry: pseudoEntry,
+        decisions: input.decisions ?? [],
+        losses: input.losses ?? 0,
+        pushes: input.pushes ?? 0,
+        removedCount: input.removedCount ?? 0,
+      },
+      resolved.policy,
+      resolved.playType,
+    );
+  }
+
+  function validateEntry(input: DfsEntryInput): DfsValidationResult {
+    const errors: DfsValidationIssue[] = [];
+    const warnings: DfsValidationIssue[] = [];
+    const resolved = resolvePolicy(input);
+    if (!resolved) {
+      errors.push({
+        code: 'validation.unknown_book_or_play_type',
+        message: `No policy is registered for ${input.bookId}/${input.playTypeId}.`,
+        severity: 'error',
+      });
+      return { ok: false, errors, warnings };
+    }
+
+    const { policy, playType } = resolved;
+    const issueSink = (severity: DfsValidationSeverity): DfsValidationIssue[] | null => {
+      if (severity === 'error') {
+        return errors;
+      }
+      if (severity === 'warn') {
+        return warnings;
+      }
+      return null;
+    };
+
+    if (input.legs.length < playType.pickCount.min || input.legs.length > playType.pickCount.max) {
+      errors.push({
+        code: 'validation.pick_count',
+        message: `${policy.displayName} ${playType.displayName} requires ${playType.pickCount.min}-${playType.pickCount.max} picks.`,
+        severity: 'error',
+      });
+    }
+
+    const allowedLeagues = policy.validation?.leagues;
+    if (allowedLeagues?.length) {
+      const allowed = new Set(allowedLeagues.map((league) => normalizeLeague(league)));
+      for (const leg of input.legs) {
+        if (!allowed.has(normalizeLeague(leg.league))) {
+          errors.push({
+            code: 'validation.league_restricted',
+            message: `${normalizeLeague(leg.league)} is not allowed by ${policy.displayName}.`,
+            severity: 'error',
+            legIds: [leg.legId],
+          });
+        }
+      }
+    }
+
+    const duplicateSeverity = policy.validation?.duplicatePlayers ?? 'allow';
+    const duplicateSink = issueSink(duplicateSeverity);
+    if (duplicateSink) {
+      const players = new Map<string, DfsLegInput[]>();
+      for (const leg of input.legs) {
+        const key = leg.playerId ?? leg.playerName.trim().toLowerCase();
+        if (!key) {
+          continue;
+        }
+        const existing = players.get(key) ?? [];
+        existing.push(leg);
+        players.set(key, existing);
+      }
+      for (const duplicate of players.values()) {
+        if (duplicate.length > 1) {
+          const key = duplicate[0].playerId ?? duplicate[0].playerName.trim().toLowerCase();
+          duplicateSink.push({
+            code: 'validation.duplicate_player',
+            message: `Duplicate player ${key} is not allowed by ${policy.id}.`,
+            severity: duplicateSeverity === 'error' ? 'error' : 'warning',
+            legIds: duplicate.map((leg) => leg.legId),
+          });
+        }
+      }
+    }
+
+    const sameTeamSeverity = policy.validation?.sameTeam ?? 'allow';
+    const sameTeamSink = issueSink(sameTeamSeverity);
+    if (sameTeamSink) {
+      addGroupedValidationIssues({
+        legs: input.legs,
+        getKey: (leg) => leg.team?.trim().toUpperCase() || null,
+        sink: sameTeamSink,
+        severity: sameTeamSeverity === 'error' ? 'error' : 'warn',
+        code: 'validation.same_team',
+        message: (team) => `Multiple picks from ${team} are not allowed by ${policy.id}.`,
+      });
+    }
+
+    const sameGameSeverity = policy.validation?.sameGame ?? 'allow';
+    const sameGameSink = issueSink(sameGameSeverity);
+    if (sameGameSink) {
+      addGroupedValidationIssues({
+        legs: input.legs,
+        getKey: (leg) => leg.gameId?.trim() || null,
+        sink: sameGameSink,
+        severity: sameGameSeverity === 'error' ? 'error' : 'warn',
+        code: 'validation.same_game',
+        message: (gameId) => `Multiple picks from game ${gameId} are not allowed by ${policy.id}.`,
+      });
+    }
+
+    return { ok: errors.length === 0, errors, warnings };
+  }
+
+  async function settleEntry(
     input: DfsEntryInput,
     context: DfsSettlementContext = {},
-  ): Promise<DfsSettlementResult> => {
-    const normalized = normalizeEntry(input);
-    const events: DfsAuditEvent[] = [];
-    audit(
-      events,
-      'entry.normalized',
-      normalized.entryId ?? null,
-      `${normalized.legs.length} legs normalized`,
-      context,
-    );
+  ): Promise<DfsSettlementResult> {
+    const entry = normalizeEntry(input);
+    const settledAt = context.settledAt ?? clock().toISOString();
+    const auditTrail: DfsSettlementResult['auditTrail'] = [
+      {
+        at: settledAt,
+        code: 'settlement.started',
+        message: `Started settlement for ${entry.entryId}.`,
+        metadata: auditMetadata,
+      },
+    ];
+    const validation = validateEntry(entry);
+    const resolved = resolvePolicy(entry);
+    if (!resolved) {
+      return pendingResult({
+        entry,
+        settledAt,
+        context,
+        auditTrail,
+        pendingReasons: ['missing_policy'],
+        explanationCodes: ['validation.unknown_book_or_play_type'],
+        validation,
+      });
+    }
 
+    const { policy, playType } = resolved;
     const decisions: DfsLegDecision[] = [];
     const adjustments: DfsSettlementAdjustment[] = [];
+    const pendingReasons: string[] = [];
+    const explanationCodes = new Set<string>();
+    for (const warning of validation.warnings) {
+      explanationCodes.add(warning.code);
+    }
+    for (const error of validation.errors) {
+      explanationCodes.add(error.code);
+    }
 
-    for (const currentLeg of normalized.legs) {
-      if (currentLeg.legStatus === 'dnp') {
+    for (const leg of entry.legs) {
+      const contextStatus =
+        (context.legStatusesByLegId ?? context.legStatusByLegId)?.[leg.legId] ??
+        leg.status ??
+        leg.legStatus;
+      if (contextStatus === 'dnp') {
+        const outcome = resolveDnpOutcome(policy, leg, entry, context);
         decisions.push({
-          legId: currentLeg.legId,
-          status: 'dnp',
-          line: currentLeg.line,
-          direction: currentLeg.direction,
+          legId: leg.legId,
+          status: outcome,
           actual: null,
-          propType: currentLeg.propType,
-          normalizedPropType: currentLeg.propType,
+          line: leg.line,
+          direction: leg.direction,
+          playerName: leg.playerName,
+          propType: leg.propType,
+          provider: provenance('status', context.providerId, settledAt),
           pendingReason: null,
-          provenance: null,
         });
-        adjustments.push({ type: 'dnp', legIds: [currentLeg.legId], reason: 'leg_marked_dnp' });
-        audit(
-          events,
-          'entry.adjusted',
-          normalized.entryId ?? null,
-          'leg removed as DNP',
-          context,
-          currentLeg.legId,
-        );
+        adjustments.push({
+          type: outcome === 'manual' ? 'manual' : 'dnp',
+          legId: leg.legId,
+          message: `${leg.playerName} was marked ${outcome}.`,
+        });
+        explanationCodes.add(`leg.${outcome}`);
+        continue;
+      }
+      if (
+        contextStatus === 'void' ||
+        contextStatus === 'rescued' ||
+        contextStatus === 'canceled' ||
+        contextStatus === 'manual'
+      ) {
+        decisions.push({
+          legId: leg.legId,
+          status: contextStatus,
+          actual: null,
+          line: leg.line,
+          direction: leg.direction,
+          playerName: leg.playerName,
+          propType: leg.propType,
+          provider: provenance('status', context.providerId, settledAt),
+          pendingReason: null,
+        });
+        adjustments.push({
+          type: contextStatus,
+          legId: leg.legId,
+          message: `${leg.playerName} was marked ${contextStatus}.`,
+        });
+        explanationCodes.add(`leg.${contextStatus}`);
         continue;
       }
 
-      const stat = await extractLegStat(currentLeg, normalized, context);
+      const stat = await extractLegStat(leg, context, entry);
       if (!stat.ok) {
         decisions.push({
-          legId: currentLeg.legId,
+          legId: leg.legId,
           status: 'pending',
-          line: currentLeg.line,
-          direction: currentLeg.direction,
           actual: null,
-          propType: currentLeg.propType,
-          normalizedPropType: stat.normalizedPropType ?? currentLeg.propType,
+          line: leg.line,
+          direction: leg.direction,
+          playerName: leg.playerName,
+          propType: leg.propType,
+          provider: stat.provenance,
           pendingReason: stat.reason,
-          provenance: stat.provenance ?? null,
         });
-        audit(
-          events,
-          'leg.actual.pending',
-          normalized.entryId ?? null,
-          stat.detail,
-          context,
-          currentLeg.legId,
-        );
+        pendingReasons.push(`${leg.legId}:${stat.reason}`);
+        explanationCodes.add(`leg.pending.${stat.reason}`);
         continue;
       }
 
-      audit(
-        events,
-        'leg.actual.resolved',
-        normalized.entryId ?? null,
-        `${currentLeg.propType}=${stat.value}`,
-        context,
-        currentLeg.legId,
-      );
-      const decision = gradeLeg(currentLeg, stat.value, stat.provenance);
-      decisions.push(decision);
-      audit(
-        events,
-        'leg.graded',
-        normalized.entryId ?? null,
-        decision.status,
-        context,
-        currentLeg.legId,
-      );
-    }
-
-    const removedLegIds = decisions
-      .filter((decision) => decision.status === 'dnp' || decision.status === 'push')
-      .map((decision) => decision.legId);
-    for (const pushed of decisions.filter((decision) => decision.status === 'push')) {
-      adjustments.push({ type: 'push', legIds: [pushed.legId], reason: 'leg_pushed' });
-    }
-
-    const surviving = decisions.filter(
-      (decision) => decision.status !== 'dnp' && decision.status !== 'push',
-    );
-    if (surviving.length === 0) {
-      const status: BetStatus = decisions.some((decision) => decision.status === 'dnp')
-        ? 'void'
-        : 'pushed';
-      adjustments.push({ type: 'void', legIds: removedLegIds, reason: 'all_legs_removed' });
-      const payout = { total: normalized.stake, withdrawable: normalized.stake, bonus: 0 };
-      audit(events, 'entry.settled', normalized.entryId ?? null, status, context);
-      return {
-        entryId: normalized.entryId ?? null,
-        app: normalized.app,
-        playType: normalized.playType,
+      let status = gradeLegWithTiePolicy(leg, stat.actual, policy.tiePolicy, entry, context);
+      if (status === 'push') {
+        status = resolvePushOutcome(policy, leg, entry, context);
+      }
+      decisions.push({
+        legId: leg.legId,
         status,
-        effectiveMultiplier: 0,
-        payout,
-        legs: decisions,
-        adjustments,
-        audit: events,
-      };
+        actual: stat.actual,
+        line: leg.line,
+        direction: leg.direction,
+        playerName: leg.playerName,
+        propType: leg.propType,
+        provider: stat.provenance,
+        pendingReason: null,
+      });
+      if (status === 'push') {
+        adjustments.push({
+          type: 'push',
+          legId: leg.legId,
+          message: `${leg.playerName} pushed and was removed by policy.`,
+        });
+        explanationCodes.add('leg.push_removed');
+      }
     }
 
-    if (surviving.some((decision) => decision.status === 'pending')) {
-      audit(events, 'entry.settled', normalized.entryId ?? null, 'pending', context);
+    if (decisions.some((decision) => decision.status === 'manual')) {
+      pendingReasons.push('manual_action_required');
+      explanationCodes.add('settlement.manual_action_required');
+    }
+
+    if (pendingReasons.length) {
+      auditTrail.push({
+        at: settledAt,
+        code: 'settlement.pending',
+        message: 'Settlement is pending missing or unsupported stat data.',
+      });
       return {
-        entryId: normalized.entryId ?? null,
-        app: normalized.app,
-        playType: normalized.playType,
+        entryId: entry.entryId,
+        bookId: entry.bookId,
+        playTypeId: entry.playTypeId,
         status: 'pending',
-        effectiveMultiplier: normalized.displayedMultiplier,
-        payout: { total: 0, withdrawable: 0, bonus: 0 },
+        multiplier: 0,
+        effectiveMultiplier: 0,
+        payout: EMPTY_PAYOUT,
+        stake: entry.stake,
+        displayedMultiplier: entry.displayedMultiplier,
+        baseMultiplier: entry.baseMultiplier,
+        profitBoostPct: entry.profitBoostPct,
         legs: decisions,
         adjustments,
-        audit: events,
+        pendingReasons,
+        policyVersion: policy.version,
+        sourceRefs: [...policy.sources],
+        confidence: 'low',
+        explanationCodes: [...explanationCodes],
+        provenance: {
+          providers: decisions.map((decision) => decision.provider),
+          settledAt,
+          auditId: context.auditId ?? context.auditRunId,
+        },
+        auditTrail,
       };
     }
 
-    let displayedMultiplier = normalized.displayedMultiplier;
-    if (removedLegIds.length > 0) {
-      const reprice = recalcMultiplierAfterDnp({
-        app: normalized.app,
-        playType: normalized.playType,
-        originalPickCount: normalized.legs.length,
-        survivingPickCount: surviving.length,
-        survivingHits: surviving.filter((decision) => decision.status === 'won').length,
-        originalMultiplier: normalized.displayedMultiplier,
-      });
-      displayedMultiplier = reprice.newMultiplier;
+    const removedStatuses = new Set<DfsLegOutcome>(['dnp', 'push', 'void', 'rescued', 'canceled']);
+    const active = decisions.filter((decision) => !removedStatuses.has(decision.status));
+    const removed = decisions.length - active.length;
+    if (active.length === 0) {
       adjustments.push({
-        type: 'reprice',
-        legIds: removedLegIds,
-        reason: 'removed_legs',
-        multiplier: reprice.newMultiplier,
-        usedFallback: reprice.usedFallback,
+        type: 'void',
+        message: 'All legs were removed by policy, so the entry returns stake.',
+      });
+      explanationCodes.add('settlement.all_legs_removed_refund');
+      return {
+        entryId: entry.entryId,
+        bookId: entry.bookId,
+        playTypeId: entry.playTypeId,
+        status: 'void',
+        multiplier: 1,
+        effectiveMultiplier: 1,
+        payout: splitAllWithdrawable(entry.stake),
+        stake: entry.stake,
+        displayedMultiplier: entry.displayedMultiplier,
+        baseMultiplier: entry.baseMultiplier,
+        profitBoostPct: entry.profitBoostPct,
+        legs: decisions,
+        adjustments,
+        pendingReasons,
+        policyVersion: policy.version,
+        sourceRefs: [...policy.sources],
+        confidence: 'high',
+        explanationCodes: [...explanationCodes],
+        provenance: {
+          providers: decisions.map((decision) => decision.provider),
+          settledAt,
+          auditId: context.auditId ?? context.auditRunId,
+        },
+        auditTrail: [
+          ...auditTrail,
+          {
+            at: settledAt,
+            code: 'settlement.void',
+            message: 'Entry voided because no active legs remained.',
+          },
+        ],
+      };
+    }
+
+    const hits = active.filter((decision) => decision.status === 'won').length;
+    const losses = active.filter((decision) => decision.status === 'lost').length;
+    const pushes = decisions.filter((decision) => decision.status === 'push').length;
+    const payout = lookupPayoutForPolicy(
+      {
+        bookId: entry.bookId,
+        playTypeId: entry.playTypeId,
+        stake: entry.stake,
+        displayedMultiplier: entry.displayedMultiplier,
+        baseMultiplier: entry.baseMultiplier,
+        profitBoostPct: entry.profitBoostPct,
+        pickCount: active.length,
+        hits,
+        losses,
+        pushes,
+        removedCount: removed,
+        entry,
+        decisions,
+      },
+      policy,
+      playType,
+    ) ?? {
+      status: losses > 0 ? 'lost' : 'pending',
+      multiplier: 0,
+      payout: EMPTY_PAYOUT,
+      explanationCode: 'settlement.no_payout_resolution',
+      confidence: 'low' as const,
+    };
+
+    explanationCodes.add(payout.explanationCode);
+    if (removed > 0) {
+      explanationCodes.add('settlement.repriced_after_removed_legs');
+      adjustments.push({
+        type: 'void',
+        message: `Payout was recalculated after ${removed} leg${removed === 1 ? '' : 's'} were removed.`,
       });
     }
 
-    const legacyLegs = surviving.map((decision) => decisionToLegacyLeg(normalized.legs, decision));
-    const wonCount = surviving.filter((decision) => decision.status === 'won').length;
-    const isFlex = normalized.playType === 'flex' || normalized.playType === 'underdog_flex';
-    const graded = gradeDfsBetFromGraded({
-      app: normalized.app,
-      playType: normalized.playType,
-      legs: legacyLegs,
-      stake: normalized.stake,
-      displayedMultiplier,
-      baseMultiplier:
-        normalized.baseMultiplier ??
-        lookupConfiguredMultiplier({
-          app: normalized.app,
-          playType: normalized.playType,
-          pickCount: surviving.length,
-          hits: surviving.length,
-        }),
-      profitBoostPct: normalized.profitBoostPct ?? null,
-    });
-    const baseForSplit = isFlex
-      ? lookupConfiguredMultiplier({
-          app: normalized.app,
-          playType: normalized.playType,
-          pickCount: surviving.length,
-          hits: wonCount,
-        })
-      : normalized.baseMultiplier;
-    const split = computeBoostSplit({
-      app: normalized.app,
-      totalPayout: graded.totalPayout,
-      stake: normalized.stake,
-      multiplier: graded.effectiveMultiplier,
-      baseMultiplier: baseForSplit ?? null,
-      profitBoostPct: normalized.profitBoostPct ?? null,
+    auditTrail.push({
+      at: settledAt,
+      code: `settlement.${payout.status}`,
+      message: `Entry settled as ${payout.status}.`,
+      metadata: {
+        multiplier: payout.multiplier,
+        hits,
+        losses,
+        removed,
+      },
     });
 
-    audit(events, 'entry.settled', normalized.entryId ?? null, graded.status, context);
-    return {
-      entryId: normalized.entryId ?? null,
-      app: normalized.app,
-      playType: normalized.playType,
-      status: graded.status,
-      effectiveMultiplier: graded.effectiveMultiplier,
-      payout: {
-        total: split.total,
-        withdrawable: split.withdrawable,
-        bonus: split.bonus,
-      },
+    const result: DfsSettlementResult = {
+      entryId: entry.entryId,
+      bookId: entry.bookId,
+      playTypeId: entry.playTypeId,
+      status: payout.status,
+      multiplier: payout.multiplier,
+      effectiveMultiplier: payout.multiplier,
+      payout: payout.payout,
+      stake: entry.stake,
+      displayedMultiplier: entry.displayedMultiplier,
+      baseMultiplier: entry.baseMultiplier,
+      profitBoostPct: entry.profitBoostPct,
       legs: decisions,
       adjustments,
-      audit: events,
+      pendingReasons,
+      policyVersion: policy.version,
+      sourceRefs: [...policy.sources],
+      confidence: payout.confidence,
+      explanationCodes: [...explanationCodes],
+      provenance: {
+        providers: decisions.map((decision) => decision.provider),
+        settledAt,
+        auditId: context.auditId ?? context.auditRunId,
+      },
+      auditTrail,
     };
-  };
+
+    await config.settlementStore?.saveSettlement?.(result);
+    return result;
+  }
+
+  function explainSettlement(result: DfsSettlementResult): string {
+    const settled = result.legs.filter((leg) => leg.status !== 'pending').length;
+    const total = result.legs.length;
+    return `${result.entryId} settled as ${result.status} for ${result.bookId}/${result.playTypeId} at ${result.multiplier}x. ${settled}/${total} legs settled.`;
+  }
+
+  function lookupPayoutForPolicy(
+    input: Required<Pick<DfsPayoutLookupInput, 'entry' | 'decisions'>> &
+      Omit<DfsPayoutLookupInput, 'entry' | 'decisions'> & {
+        losses: number;
+        pushes: number;
+        removedCount: number;
+      },
+    policy: DfsBookPolicy,
+    playType: DfsBookPlayType,
+  ): DfsPayoutResolution | null {
+    if (playType.allOrNothing && input.losses > 0) {
+      return {
+        status: 'lost',
+        multiplier: 0,
+        payout: EMPTY_PAYOUT,
+        explanationCode: 'settlement.all_or_nothing_loss',
+        confidence: 'high',
+      };
+    }
+
+    if (playType.payoutModel === 'custom') {
+      if (!policy.payoutResolver) {
+        return null;
+      }
+      const resolved = policy.payoutResolver({
+        bookId: input.bookId,
+        playTypeId: input.playTypeId,
+        stake: input.stake,
+        displayedMultiplier: input.displayedMultiplier,
+        baseMultiplier: input.baseMultiplier,
+        profitBoostPct: input.profitBoostPct,
+        pickCount: input.pickCount,
+        hits: input.hits,
+        losses: input.losses,
+        pushes: input.pushes,
+        removedCount: input.removedCount,
+        entry: input.entry,
+        decisions: input.decisions,
+      });
+      const payout =
+        resolved.payout ??
+        splitPayout(policy, {
+          stake: input.stake,
+          multiplier: resolved.multiplier,
+          totalPayout: input.stake * resolved.multiplier,
+          baseMultiplier: input.baseMultiplier,
+          profitBoostPct: input.profitBoostPct,
+        });
+      return {
+        status: resolved.multiplier > 0 ? 'won' : 'lost',
+        multiplier: resolved.multiplier,
+        payout,
+        explanationCode: resolved.explanationCode ?? 'settlement.custom_payout',
+        confidence: resolved.confidence ?? 'medium',
+      };
+    }
+
+    let multiplier: number | null = null;
+    let explanationCode = 'settlement.fixed_table_payout';
+    let baseForSplit = input.baseMultiplier ?? null;
+
+    if (playType.payoutModel === 'displayed-multiplier') {
+      multiplier = input.losses > 0 ? 0 : (input.displayedMultiplier ?? 0);
+      explanationCode = 'settlement.displayed_multiplier_payout';
+      baseForSplit = input.baseMultiplier ?? multiplier;
+    } else {
+      const tableMultiplier = lookupTableMultiplier(
+        input.bookId,
+        input.playTypeId,
+        input.pickCount,
+        input.hits,
+      );
+      if (tableMultiplier == null) {
+        multiplier = 0;
+        explanationCode = 'settlement.no_payout_table_row';
+      } else if (playType.scaleDisplayedMultiplier && input.displayedMultiplier != null) {
+        const baseAllHit =
+          resolveBaseMultiplier(input) ??
+          lookupTableMultiplier(input.bookId, input.playTypeId, input.pickCount, input.pickCount);
+        const allHit = lookupTableMultiplier(
+          input.bookId,
+          input.playTypeId,
+          input.pickCount,
+          input.pickCount,
+        );
+        if (baseAllHit && allHit) {
+          multiplier = (input.displayedMultiplier * tableMultiplier) / baseAllHit;
+          baseForSplit = (baseAllHit * tableMultiplier) / allHit;
+        } else {
+          multiplier = tableMultiplier;
+          baseForSplit = tableMultiplier;
+        }
+      } else {
+        multiplier = tableMultiplier;
+        baseForSplit = tableMultiplier;
+      }
+    }
+
+    if (input.losses > 0 && multiplier <= 0) {
+      return {
+        status: 'lost',
+        multiplier: 0,
+        payout: EMPTY_PAYOUT,
+        explanationCode,
+        confidence: 'high',
+      };
+    }
+
+    const payout = splitPayout(policy, {
+      stake: input.stake,
+      multiplier,
+      totalPayout: input.stake * multiplier,
+      baseMultiplier: baseForSplit,
+      profitBoostPct: input.profitBoostPct,
+    });
+    return {
+      status: multiplier > 0 ? 'won' : 'lost',
+      multiplier,
+      payout,
+      explanationCode,
+      confidence: explanationCode === 'settlement.no_payout_table_row' ? 'low' : 'high',
+    };
+  }
 
   return {
     normalizeEntry,
     extractLegStat,
     gradeLeg,
+    lookupPayout,
+    validateEntry,
     settleEntry,
     explainSettlement,
-    registerLeague,
-    getRegisteredLeagues: () => Array.from(leagues.keys()).sort(),
-    registerStatProvider: (provider: StatProvider) => {
-      statProviders.set(provider.id, defineStatProvider(provider));
-    },
+    registerBookPolicy,
+    registerPayoutTable,
+    registerLeagueAdapter,
+    registerStatProvider,
+    getRegisteredBooks,
   };
 }
 
-function decisionToLegacyLeg(legs: DfsLegInput[], decision: DfsLegDecision): DfsBetLeg {
-  const source = legs.find((leg) => leg.legId === decision.legId);
+function splitPayout(
+  policy: DfsBookPolicy,
+  input: {
+    stake: number;
+    multiplier: number;
+    totalPayout: number;
+    baseMultiplier?: number | null;
+    profitBoostPct?: number | null;
+  },
+): DfsPayoutSplit {
+  if (input.multiplier <= 0 || input.totalPayout <= 0) {
+    return EMPTY_PAYOUT;
+  }
+  if (policy.payoutSplit.type === 'custom') {
+    return policy.payoutSplit.split(input);
+  }
+  if (policy.payoutSplit.type === 'underdog_bonus_split') {
+    return computeBoostSplit({
+      app: 'underdog',
+      totalPayout: input.totalPayout,
+      stake: input.stake,
+      multiplier: input.multiplier,
+      baseMultiplier: input.baseMultiplier ?? input.multiplier,
+      profitBoostPct: input.profitBoostPct,
+    });
+  }
+  return splitAllWithdrawable(input.totalPayout);
+}
+
+function splitAllWithdrawable(total: number): DfsPayoutSplit {
   return {
-    legId: decision.legId,
-    playerName: source?.playerName ?? '',
-    playerTeam: null,
-    playerPosition: null,
-    playerNumber: null,
-    playerAthleteId: source?.playerId ?? null,
-    linkage: null,
-    propType: decision.normalizedPropType,
-    line: decision.line,
-    direction: decision.direction,
-    league: source?.league ?? '',
-    gameContext: {
-      raw: '',
-      homeTeam: null,
-      awayTeam: null,
-      homeScore: null,
-      awayScore: null,
-      state: 'final',
-      clock: null,
-      startTime: null,
-      gameId: source?.gameId ?? null,
-      gameDate: source?.gameDate ?? null,
-      gameStartTime: null,
-      dayOfWeek: null,
-      stateCode: null,
-    },
-    actualValue: decision.actual,
-    legStatus: decision.status,
-    boostType: 'standard',
-    liveSnapshot: null,
-    gradingSnapshot: null,
+    total,
+    withdrawable: total,
+    bonus: 0,
   };
 }
 
-function explainSettlement(result: DfsSettlementResult): string {
-  const id = result.entryId ?? 'entry';
-  const payout = formatUsd(result.payout.total);
-  const legSummary = result.legs.map((leg) => `${leg.legId}:${leg.status}`).join(', ');
-  const adjustmentSummary =
-    result.adjustments.length > 0
-      ? ` Adjustments: ${result.adjustments.map((adjustment) => adjustment.type).join(', ')}.`
-      : '';
-  return `${id} settled ${result.status} at ${result.effectiveMultiplier}x for ${payout}. Legs: ${legSummary}.${adjustmentSummary}`;
+function gradeLegWithTiePolicy(
+  leg: DfsLegInput,
+  actual: number,
+  tiePolicy: DfsTiePolicy,
+  entry: DfsEntryInput | undefined,
+  context: DfsSettlementContext,
+): DfsLegOutcome {
+  if (actual === leg.line) {
+    if (tiePolicy.type === 'more_wins_less_loses') {
+      return leg.direction === 'over' ? 'won' : 'lost';
+    }
+    if (tiePolicy.type === 'loss') {
+      return 'lost';
+    }
+    if (tiePolicy.type === 'custom' && entry) {
+      return tiePolicy.gradeTie({ leg, entry, context });
+    }
+    return 'push';
+  }
+  return gradeLegFromActual(leg.line, leg.direction, actual);
 }
 
-function formatUsd(value: number): string {
-  return `$${value.toFixed(2)}`;
+function resolveDnpOutcome(
+  policy: DfsBookPolicy,
+  leg: DfsLegInput,
+  entry: DfsEntryInput,
+  context: DfsSettlementContext,
+): DfsLegOutcome {
+  if (policy.dnpPolicy.type === 'custom') {
+    return policy.dnpPolicy.resolve({ leg, entry, context });
+  }
+  if (policy.dnpPolicy.type === 'loss') {
+    return 'lost';
+  }
+  if (policy.dnpPolicy.type === 'manual') {
+    return 'manual';
+  }
+  return 'dnp';
 }
 
-export function adaptBuzzrBetInput(input: CreateDfsBetInput & { id?: string }): DfsEntryInput {
+function resolvePushOutcome(
+  policy: DfsBookPolicy,
+  leg: DfsLegInput,
+  entry: DfsEntryInput,
+  context: DfsSettlementContext,
+): DfsLegOutcome {
+  if (policy.pushPolicy.type === 'custom') {
+    return policy.pushPolicy.resolve({ leg, entry, context });
+  }
+  if (policy.pushPolicy.type === 'loss') {
+    return 'lost';
+  }
+  if (policy.pushPolicy.type === 'manual') {
+    return 'manual';
+  }
+  return 'push';
+}
+
+function addGroupedValidationIssues(input: {
+  legs: readonly DfsLegInput[];
+  getKey: (leg: DfsLegInput) => string | null;
+  sink: DfsValidationIssue[];
+  severity: Exclude<DfsValidationSeverity, 'allow'>;
+  code: string;
+  message: (key: string) => string;
+}): void {
+  const groups = new Map<string, DfsLegInput[]>();
+  for (const leg of input.legs) {
+    const key = input.getKey(leg);
+    if (!key) {
+      continue;
+    }
+    const group = groups.get(key) ?? [];
+    group.push(leg);
+    groups.set(key, group);
+  }
+
+  for (const [key, group] of groups) {
+    if (group.length < 2) {
+      continue;
+    }
+    input.sink.push({
+      code: input.code,
+      message: input.message(key),
+      severity: input.severity === 'error' ? 'error' : 'warning',
+      legIds: group.map((leg) => leg.legId),
+    });
+  }
+}
+
+function runAdapter(
+  leg: DfsLegInput,
+  rawEntry: PlayerGameLogEntryShape,
+  bookId: DfsBookId,
+): number | null {
+  const league = normalizeLeague(leg.league);
+  const value = extractStatForProp(leg.propType, league, rawEntry, bookId as DfsApp);
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  return null;
+}
+
+function tableEntryPicks(entry: DfsPayoutTableEntry): number | null {
+  return entry.picks ?? entry.pickCount ?? null;
+}
+
+function normalizeLeague(league: string): string {
+  return league.trim().toUpperCase();
+}
+
+function provenance(
+  source: string,
+  sourceRef?: string,
+  observedAt?: string,
+): DfsProviderProvenance {
   return {
-    entryId: input.id,
-    app: input.app,
-    playType: input.playType,
-    stake: input.stakeAmount,
-    displayedMultiplier: input.multiplier,
-    baseMultiplier: input.baseMultiplier ?? null,
-    profitBoostPct: input.profitBoostPct ?? null,
-    placedAt: input.placedAt ?? null,
-    legs: input.legs.map((leg) => ({
-      legId: leg.legId,
-      playerName: leg.playerName,
-      playerId: leg.playerAthleteId,
-      league: leg.league,
-      propType: normalizeDfsPropType(leg.propType),
-      line: leg.line,
-      direction: leg.direction,
-      gameId: leg.linkage?.gameId ?? leg.gameContext.gameId,
-      gameDate: leg.linkage?.gameDate ?? leg.gameContext.gameDate,
-      actualValue: leg.actualValue,
-      legStatus: leg.legStatus,
-      boostType: leg.boostType,
-    })),
+    source,
+    sourceRef,
+    observedAt,
+    confidence: 1,
+  };
+}
+
+function pendingResult(input: {
+  entry: DfsEntryInput;
+  settledAt: string;
+  context: DfsSettlementContext;
+  auditTrail: DfsSettlementResult['auditTrail'];
+  pendingReasons: string[];
+  explanationCodes: string[];
+  validation: DfsValidationResult;
+}): DfsSettlementResult {
+  return {
+    entryId: input.entry.entryId,
+    bookId: input.entry.bookId,
+    playTypeId: input.entry.playTypeId,
+    status: 'pending',
+    multiplier: 0,
+    effectiveMultiplier: 0,
+    payout: EMPTY_PAYOUT,
+    stake: input.entry.stake,
+    displayedMultiplier: input.entry.displayedMultiplier,
+    baseMultiplier: input.entry.baseMultiplier,
+    profitBoostPct: input.entry.profitBoostPct,
+    legs: [],
+    adjustments: [],
+    pendingReasons: input.pendingReasons,
+    policyVersion: null,
+    sourceRefs: [],
+    confidence: 'low',
+    explanationCodes: [
+      ...input.explanationCodes,
+      ...input.validation.errors.map((issue) => issue.code),
+      ...input.validation.warnings.map((issue) => issue.code),
+    ],
+    provenance: {
+      providers: [],
+      settledAt: input.settledAt,
+      auditId: input.context.auditId ?? input.context.auditRunId,
+    },
+    auditTrail: [
+      ...input.auditTrail,
+      {
+        at: input.settledAt,
+        code: 'settlement.pending',
+        message: 'Settlement could not run without a matching book policy.',
+      },
+    ],
   };
 }

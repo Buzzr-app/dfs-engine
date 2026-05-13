@@ -3,7 +3,7 @@
 [![npm version](https://img.shields.io/npm/v/@buzzr/dfs-engine.svg)](https://www.npmjs.com/package/@buzzr/dfs-engine)
 [![ci](https://github.com/sarveshsea/dfs-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/sarveshsea/dfs-engine/actions/workflows/ci.yml)
 
-Pure-functional **DFS prop grading**, payout math, and stat normalization for PrizePicks- and Underdog-style daily-fantasy contests. Drop-in TypeScript, zero runtime dependencies, ESM + CJS + `.d.ts` shipped.
+Pure-functional **DFS prop grading**, payout math, stat normalization, and policy-aware settlement for DFS pick'em apps. PrizePicks and Underdog ship as stable built-ins, and v3 lets you register any custom book without forking. Drop-in TypeScript, zero runtime dependencies, ESM + CJS + `.d.ts` shipped.
 
 **Sports covered:** NBA, WNBA, NCAAM/W, NFL, MLB, NHL, EPL, MLS, La Liga, NWSL, UEFA Champions League. ~70 props.
 
@@ -37,29 +37,55 @@ gradeLegFromActual(24.5, 'over', 20);  // 'lost'
 gradeLegFromActual(24.5, 'over', null); // 'pending'
 ```
 
-## v2 Settlement OS
+## v3 Settlement OS
 
-For full-entry settlement, create an isolated engine. Each engine owns its own league adapters, book policies, payout overrides, providers, clock, and audit metadata, so tests, apps, and plugins do not mutate a global registry.
+For full-entry settlement, create an isolated engine. Each engine owns its own book policies, payout overrides, league adapters, providers, clock, and audit metadata, so tests, apps, and plugins do not mutate a global registry.
 
 ```ts
-import { createDfsEngine, defineStatProvider } from '@buzzr/dfs-engine';
+import { createDfsEngine, defineBookPolicy, definePayoutTable } from '@buzzr/dfs-engine';
 
-const provider = defineStatProvider({
-  id: 'my-stats',
-  async getGameLog({ leg }) {
-    return loadYourGameLogRows(leg.playerId);
-  },
+const myBook = defineBookPolicy({
+  id: 'my-book',
+  displayName: 'My Book',
+  version: '2026-05',
+  effectiveFrom: '2026-05-01',
+  status: 'stable',
+  sources: [{ label: 'Internal rules memo' }],
+  playTypes: [
+    {
+      id: 'all-in',
+      displayName: 'All-In',
+      payoutModel: 'fixed-table',
+      pickCount: { min: 2, max: 4 },
+      allOrNothing: true,
+    },
+  ],
+  tiePolicy: { type: 'push' },
+  dnpPolicy: { type: 'remove_leg', voidIfNoSurvivors: true },
+  pushPolicy: { type: 'remove_leg', refundIfNoSurvivors: true },
+  payoutSplit: { type: 'all_withdrawable' },
+  validation: { duplicatePlayers: 'error' },
 });
 
-const engine = createDfsEngine({ statProviders: [provider] });
+const engine = createDfsEngine({
+  bookPolicies: [myBook],
+  payoutTables: [
+    definePayoutTable({
+      bookId: 'my-book',
+      playTypeId: 'all-in',
+      effectiveFrom: '2026-05-01',
+      entries: [{ pickCount: 2, hits: 2, multiplier: 4 }],
+    }),
+  ],
+});
 
 const result = await engine.settleEntry(
   {
     entryId: 'slip-1',
-    app: 'prizepicks',
-    playType: 'power',
+    bookId: 'my-book',
+    playTypeId: 'all-in',
     stake: 10,
-    displayedMultiplier: 3,
+    displayedMultiplier: 4,
     legs: [
       {
         legId: 'a',
@@ -71,12 +97,35 @@ const result = await engine.settleEntry(
         direction: 'over',
         gameDate: '2026-05-07',
       },
+      {
+        legId: 'b',
+        playerName: 'B. Example',
+        league: 'NBA',
+        propType: 'Rebounds',
+        line: 7.5,
+        direction: 'over',
+      },
     ],
   },
-  { statProviderId: 'my-stats' },
+  { actualsByLegId: { a: 28, b: 9 } },
 );
 
-console.log(result.status, result.payout, result.audit);
+console.log(result.status, result.payout, result.policyVersion, result.explanationCodes);
+```
+
+Legacy `app` / `playType` inputs are intentionally not the main v3 model. Use `adaptV2EntryInput(...)` during migration:
+
+```ts
+import { adaptV2EntryInput } from '@buzzr/dfs-engine';
+
+const v3Input = adaptV2EntryInput({
+  entryId: 'legacy-slip',
+  app: 'underdog',
+  playType: 'underdog_flex',
+  stake: 10,
+  displayedMultiplier: 11.5,
+  legs: [],
+});
 ```
 
 Optional SDK packages:

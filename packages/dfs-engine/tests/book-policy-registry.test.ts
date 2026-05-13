@@ -85,7 +85,9 @@ describe('Book Policy Registry 3.0', () => {
     expect(result.bookId).toBe('custom-book');
     expect(result.playTypeId).toBe('all-in');
     expect(result.policyVersion).toBe('2026-05');
-    expect(result.sourceRefs).toEqual([{ label: 'Fixture rules', url: 'https://example.com/rules' }]);
+    expect(result.sourceRefs).toEqual([
+      { label: 'Fixture rules', url: 'https://example.com/rules' },
+    ]);
     expect(result.status).toBe('won');
     expect(result.effectiveMultiplier).toBe(7);
     expect(result.payout).toEqual({ total: 70, withdrawable: 70, bonus: 0 });
@@ -163,7 +165,11 @@ describe('Book Policy Registry 3.0', () => {
       payoutResolver({ stake, hits }) {
         return {
           multiplier: hits === 2 ? 12 : 0,
-          payout: { total: hits === 2 ? stake * 12 : 0, withdrawable: hits === 2 ? stake * 12 : 0, bonus: 0 },
+          payout: {
+            total: hits === 2 ? stake * 12 : 0,
+            withdrawable: hits === 2 ? stake * 12 : 0,
+            bonus: 0,
+          },
           explanationCode: 'fixture.dynamic_resolver',
         };
       },
@@ -195,6 +201,7 @@ describe('Book Policy Registry 3.0', () => {
     expect(validation.errors).toContainEqual({
       code: 'validation.duplicate_player',
       message: 'Duplicate player athlete-1 is not allowed by custom-book.',
+      severity: 'error',
       legIds: ['a', 'b'],
     });
   });
@@ -227,5 +234,24 @@ describe('Book Policy Registry 3.0', () => {
     ]);
     expect(DRAFT_BOOK_POLICY_FIXTURES.every((fixture) => fixture.status === 'draft')).toBe(true);
     expect(createDfsEngine().getRegisteredBooks()).not.toContain('sleeper');
+  });
+
+  test('keeps built-in Underdog high-pick payout compatibility through policy lookup', () => {
+    const engine = createDfsEngine();
+
+    expect(
+      engine.lookupPayout({
+        bookId: 'underdog',
+        playTypeId: 'underdog_standard',
+        stake: 10,
+        displayedMultiplier: 100,
+        pickCount: 8,
+        hits: 8,
+      }),
+    ).toMatchObject({
+      status: 'won',
+      multiplier: 100,
+      payout: { total: 1000, withdrawable: 1000, bonus: 0 },
+    });
   });
 });

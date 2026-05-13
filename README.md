@@ -6,7 +6,7 @@ Monorepo for the Buzzr DFS settlement packages.
 
 | Package | Purpose |
 |---|---|
-| `@buzzr/dfs-engine` | Core zero-runtime-dependency settlement engine, grading math, policies, adapters, and v1 compatibility exports. |
+| `@buzzr/dfs-engine` | Core zero-runtime-dependency settlement engine, grading math, v3 book policy registry, adapters, and compatibility exports. |
 | `@buzzr/dfs-provider-espn` | Optional provider contract package for wiring ESPN-shaped gamelog data into the engine. |
 | `@buzzr/dfs-testkit` | Golden fixture builders, mock providers, and contract helpers for consumers and Buzzr app tests. |
 
