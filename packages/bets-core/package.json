@@ -1,0 +1,47 @@
+{
+  "name": "@buzzr/bets-core",
+  "version": "3.0.0",
+  "description": "Pure Buzzr Bets domain contracts, odds math, ROI rollups, and settlement adapters.",
+  "license": "MIT",
+  "author": "Sarvesh Chidambaram",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm,cjs --dts --sourcemap --clean --treeshake --target es2022",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "eslint src tests",
+    "format": "prettier --write src tests",
+    "format:check": "prettier --check src tests"
+  },
+  "keywords": [
+    "buzzr",
+    "bets",
+    "sportsbook",
+    "odds",
+    "ev",
+    "roi",
+    "settlement",
+    "typescript"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

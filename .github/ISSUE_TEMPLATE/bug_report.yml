@@ -1,0 +1,65 @@
+name: Bug report
+description: Report a Buzzr DFS package bug or settlement mismatch.
+title: "[Bug]: "
+labels: ["Bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping tighten the settlement engine. Please include enough detail for a deterministic reproduction.
+  - type: input
+    id: package
+    attributes:
+      label: Package and version
+      description: Example: @buzzr/dfs-engine@3.0.0
+      placeholder: "@buzzr/dfs-engine@3.0.0"
+    validations:
+      required: true
+  - type: input
+    id: node
+    attributes:
+      label: Node version
+      placeholder: "v22.19.0"
+    validations:
+      required: true
+  - type: textarea
+    id: policy
+    attributes:
+      label: Book policy and play type
+      description: Include bookId, playTypeId, policy version, and any custom policy/payout table involved.
+      placeholder: |
+        bookId: prizepicks
+        playTypeId: power
+        policyVersion: 2026-05
+    validations:
+      required: true
+  - type: textarea
+    id: provider-data
+    attributes:
+      label: Provider data shape
+      description: Paste a redacted PlayerGameLogEntryShape, boxscore row, or stat-provider result.
+      render: json
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Provide the smallest code snippet or test that shows the issue.
+      render: ts
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+      placeholder: "The leg should settle as won with a 3x payout."
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual result
+      placeholder: "The leg settled as pending with reason missing_provider_data."
+    validations:
+      required: true

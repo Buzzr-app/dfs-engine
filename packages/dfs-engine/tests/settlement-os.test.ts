@@ -125,6 +125,33 @@ describe('v2 Settlement OS engine', () => {
     ).resolves.toMatchObject({ ok: false, reason: 'unsupported_prop' });
   });
 
+  test('lets engine-scoped league adapters override provider-backed built-in extraction', async () => {
+    const provider = defineStatProvider({
+      id: 'fixture-gamelog',
+      getGameLog: () => [gameLogEntry({ points: '31' })],
+    });
+    const customNba = defineLeagueAdapter({
+      league: 'NBA',
+      adapters: {
+        Points: () => 42,
+      },
+    });
+    const engine = createDfsEngine({
+      leagueAdapters: [customNba],
+      statProviders: [provider],
+    });
+
+    await expect(
+      engine.extractLegStat(
+        leg(),
+        {
+          statProviderId: 'fixture-gamelog',
+        },
+        entry({ legs: [leg()] }),
+      ),
+    ).resolves.toMatchObject({ ok: true, value: 42 });
+  });
+
   test('voids and refunds an entry when policy removes every leg as DNP', async () => {
     const engine = createDfsEngine();
     const result = await engine.settleEntry(

@@ -1070,6 +1070,23 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
         if (provider.getGameLog && entry) {
           const rows = await provider.getGameLog({ leg, entry, context });
           for (const row of rows) {
+            const localActual = runEngineLeagueAdapter(leg, row);
+            if (localActual != null) {
+              return {
+                ok: true,
+                actual: localActual,
+                value: localActual,
+                source: 'stat_provider',
+                providerId: provider.id,
+                provenance: {
+                  source: 'league-adapter',
+                  providerId: provider.id,
+                  observedAt: context.settledAt,
+                  confidence: 1,
+                  raw: row,
+                },
+              };
+            }
             const actual = runAdapter(leg, row, entry.bookId);
             if (actual != null) {
               return {
@@ -1103,6 +1120,25 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
       }
     }
 
+    function runEngineLeagueAdapter(
+      legInput: DfsLegInput,
+      rawEntry: PlayerGameLogEntryShape,
+    ): number | null {
+      const localAdapter = leagueAdapters.get(normalizeLeague(legInput.league));
+      const localExtractor =
+        localAdapter?.adapters?.[normalizeDfsPropType(legInput.propType)] ??
+        localAdapter?.adapters?.[legInput.propType];
+      if (!localExtractor) {
+        return null;
+      }
+
+      const localActual = localExtractor(rawEntry, legInput);
+      if (typeof localActual === 'number' && Number.isFinite(localActual)) {
+        return localActual;
+      }
+      return null;
+    }
+
     const providerData =
       context.providerDataByLegId?.[leg.legId] ?? context.actualEntry ?? leg.providerData;
     if (!providerData) {
@@ -1114,26 +1150,21 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
       };
     }
 
-    const actual = runAdapter(leg, providerData, entry?.bookId ?? 'prizepicks');
-    const localAdapter = leagueAdapters.get(normalizeLeague(leg.league));
-    const localExtractor =
-      localAdapter?.adapters?.[normalizeDfsPropType(leg.propType)] ??
-      localAdapter?.adapters?.[leg.propType];
-    if (localExtractor) {
-      const localActual = localExtractor(providerData, leg);
-      if (typeof localActual === 'number' && Number.isFinite(localActual)) {
-        return {
-          ok: true,
-          actual: localActual,
-          value: localActual,
-          source: 'provider_data',
-          provenance: {
-            ...provenance('league_adapter', undefined, context.settledAt),
-            raw: providerData,
-          },
-        };
-      }
+    const localActual = runEngineLeagueAdapter(leg, providerData);
+    if (localActual != null) {
+      return {
+        ok: true,
+        actual: localActual,
+        value: localActual,
+        source: 'provider_data',
+        provenance: {
+          ...provenance('league_adapter', undefined, context.settledAt),
+          raw: providerData,
+        },
+      };
     }
+
+    const actual = runAdapter(leg, providerData, entry?.bookId ?? 'prizepicks');
     if (actual == null) {
       return {
         ok: false,
