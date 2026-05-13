@@ -1,6 +1,6 @@
 {
   "name": "@buzzr/dfs-engine",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "description": "Buzzr DFS Settlement OS core: extensible book policies, pure grading, and provider-ready settlement orchestration.",
   "license": "MIT",
   "author": "Sarvesh Chidambaram",
@@ -54,7 +54,7 @@
   "homepage": "https://github.com/sarveshsea/dfs-engine",
   "repository": {
     "type": "git",
-    "url": "https://github.com/sarveshsea/dfs-engine.git"
+    "url": "git+https://github.com/sarveshsea/dfs-engine.git"
   },
   "bugs": {
     "url": "https://github.com/sarveshsea/dfs-engine/issues"
