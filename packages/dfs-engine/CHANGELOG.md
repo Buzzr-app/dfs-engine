@@ -1,5 +1,32 @@
 # Changelog
 
+## 4.0.0 — Strict Settlement Contracts
+
+Hardens the Settlement OS for strict, auditable package boundaries.
+
+### Added
+
+- **Structured validation:** `validateDfsLegInput`, `validateDfsEntryInput`, `validateDfsSettlementContext`, and `assertValidDfsEntryInput` now report machine-readable issue codes, paths, severities, and leg IDs.
+- **Typed failures:** `DfsDefinitionError` covers invalid policies/tables/providers, and `DfsEngineInvariantError` covers impossible settlement or payout math.
+- **Settlement evidence:** every `DfsSettlementResult` now includes the validation result that allowed or blocked settlement.
+- **Provider contract failures:** stat extraction can now report `provider_not_found`, `invalid_provider_result`, `invalid_adapter_result`, and `invalid_provider_data`.
+
+### Changed
+
+- `DfsLegInput` is canonical: use `actual` and `status`; legacy `stat` and `legStatus` are rejected at strict boundaries.
+- `DfsSettlementContext` is canonical: use `actualsByLegId` and `legStatusesByLegId`; legacy alias maps are rejected.
+- `defineBookPolicy`, `definePayoutTable`, `defineLeagueAdapter`, and provider execution validate invariants before settlement can move money.
+- Payout helpers now throw on non-integer counts, impossible hit totals, non-finite multipliers, and invalid payout splits instead of returning unverifiable math.
+- `@buzzr/bets-core`, `@buzzr/dfs-provider-espn`, and `@buzzr/dfs-testkit` now emit/test v4-canonical settlement shapes.
+
+### Migration notes
+
+- Replace `leg.stat` with `leg.actual`.
+- Replace `leg.legStatus` with `leg.status` on `DfsLegInput`. The app-facing `DfsBetLeg` compatibility type still uses `legStatus`.
+- Replace `statsByLegId` with `actualsByLegId`.
+- Replace `legStatusByLegId` with `legStatusesByLegId`.
+- Use `adaptBuzzrBetInput` or `adaptV2EntryInput` at migration boundaries instead of passing legacy shapes directly into `settleEntry`.
+
 ## 3.0.0 — Book Policy Registry
 
 Turns the Settlement OS into a book-policy registry instead of a PrizePicks/Underdog-only settlement wrapper.

@@ -21,9 +21,8 @@ export type DfsLegInput = {
   propType: string;
   line: number;
   direction: 'over' | 'under';
-  stat?: number | null;
+  actual?: number | null;
   status?: DfsLegOutcome | null;
-  legStatus?: DfsLegOutcome | null;
   providerData?: Record<string, unknown> | null;
   metadata?: Record<string, unknown>;
 };
@@ -373,7 +372,14 @@ export function betRecordToDfsEntryInput(
 
   const displayedMultiplier =
     options.displayedMultiplier ?? bet.dfs?.displayedMultiplier ?? inferDisplayedMultiplier(bet);
-  assertFiniteNumber(displayedMultiplier, 'displayedMultiplier');
+  assertPositiveNumber(bet.stake, 'stake');
+  assertPositiveNumber(displayedMultiplier, 'displayedMultiplier');
+  if (bet.dfs?.baseMultiplier != null) {
+    assertPositiveNumber(bet.dfs.baseMultiplier, 'baseMultiplier');
+  }
+  if (bet.dfs?.profitBoostPct != null) {
+    assertNonNegativeNumber(bet.dfs.profitBoostPct, 'profitBoostPct');
+  }
 
   return {
     entryId: options.entryId ?? bet.id,
@@ -401,6 +407,10 @@ function toDfsLegInput(leg: BetLeg): DfsLegInput {
   if (leg.line == null) {
     throw new Error(`betRecordToDfsEntryInput: ${leg.legId} line is required`);
   }
+  assertFiniteNumber(leg.line, `${leg.legId}.line`);
+  if (leg.actual != null) {
+    assertFiniteNumber(leg.actual, `${leg.legId}.actual`);
+  }
 
   const direction = leg.direction ?? directionFromSide(leg.side);
   if (!direction) {
@@ -417,8 +427,8 @@ function toDfsLegInput(leg: BetLeg): DfsLegInput {
     propType: leg.propType,
     line: leg.line,
     direction,
-    stat: leg.actual ?? null,
-    legStatus: leg.status ?? null,
+    actual: leg.actual ?? null,
+    status: leg.status ?? null,
   };
 }
 
@@ -483,6 +493,20 @@ function timestamp(value: string): number {
 function assertFiniteNumber(value: number, label: string): void {
   if (!Number.isFinite(value)) {
     throw new Error(`${label} must be a finite number`);
+  }
+}
+
+function assertPositiveNumber(value: number, label: string): void {
+  assertFiniteNumber(value, label);
+  if (value <= 0) {
+    throw new Error(`${label} must be a positive number`);
+  }
+}
+
+function assertNonNegativeNumber(value: number, label: string): void {
+  assertFiniteNumber(value, label);
+  if (value < 0) {
+    throw new Error(`${label} must be a non-negative number`);
   }
 }
 

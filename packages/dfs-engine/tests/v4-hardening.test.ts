@@ -119,10 +119,7 @@ describe('v4 strict validators', () => {
         stake: -1,
         displayedMultiplier: Infinity,
         metadata: [] as unknown as Record<string, unknown>,
-        legs: [
-          leg({ legId: 'dup', line: Number.NaN }),
-          leg({ legId: 'dup', playerName: '' }),
-        ],
+        legs: [leg({ legId: 'dup', line: Number.NaN }), leg({ legId: 'dup', playerName: '' })],
       }),
     );
 
@@ -143,7 +140,7 @@ describe('v4 strict validators', () => {
   test('validates settlement contexts and rejects legacy context aliases', () => {
     const result = validateDfsSettlementContext({
       actualsByLegId: { 'leg-1': Infinity },
-      legStatusesByLegId: { 'leg-1': 'manual' },
+      legStatusesByLegId: { 'leg-1': 'bogus' },
       statsByLegId: { 'leg-1': 24 },
       legStatusByLegId: { 'leg-1': 'won' },
       settledAt: 'not-a-date',
@@ -251,32 +248,43 @@ describe('v4 definition and settlement hardening', () => {
         Points: () => Number.NaN,
       },
     });
-    const engine = createDfsEngine({
+    const providerEngine = createDfsEngine({
       bookPolicies: [policy()],
       statProviders: [invalidProvider],
+    });
+    const adapterEngine = createDfsEngine({
+      bookPolicies: [policy()],
       leagueAdapters: [invalidAdapter],
     });
 
     await expect(
-      engine.extractLegStat(leg(), { statProviderId: 'missing-provider' }, entry()),
+      providerEngine.extractLegStat(leg(), { statProviderId: 'missing-provider' }, entry()),
     ).resolves.toMatchObject({
       ok: false,
       reason: 'provider_not_found',
     });
     await expect(
-      engine.extractLegStat(leg(), { statProviderId: 'bad-provider' }, entry()),
+      providerEngine.extractLegStat(leg(), { statProviderId: 'bad-provider' }, entry()),
     ).resolves.toMatchObject({
       ok: false,
       reason: 'invalid_provider_result',
     });
     await expect(
-      engine.extractLegStat(leg({ league: 'SIM' }), { actualEntry: gameLogEntry() }, entry()),
+      adapterEngine.extractLegStat(
+        leg({ league: 'SIM' }),
+        { actualEntry: gameLogEntry() },
+        entry(),
+      ),
     ).resolves.toMatchObject({
       ok: false,
       reason: 'invalid_adapter_result',
     });
     await expect(
-      engine.extractLegStat(leg(), { actualEntry: { ...gameLogEntry(), points: null } }, entry()),
+      adapterEngine.extractLegStat(
+        leg(),
+        { actualEntry: { ...gameLogEntry(), points: null } },
+        entry(),
+      ),
     ).resolves.toMatchObject({
       ok: false,
       reason: 'invalid_provider_data',

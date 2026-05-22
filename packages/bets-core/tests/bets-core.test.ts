@@ -173,7 +173,8 @@ describe('@buzzr/bets-core', () => {
           propType: 'Points',
           line: 20.5,
           direction: 'over',
-          stat: 24,
+          actual: 24,
+          status: null,
         },
         {
           legId: 'leg-2',
@@ -182,6 +183,8 @@ describe('@buzzr/bets-core', () => {
         },
       ],
     });
+    expect(betRecordToDfsEntryInput(baseBet()).legs[0]).not.toHaveProperty('stat');
+    expect(betRecordToDfsEntryInput(baseBet()).legs[0]).not.toHaveProperty('legStatus');
 
     expect(
       betRecordToDfsEntryInput(
@@ -237,5 +240,24 @@ describe('@buzzr/bets-core', () => {
         }),
       ),
     ).toThrow('direction is required');
+    expect(() => betRecordToDfsEntryInput(baseBet({ stake: 0 }))).toThrow(
+      'stake must be a positive number',
+    );
+    expect(() =>
+      betRecordToDfsEntryInput(
+        baseBet({
+          legs: [
+            {
+              legId: 'bad-line',
+              playerName: 'C. Example',
+              league: 'NBA',
+              propType: 'Assists',
+              line: Number.NaN,
+              side: 'under',
+            },
+          ],
+        }),
+      ),
+    ).toThrow('bad-line.line must be a finite number');
   });
 });

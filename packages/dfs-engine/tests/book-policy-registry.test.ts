@@ -9,15 +9,19 @@ import {
   type DfsLegInput,
 } from '../src';
 
-const leg = (overrides: Partial<DfsLegInput> = {}): DfsLegInput => ({
-  legId: 'leg-1',
-  playerName: 'Fixture Player',
-  league: 'NBA',
-  propType: 'Points',
-  line: 10,
-  direction: 'over',
-  ...overrides,
-});
+const leg = (overrides: Partial<DfsLegInput> = {}): DfsLegInput => {
+  const legId = overrides.legId ?? 'leg-1';
+  return {
+    legId,
+    playerId: `player-${legId}`,
+    playerName: `Fixture Player ${legId}`,
+    league: 'NBA',
+    propType: 'Points',
+    line: 10,
+    direction: 'over',
+    ...overrides,
+  };
+};
 
 const entry = (overrides: Partial<DfsEntryInput> = {}): DfsEntryInput => ({
   entryId: 'entry-1',
@@ -72,7 +76,7 @@ describe('Book Policy Registry 3.0', () => {
           effectiveFrom: '2026-05-01',
           entries: [
             { pickCount: 2, hits: 2, multiplier: 7 },
-            { pickCount: 2, hits: 1, multiplier: 0 },
+            { pickCount: 2, hits: 1, multiplier: 0.4 },
           ],
         }),
       ],

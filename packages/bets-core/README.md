@@ -6,7 +6,9 @@ This package intentionally contains no React, no native modules, no Supabase
 client, no network calls, and no credentials. It is the app-facing domain layer
 for sportsbook normalization, external bet keys, no-vig fair-line math, ROI
 rollups, and converting tracked bet records into settlement inputs shaped for
-`@buzzr/dfs-engine`.
+`@buzzr/dfs-engine`. The DFS adapter emits v4-canonical settlement legs
+(`actual` and `status`, never legacy `stat` / `legStatus`) and rejects
+non-finite money or line values before they hit the engine.
 
 The package has zero runtime dependencies. Consumers can install
 `@buzzr/dfs-engine` when they want to pass the adapter output directly into the

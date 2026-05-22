@@ -8,7 +8,15 @@ const packages = [
   {
     name: '@buzzr/dfs-engine',
     path: 'packages/dfs-engine',
-    exports: ['gradeLegFromActual', 'createDfsEngine', 'defineBookPolicy'],
+    exports: [
+      'gradeLegFromActual',
+      'createDfsEngine',
+      'defineBookPolicy',
+      'validateDfsEntryInput',
+      'assertValidDfsEntryInput',
+      'DfsDefinitionError',
+      'DfsEngineInvariantError',
+    ],
   },
   {
     name: '@buzzr/bets-core',
@@ -23,7 +31,7 @@ const packages = [
   {
     name: '@buzzr/dfs-testkit',
     path: 'packages/dfs-testkit',
-    exports: ['makeDfsEntry', 'createMockStatProvider'],
+    exports: ['makeDfsEntry', 'makeInvalidDfsEntry', 'createMockStatProvider'],
   },
 ];
 
