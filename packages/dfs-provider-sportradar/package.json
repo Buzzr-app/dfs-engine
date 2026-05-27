@@ -1,7 +1,7 @@
 {
-  "name": "@buzzr/dfs-provider-espn",
-  "version": "3.0.1",
-  "description": "Optional ESPN-shaped stat provider contract for @buzzr/dfs-engine.",
+  "name": "@buzzr/dfs-provider-sportradar",
+  "version": "0.1.0",
+  "description": "Optional Sportradar-shaped stat provider contract for @buzzr/dfs-engine.",
   "license": "MIT",
   "author": "Sarvesh Chidambaram",
   "type": "module",
@@ -28,6 +28,13 @@
     "format": "prettier --write src tests",
     "format:check": "prettier --check src tests"
   },
+  "keywords": [
+    "dfs",
+    "buzzr",
+    "sportradar",
+    "stat-provider",
+    "settlement"
+  ],
   "dependencies": {
     "@buzzr/dfs-engine": ">=3.0.1 <5"
   },

@@ -29,7 +29,7 @@
     "format:check": "prettier --check src tests"
   },
   "dependencies": {
-    "@buzzr/dfs-engine": "^3.0.1"
+    "@buzzr/dfs-engine": ">=3.0.1 <5"
   },
   "engines": {
     "node": ">=22"

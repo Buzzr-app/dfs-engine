@@ -46,6 +46,30 @@ const packages = [
     allowedDependencies: ['@buzzr/dfs-engine'],
     runtimeFiles: ['dist/index.js', 'dist/index.cjs'],
   },
+  {
+    name: '@buzzr/dfs-cli',
+    path: packagePath('packages', 'dfs-cli'),
+    allowedDependencies: ['@buzzr/dfs-engine'],
+    runtimeFiles: ['dist/index.js', 'dist/cli.js'],
+  },
+  {
+    name: '@buzzr/dfs-provider-sportradar',
+    path: packagePath('packages', 'dfs-provider-sportradar'),
+    allowedDependencies: ['@buzzr/dfs-engine'],
+    runtimeFiles: ['dist/index.js', 'dist/index.cjs'],
+  },
+  {
+    name: '@buzzr/dfs-react',
+    path: packagePath('packages', 'dfs-react'),
+    allowedDependencies: ['@buzzr/dfs-engine'],
+    runtimeFiles: ['dist/index.js', 'dist/index.cjs'],
+  },
+  {
+    name: '@buzzr/dfs-engine-test-vectors',
+    path: packagePath('packages', 'dfs-engine-test-vectors'),
+    allowedDependencies: ['@buzzr/dfs-engine'],
+    runtimeFiles: ['dist/index.js', 'dist/index.cjs'],
+  },
 ];
 
 for (const pkg of packages) {
