@@ -32,6 +32,8 @@ export function makeDfsLeg(overrides: Partial<DfsLegInput> = {}): DfsLegInput {
     propType: 'Points',
     line: 20.5,
     direction: 'over',
+    actual: null,
+    status: 'pending',
     gameDate: '2026-05-07T00:00:00.000Z',
     ...overrides,
   };
@@ -58,5 +60,13 @@ export function createMockStatProvider(
     getGameLog({ leg }) {
       return rowsByLegId[leg.legId] ?? [];
     },
+  });
+}
+
+export function makeInvalidDfsEntry(overrides: Partial<DfsEntryInput> = {}): DfsEntryInput {
+  return makeDfsEntry({
+    stake: 0,
+    legs: [makeDfsLeg({ legId: 'dup' }), makeDfsLeg({ legId: 'dup' })],
+    ...overrides,
   });
 }

@@ -198,7 +198,7 @@ describe('engine release branch guardrails', () => {
         actualEntry: gameLogEntry({ points: '99' }),
         statProviderId: 'not-registered',
       }),
-    ).resolves.toMatchObject({ ok: true, value: 9 });
+    ).resolves.toMatchObject({ ok: false, reason: 'provider_not_found' });
     await expect(
       engine.extractLegStat(leg(), {
         statProviderId: 'runtime-provider',
@@ -234,7 +234,7 @@ describe('engine release branch guardrails', () => {
       statProviders: [skippedProvider, selectedProvider],
     });
 
-    await expect(engine.extractLegStat(leg({ stat: 12 }))).resolves.toMatchObject({
+    await expect(engine.extractLegStat(leg({ actual: 12 }))).resolves.toMatchObject({
       ok: true,
       value: 12,
       provenance: { source: 'input' },
@@ -303,12 +303,15 @@ describe('engine release branch guardrails', () => {
     );
 
     expect(validation.ok).toBe(false);
-    expect(validation.errors.map((issue) => issue.code)).toEqual([
-      'validation.pick_count',
-      'validation.league_restricted',
-      'validation.duplicate_player',
-      'validation.same_game',
-    ]);
+    expect(validation.errors.map((issue) => issue.code)).toEqual(
+      expect.arrayContaining([
+        'validation.player_name_required',
+        'validation.pick_count',
+        'validation.league_restricted',
+        'validation.duplicate_player',
+        'validation.same_game',
+      ]),
+    );
     expect(validation.warnings.map((issue) => issue.code)).toEqual(['validation.same_team']);
 
     expect(createDfsEngine().validateEntry(entry({ bookId: 'missing-book' }))).toMatchObject({
@@ -320,7 +323,7 @@ describe('engine release branch guardrails', () => {
     ).resolves.toMatchObject({
       status: 'pending',
       policyVersion: null,
-      pendingReasons: ['missing_policy'],
+      pendingReasons: ['validation_failed'],
       explanationCodes: expect.arrayContaining(['validation.unknown_book_or_play_type']),
     });
   });
@@ -473,6 +476,20 @@ describe('engine release branch guardrails', () => {
   });
 
   test('covers payout fallback and all-or-nothing branches', () => {
+    expect(() =>
+      policy({
+        id: 'bad-custom-payout-book',
+        playTypes: [
+          {
+            id: 'custom-empty',
+            displayName: 'Custom Empty',
+            payoutModel: 'custom',
+            pickCount: { min: 1, max: 1 },
+          },
+        ],
+      }),
+    ).toThrow('custom payout model requires payoutResolver');
+
     const payoutPolicy = policy({
       id: 'payout-book',
       playTypes: [
@@ -482,12 +499,6 @@ describe('engine release branch guardrails', () => {
           payoutModel: 'fixed-table',
           allOrNothing: true,
           pickCount: { min: 2, max: 2 },
-        },
-        {
-          id: 'custom-empty',
-          displayName: 'Custom Empty',
-          payoutModel: 'custom',
-          pickCount: { min: 1, max: 1 },
         },
         {
           id: 'fixed-empty',
@@ -513,15 +524,6 @@ describe('engine release branch guardrails', () => {
       multiplier: 0,
       explanationCode: 'settlement.all_or_nothing_loss',
     });
-    expect(
-      engine.lookupPayout({
-        bookId: 'payout-book',
-        playTypeId: 'custom-empty',
-        stake: 10,
-        pickCount: 1,
-        hits: 1,
-      }),
-    ).toBeNull();
     expect(
       engine.lookupPayout({
         bookId: 'payout-book',

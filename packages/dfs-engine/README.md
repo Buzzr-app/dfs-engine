@@ -3,7 +3,7 @@
 [![npm version](https://img.shields.io/npm/v/@buzzr/dfs-engine.svg)](https://www.npmjs.com/package/@buzzr/dfs-engine)
 [![ci](https://github.com/sarveshsea/dfs-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/sarveshsea/dfs-engine/actions/workflows/ci.yml)
 
-Pure-functional **DFS prop grading**, payout math, stat normalization, and policy-aware settlement for DFS pick'em apps. PrizePicks and Underdog ship as stable built-ins, and v3 lets you register any custom book without forking. Drop-in TypeScript, zero runtime dependencies, ESM + CJS + `.d.ts` shipped.
+Pure-functional **DFS prop grading**, payout math, stat normalization, and policy-aware settlement for DFS pick'em apps. PrizePicks and Underdog ship as stable built-ins, and v4 gives you strict settlement inputs, structured validation, and custom book policies without forking. Drop-in TypeScript, zero runtime dependencies, ESM + CJS + `.d.ts` shipped.
 
 **Sports covered:** NBA, WNBA, NCAAM/W, NFL, MLB, NHL, EPL, MLS, La Liga, NWSL, UEFA Champions League. ~70 props.
 
@@ -20,7 +20,7 @@ If you're building a DFS-adjacent tool — a bet tracker, parlay analyzer, EV ca
 - **What happens when a player doesn't play?** Demote a six-pick to a five-pick (PrizePicks) or scratch and rescale (Underdog).
 - **What stat goes into a `Pts + Rebs + Asts` leg?** Or `Pass + Rush + Rec Yds`? Or `Hitter FS`?
 
-There's no good open-source TypeScript package for any of this. Everyone reinvents it from scratch, usually wrong. This is the version extracted from [Buzzr](https://buzzr.app), where it's been settling real money lines in production. ~1.6K LOC of pure functions, ~116 tests.
+There's no good open-source TypeScript package for any of this. Everyone reinvents it from scratch, usually wrong. This is the version extracted from [Buzzr](https://buzzr.app), where it's been settling real money lines in production. Pure functions, strict runtime validation, and a release suite covering 300+ settlement tests.
 
 ## Quickstart
 
@@ -37,7 +37,7 @@ gradeLegFromActual(24.5, 'over', 20);  // 'lost'
 gradeLegFromActual(24.5, 'over', null); // 'pending'
 ```
 
-## v3 Settlement OS
+## v4 Settlement OS
 
 For full-entry settlement, create an isolated engine. Each engine owns its own book policies, payout overrides, league adapters, providers, clock, and audit metadata, so tests, apps, and plugins do not mutate a global registry.
 
@@ -95,6 +95,8 @@ const result = await engine.settleEntry(
         propType: 'Points',
         line: 24.5,
         direction: 'over',
+        actual: null,
+        status: 'pending',
         gameDate: '2026-05-07',
       },
       {
@@ -104,6 +106,8 @@ const result = await engine.settleEntry(
         propType: 'Rebounds',
         line: 7.5,
         direction: 'over',
+        actual: null,
+        status: 'pending',
       },
     ],
   },
@@ -113,12 +117,12 @@ const result = await engine.settleEntry(
 console.log(result.status, result.payout, result.policyVersion, result.explanationCodes);
 ```
 
-Legacy `app` / `playType` inputs are intentionally not the main v3 model. Use `adaptV2EntryInput(...)` during migration:
+Legacy `app` / `playType` inputs are intentionally not the main v4 model. Use `adaptV2EntryInput(...)` during migration:
 
 ```ts
 import { adaptV2EntryInput } from '@buzzr/dfs-engine';
 
-const v3Input = adaptV2EntryInput({
+const v4Input = adaptV2EntryInput({
   entryId: 'legacy-slip',
   app: 'underdog',
   playType: 'underdog_flex',
@@ -287,6 +291,7 @@ if (!grade.ok) {
 | `reconciliation-windows` | `isWithinReconciliationWindow`, per-league stat-correction TTLs (NBA 2h, NFL 24h, MLB 6h) |
 | `live-helpers` | `shouldWriteLiveActual`, `buildLiveSnapshot`, `buildLiveLegAlertTitle` for live-watcher write-paths |
 | `boxscore-shape` | `boxScorePlayerToGameLogShape` for sources that only ship some stats on the boxscore (NHL Hits, Blocked Shots) |
+| `validators` | `validateDfsEntryInput`, `validateDfsLegInput`, `validateDfsSettlementContext`, `assertValidDfsEntryInput`, and structured validation issues |
 | `types` | `DfsApp`, `DfsPlayType`, `DfsLegStatus`, `DfsBetLeg`, `DfsLegGameContext`, `DfsParseResult`, `LegLinkage`, `DfsPayoutSplit`, `BetslipParseMeta`, …and ~15 more |
 
 The `PlayerGameLogEntryShape` the adapters consume is intentionally minimal — define your own gamelog rows that satisfy the shape (`{ date, minutes, points, ... }`) and pipe them in.
@@ -316,7 +321,11 @@ Starting at 1.0, the public API is frozen. Breaking changes only at major versio
 When an LLM, webhook, or cross-process source hands you a slip leg or gamelog entry, run it through the validator before grading:
 
 ```ts
-import { validatePlayerGameLogEntryShape, validateDfsBetLeg } from '@buzzr/dfs-engine';
+import {
+  assertValidDfsEntryInput,
+  validateDfsEntryInput,
+  validatePlayerGameLogEntryShape,
+} from '@buzzr/dfs-engine';
 
 const v = validatePlayerGameLogEntryShape(maybeEntry);
 if (!v.ok) {
@@ -324,7 +333,17 @@ if (!v.ok) {
   return;
 }
 // v.value is now typed as PlayerGameLogEntryShape
+
+const entry = validateDfsEntryInput(maybeSettlementEntry);
+if (!entry.ok) {
+  console.error(entry.errors.map((issue) => [issue.path, issue.code]));
+  return;
+}
+
+assertValidDfsEntryInput(maybeSettlementEntry);
 ```
+
+v4 settlement inputs are canonical: use `actual` on `DfsLegInput`, `status` for leg state, `actualsByLegId` for settlement context actuals, and `legStatusesByLegId` for status overrides. Legacy `stat`, `legStatus`, `statsByLegId`, and `legStatusByLegId` are rejected by the strict validators.
 
 ## Status & caveats
 

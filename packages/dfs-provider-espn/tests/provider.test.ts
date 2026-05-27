@@ -38,19 +38,56 @@ describe('@buzzr/dfs-provider-espn', () => {
         gameDate: '2026-05-07T00:00:00.000Z',
       },
       {
-        app: 'prizepicks',
-        playType: 'power',
+        statProviderId: 'espn',
+      },
+      {
+        entryId: 'entry-1',
+        bookId: 'prizepicks',
+        playTypeId: 'power',
         stake: 10,
         displayedMultiplier: 3,
         legs: [],
       },
-      { statProviderId: 'espn' },
     );
 
     expect(result).toMatchObject({
       ok: true,
       value: 29,
       provenance: { source: 'stat-provider', providerId: 'espn' },
+    });
+  });
+
+  test('surfaces invalid ESPN rows through the engine provider-data contract', async () => {
+    const provider = createEspnStatProvider({
+      getGameLog: async () => [{ ...entry, points: null } as unknown as PlayerGameLogEntryShape],
+    });
+    const engine = createDfsEngine({ statProviders: [provider] });
+
+    await expect(
+      engine.extractLegStat(
+        {
+          legId: 'leg-1',
+          playerName: 'A. Example',
+          playerId: 'athlete-1',
+          league: 'NBA',
+          propType: 'Points',
+          line: 24.5,
+          direction: 'over',
+          gameDate: '2026-05-07T00:00:00.000Z',
+        },
+        { statProviderId: 'espn' },
+        {
+          entryId: 'entry-1',
+          bookId: 'prizepicks',
+          playTypeId: 'power',
+          stake: 10,
+          displayedMultiplier: 3,
+          legs: [],
+        },
+      ),
+    ).resolves.toMatchObject({
+      ok: false,
+      reason: 'invalid_provider_data',
     });
   });
 });

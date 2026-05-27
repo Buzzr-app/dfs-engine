@@ -19,6 +19,7 @@ import { lookupStandardMultiplier, recalcMultiplierAfterDnp } from './payouts';
 import { extractStatForPropViaRegistry } from './stat-adapters';
 import type { StatAdapterOptions } from './stat-adapters';
 import type { LegGradingResult } from './result';
+import { DfsEngineInvariantError } from './errors';
 import type {
   DfsApp,
   DfsBetLeg,
@@ -567,6 +568,15 @@ export function computeBoostSplit(opts: {
   baseMultiplier?: number | null;
   profitBoostPct?: number | null;
 }): DfsPayoutSplit {
+  assertFiniteNonNegative(opts.totalPayout, 'totalPayout');
+  assertFiniteNonNegative(opts.stake, 'stake');
+  assertFiniteNonNegative(opts.multiplier, 'multiplier');
+  if (opts.baseMultiplier != null) {
+    assertFiniteNonNegative(opts.baseMultiplier, 'baseMultiplier');
+  }
+  if (opts.profitBoostPct != null) {
+    assertFiniteNonNegative(opts.profitBoostPct, 'profitBoostPct');
+  }
   const total = Math.max(0, opts.totalPayout);
   if (opts.app === 'prizepicks' || total <= 0) {
     return { total, withdrawable: total, bonus: 0 };
@@ -642,6 +652,8 @@ export function applyLegDnp<L extends { legId: string; legStatus: DfsLegStatus }
   newMultiplier: number;
   newPotentialPayout: number;
 } {
+  assertFiniteNonNegative(opts.stake, 'stake');
+  assertFiniteNonNegative(opts.currentMultiplier, 'currentMultiplier');
   const target = opts.legs.find((l) => l.legId === opts.legIdToMark);
   if (!target) {
     return {
@@ -738,6 +750,14 @@ export function gradeDfsBetFromGraded(opts: {
   withdrawablePayout: number;
   bonusPayout: number;
 } {
+  assertFiniteNonNegative(opts.stake, 'stake');
+  assertFiniteNonNegative(opts.displayedMultiplier, 'displayedMultiplier');
+  if (opts.baseMultiplier != null) {
+    assertFiniteNonNegative(opts.baseMultiplier, 'baseMultiplier');
+  }
+  if (opts.profitBoostPct != null) {
+    assertFiniteNonNegative(opts.profitBoostPct, 'profitBoostPct');
+  }
   const surviving = opts.legs.filter((leg) => leg.legStatus !== 'dnp');
   const survivingCount = surviving.length;
   const wonCount = surviving.filter((leg) => leg.legStatus === 'won').length;
@@ -824,4 +844,10 @@ export function gradeDfsBetFromGraded(opts: {
     withdrawablePayout: split.withdrawable,
     bonusPayout: split.bonus,
   };
+}
+
+function assertFiniteNonNegative(value: number, label: string): void {
+  if (!Number.isFinite(value) || value < 0) {
+    throw new DfsEngineInvariantError(`${label} must be a finite non-negative number`);
+  }
 }

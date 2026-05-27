@@ -105,8 +105,16 @@ export { boxScorePlayerToGameLogShape, findAndConvertBoxScorePlayer } from './bo
 export type { BoxScorePlayer, BoxScoreTeam } from './boxscore-shape';
 
 // Runtime validators for system-boundary inputs.
-export { validatePlayerGameLogEntryShape, validateDfsBetLeg } from './validators';
-export type { ValidationResult } from './validators';
+export {
+  assertValidDfsEntryInput,
+  validateDfsBetLeg,
+  validateDfsEntryInput,
+  validateDfsLegInput,
+  validateDfsSettlementContext,
+  validatePlayerGameLogEntryShape,
+} from './validators';
+export type { DfsValidationIssue, DfsValidationResult, ValidationResult } from './validators';
+export { DfsDefinitionError, DfsEngineInvariantError } from './errors';
 
 // v3 Settlement OS — instance-safe policy registry, provider contracts, and migration adapters.
 export {
@@ -137,6 +145,7 @@ export type {
   DfsLegOutcome,
   DfsLegStatFailureReason,
   DfsLegStatResult,
+  DfsLegStatSource,
   DfsLeagueAdapterDefinition,
   DfsPayoutLookupInput,
   DfsPayoutModel,
@@ -157,8 +166,6 @@ export type {
   DfsSettlementResult,
   DfsTiePolicy,
   DfsV2EntryInput,
-  DfsValidationIssue,
-  DfsValidationResult,
   DfsValidationSeverity,
   GameProvider,
   GameProviderRequest,

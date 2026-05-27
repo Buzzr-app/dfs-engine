@@ -1,6 +1,6 @@
 {
   "name": "@buzzr/bets-core",
-  "version": "3.0.1",
+  "version": "4.0.0",
   "description": "Pure Buzzr Bets domain contracts, odds math, ROI rollups, and settlement adapters.",
   "license": "MIT",
   "author": "Sarvesh Chidambaram",

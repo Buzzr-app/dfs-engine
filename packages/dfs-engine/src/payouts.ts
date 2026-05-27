@@ -27,6 +27,7 @@
  *     is only the demotion baseline.
  */
 import type { DfsApp, DfsPlayType } from './types';
+import { DfsEngineInvariantError } from './errors';
 
 /**
  * Per-app payout schedule. Outer key: pick count. Inner key: hits.
@@ -94,6 +95,11 @@ export function lookupStandardMultiplier(opts: {
   pickCount: number;
   hits: number;
 }): number | null {
+  assertCount(opts.pickCount, 'pickCount');
+  assertCount(opts.hits, 'hits');
+  if (opts.hits > opts.pickCount) {
+    throw new DfsEngineInvariantError('hits cannot exceed pickCount');
+  }
   const schedule = scheduleFor(opts.app, opts.playType);
   if (!schedule) return null;
   const row = schedule[opts.pickCount];
@@ -132,8 +138,17 @@ export function recalcMultiplierAfterDnp(opts: {
   /** Multiplier as displayed on the original slip (post-boost, pre-DNP). */
   originalMultiplier: number;
 }): { newMultiplier: number; usedFallback: boolean } {
+  assertCount(opts.originalPickCount, 'originalPickCount');
+  assertCount(opts.survivingPickCount, 'survivingPickCount');
+  assertCount(opts.survivingHits, 'survivingHits');
+  if (!Number.isFinite(opts.originalMultiplier) || opts.originalMultiplier <= 0) {
+    throw new DfsEngineInvariantError('originalMultiplier must be a finite positive number');
+  }
   if (opts.survivingPickCount < 1 || opts.survivingPickCount > opts.originalPickCount) {
-    return { newMultiplier: 0, usedFallback: true };
+    throw new DfsEngineInvariantError('survivingPickCount must be between 1 and originalPickCount');
+  }
+  if (opts.survivingHits > opts.survivingPickCount) {
+    throw new DfsEngineInvariantError('survivingHits cannot exceed survivingPickCount');
   }
   const original = lookupStandardMultiplier({
     app: opts.app,
@@ -166,4 +181,10 @@ export function lookupBaseMultiplier(opts: {
   pickCount: number;
 }): number | null {
   return lookupStandardMultiplier({ ...opts, hits: opts.pickCount });
+}
+
+function assertCount(value: number, label: string): void {
+  if (!Number.isInteger(value) || value < 0) {
+    throw new DfsEngineInvariantError(`${label} must be a non-negative integer`);
+  }
 }

@@ -23,7 +23,11 @@ jobs:
       - run: npm run lint
       - run: npm run format:check
       - run: npm test
+      - run: npm run test:coverage
       - run: npm run build
       - run: npm run docs
+      - run: npm run smoke:exports
+      - run: npm run size:check
       - run: npm run pack:smoke
       - run: npm run bench
+      - run: npm run audit:high

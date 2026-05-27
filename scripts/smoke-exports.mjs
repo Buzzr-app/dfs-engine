@@ -8,7 +8,15 @@ const packages = [
   {
     name: '@buzzr/dfs-engine',
     path: 'packages/dfs-engine',
-    exports: ['gradeLegFromActual', 'createDfsEngine', 'defineBookPolicy'],
+    exports: [
+      'gradeLegFromActual',
+      'createDfsEngine',
+      'defineBookPolicy',
+      'validateDfsEntryInput',
+      'assertValidDfsEntryInput',
+      'DfsDefinitionError',
+      'DfsEngineInvariantError',
+    ],
   },
   {
     name: '@buzzr/bets-core',
@@ -23,7 +31,28 @@ const packages = [
   {
     name: '@buzzr/dfs-testkit',
     path: 'packages/dfs-testkit',
-    exports: ['makeDfsEntry', 'createMockStatProvider'],
+    exports: ['makeDfsEntry', 'makeInvalidDfsEntry', 'createMockStatProvider'],
+  },
+  {
+    name: '@buzzr/dfs-cli',
+    path: 'packages/dfs-cli',
+    exports: ['runGrade', 'runGradeFromFiles'],
+    esmOnly: true,
+  },
+  {
+    name: '@buzzr/dfs-provider-sportradar',
+    path: 'packages/dfs-provider-sportradar',
+    exports: ['createSportradarStatProvider', 'sportradarRowToGameLog'],
+  },
+  {
+    name: '@buzzr/dfs-react',
+    path: 'packages/dfs-react',
+    exports: ['getSlipDisplayModel', 'getStatusTone', 'formatLegLabel', 'formatLegLine'],
+  },
+  {
+    name: '@buzzr/dfs-engine-test-vectors',
+    path: 'packages/dfs-engine-test-vectors',
+    exports: ['TEST_VECTORS'],
   },
 ];
 
@@ -35,12 +64,19 @@ function assert(condition, message) {
 
 for (const pkg of packages) {
   const esm = await import(join(root, pkg.path, 'dist/index.js'));
-  const cjs = require(join(root, pkg.path, 'dist/index.cjs'));
+  const cjs = pkg.esmOnly ? null : require(join(root, pkg.path, 'dist/index.cjs'));
 
   for (const exportName of pkg.exports) {
     assert(typeof esm[exportName] !== 'undefined', `${pkg.name} ESM export missing: ${exportName}`);
-    assert(typeof cjs[exportName] !== 'undefined', `${pkg.name} CJS export missing: ${exportName}`);
+    if (cjs) {
+      assert(
+        typeof cjs[exportName] !== 'undefined',
+        `${pkg.name} CJS export missing: ${exportName}`,
+      );
+    }
   }
 
-  console.log(`${pkg.name}: ESM/CJS export smoke passed`);
+  console.log(
+    `${pkg.name}: ${pkg.esmOnly ? 'ESM-only' : 'ESM/CJS'} export smoke passed`,
+  );
 }

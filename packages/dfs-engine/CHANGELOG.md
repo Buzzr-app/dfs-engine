@@ -1,5 +1,38 @@
 # Changelog
 
+## 4.0.0
+
+### Major Changes
+
+- 07fc4c7: Harden DFS Settlement OS v4 with canonical settlement inputs, structured validation, typed definition and invariant errors, stricter provider/payout contracts, and cross-package v4 fixture/adaptor updates.
+
+## 4.0.0 — Strict Settlement Contracts
+
+Hardens the Settlement OS for strict, auditable package boundaries.
+
+### Added
+
+- **Structured validation:** `validateDfsLegInput`, `validateDfsEntryInput`, `validateDfsSettlementContext`, and `assertValidDfsEntryInput` now report machine-readable issue codes, paths, severities, and leg IDs.
+- **Typed failures:** `DfsDefinitionError` covers invalid policies/tables/providers, and `DfsEngineInvariantError` covers impossible settlement or payout math.
+- **Settlement evidence:** every `DfsSettlementResult` now includes the validation result that allowed or blocked settlement.
+- **Provider contract failures:** stat extraction can now report `provider_not_found`, `invalid_provider_result`, `invalid_adapter_result`, and `invalid_provider_data`.
+
+### Changed
+
+- `DfsLegInput` is canonical: use `actual` and `status`; legacy `stat` and `legStatus` are rejected at strict boundaries.
+- `DfsSettlementContext` is canonical: use `actualsByLegId` and `legStatusesByLegId`; legacy alias maps are rejected.
+- `defineBookPolicy`, `definePayoutTable`, `defineLeagueAdapter`, and provider execution validate invariants before settlement can move money.
+- Payout helpers now throw on non-integer counts, impossible hit totals, non-finite multipliers, and invalid payout splits instead of returning unverifiable math.
+- `@buzzr/bets-core`, `@buzzr/dfs-provider-espn`, and `@buzzr/dfs-testkit` now emit/test v4-canonical settlement shapes.
+
+### Migration notes
+
+- Replace `leg.stat` with `leg.actual`.
+- Replace `leg.legStatus` with `leg.status` on `DfsLegInput`. The app-facing `DfsBetLeg` compatibility type still uses `legStatus`.
+- Replace `statsByLegId` with `actualsByLegId`.
+- Replace `legStatusByLegId` with `legStatusesByLegId`.
+- Use `adaptBuzzrBetInput` or `adaptV2EntryInput` at migration boundaries instead of passing legacy shapes directly into `settleEntry`.
+
 ## 3.0.0 — Book Policy Registry
 
 Turns the Settlement OS into a book-policy registry instead of a PrizePicks/Underdog-only settlement wrapper.
@@ -67,13 +100,13 @@ First non-US-major built-in sport, demonstrating the v0.2 plugin registry actual
 
 `vitest bench` suite at `bench/grading.bench.ts` (`npm run bench`). Reference numbers on a Mac M-series:
 
-| Function | ops/sec |
-|---|---|
-| `gradeLegFromActual` | ~24M |
-| `extractStatForPropViaRegistry` (NBA Points) | ~7.5M |
-| `gradeDfsBetFromGraded` (5-pick Power) | ~11.5M |
-| `recalcMultiplierAfterDnp` | ~20M |
-| `applyLegDnp` (6-pick) | ~5.8M |
+| Function                                     | ops/sec |
+| -------------------------------------------- | ------- |
+| `gradeLegFromActual`                         | ~24M    |
+| `extractStatForPropViaRegistry` (NBA Points) | ~7.5M   |
+| `gradeDfsBetFromGraded` (5-pick Power)       | ~11.5M  |
+| `recalcMultiplierAfterDnp`                   | ~20M    |
+| `applyLegDnp` (6-pick)                       | ~5.8M   |
 
 ### Added — docs site
 
@@ -82,6 +115,7 @@ First non-US-major built-in sport, demonstrating the v0.2 plugin registry actual
 ### Added — JSDoc disambiguation
 
 Clarifies when to use which variant of duplicate APIs:
+
 - `extractStatForProp` vs `extractStatForPropViaRegistry` vs `extractStatForPropExplained`
 - `gradeLegFromActual` vs `gradeLegFromActualExplained`
 - `findGameLogCandidates` vs `matchGameLogEntry`
@@ -97,6 +131,7 @@ Clarifies when to use which variant of duplicate APIs:
 - New optional fields can be added to `PlayerGameLogEntryShape` (and analogous interfaces) without breaking changes.
 
 What's NOT covered:
+
 - Payout schedules — books adjust these. Schedule corrections ship as patch releases with a note.
 - Behavior of `*Explained` failure reasons — new reason codes may be added to the union (additive change).
 
@@ -114,13 +149,13 @@ Adds 14 new props across the four built-in sports, runtime input validators, con
 
 ### Added — props
 
-| Sport | New props |
-|---|---|
+| Sport                      | New props                                                                                       |
+| -------------------------- | ----------------------------------------------------------------------------------------------- |
 | NBA / WNBA / NCAAM / NCAAW | `Pts+Stls`, `Pts+Blks`, `Stls+Blks` (alias `Defensive Stats`), `Double-Double`, `Triple-Double` |
-| NFL | `Longest Reception`, `Longest Rush`, `Longest Pass` |
-| MLB (batter) | `Singles`, `Doubles`, `Triples`, `Runs` |
-| MLB (pitcher) | `Pitching Outs` (IP × 3 with .1 / .2 fractional handling) |
-| NHL | `Plus/Minus` |
+| NFL                        | `Longest Reception`, `Longest Rush`, `Longest Pass`                                             |
+| MLB (batter)               | `Singles`, `Doubles`, `Triples`, `Runs`                                                         |
+| MLB (pitcher)              | `Pitching Outs` (IP × 3 with .1 / .2 fractional handling)                                       |
+| NHL                        | `Plus/Minus`                                                                                    |
 
 `Double-Double` and `Triple-Double` return `1` (achieved) or `0` (not) — books grade them at the standard `0.5` line, so over=achievement, under=missed. The token canonicalizer also learned `stl` and `blk`, so combo aliases like `"Pts+Stl"` and `"PTS+BLK"` resolve via tokenization.
 

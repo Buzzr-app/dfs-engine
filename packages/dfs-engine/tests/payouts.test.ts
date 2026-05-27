@@ -105,27 +105,28 @@ describe('dfs-payouts: recalcMultiplierAfterDnp', () => {
     expect(result.newMultiplier).toBeCloseTo(5, 4);
   });
 
-  test('falls back when survivingPickCount is invalid', () => {
-    const r1 = recalcMultiplierAfterDnp({
-      app: 'prizepicks',
-      playType: 'power',
-      originalPickCount: 4,
-      survivingPickCount: 0,
-      survivingHits: 0,
-      originalMultiplier: 10,
-    });
-    expect(r1.usedFallback).toBe(true);
-    expect(r1.newMultiplier).toBe(0);
+  test('throws when survivingPickCount is impossible', () => {
+    expect(() =>
+      recalcMultiplierAfterDnp({
+        app: 'prizepicks',
+        playType: 'power',
+        originalPickCount: 4,
+        survivingPickCount: 0,
+        survivingHits: 0,
+        originalMultiplier: 10,
+      }),
+    ).toThrow('survivingPickCount');
 
-    const r2 = recalcMultiplierAfterDnp({
-      app: 'prizepicks',
-      playType: 'power',
-      originalPickCount: 4,
-      survivingPickCount: 5,
-      survivingHits: 5,
-      originalMultiplier: 10,
-    });
-    expect(r2.usedFallback).toBe(true);
+    expect(() =>
+      recalcMultiplierAfterDnp({
+        app: 'prizepicks',
+        playType: 'power',
+        originalPickCount: 4,
+        survivingPickCount: 5,
+        survivingHits: 5,
+        originalMultiplier: 10,
+      }),
+    ).toThrow('survivingPickCount');
   });
 
   test('falls back when schedule lookup misses', () => {

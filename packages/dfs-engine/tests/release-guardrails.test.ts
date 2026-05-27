@@ -22,6 +22,7 @@ describe('release guardrails', () => {
       'test:coverage': expect.stringContaining('--coverage'),
       'smoke:exports': 'node scripts/smoke-exports.mjs',
       'size:check': 'node scripts/check-package-size.mjs',
+      'audit:high': 'npm audit --audit-level=high',
     });
   });
 

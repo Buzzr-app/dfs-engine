@@ -37,7 +37,7 @@ describe('validatePlayerGameLogEntryShape', () => {
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.errors).toHaveLength(1);
-      expect(result.errors[0]).toContain('expected object');
+      expect(result.errors[0]?.message.toLowerCase()).toContain('expected object');
     }
   });
 
@@ -52,7 +52,7 @@ describe('validatePlayerGameLogEntryShape', () => {
     const result = validatePlayerGameLogEntryShape(rest);
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect(result.errors.some((e) => e.includes('"points"'))).toBe(true);
+      expect(result.errors.some((e) => e.path === 'points')).toBe(true);
     }
   });
 
@@ -60,7 +60,9 @@ describe('validatePlayerGameLogEntryShape', () => {
     const result = validatePlayerGameLogEntryShape({ ...VALID_ENTRY, points: 28 });
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect(result.errors.some((e) => e.includes('"points"') && e.includes('number'))).toBe(true);
+      expect(result.errors.some((e) => e.path === 'points' && e.message.includes('number'))).toBe(
+        true,
+      );
     }
   });
 
@@ -85,7 +87,7 @@ describe('validatePlayerGameLogEntryShape', () => {
     });
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect(result.errors.some((e) => e.includes('mlbRole'))).toBe(true);
+      expect(result.errors.some((e) => e.path === 'mlbRole')).toBe(true);
     }
   });
 
@@ -107,7 +109,7 @@ describe('validateDfsBetLeg', () => {
     const result = validateDfsBetLeg(rest);
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect(result.errors.some((e) => e.includes('legId'))).toBe(true);
+      expect(result.errors.some((e) => e.path === 'legId')).toBe(true);
     }
   });
 
@@ -120,9 +122,9 @@ describe('validateDfsBetLeg', () => {
     const result = validateDfsBetLeg({ ...VALID_LEG, legStatus: 'cancelled' });
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect(result.errors.some((e) => e.includes('legStatus') && e.includes('pending'))).toBe(
-        true,
-      );
+      expect(
+        result.errors.some((e) => e.path === 'legStatus' && e.message.includes('pending')),
+      ).toBe(true);
     }
   });
 

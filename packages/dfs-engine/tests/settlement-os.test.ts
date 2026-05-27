@@ -157,7 +157,7 @@ describe('v2 Settlement OS engine', () => {
     const result = await engine.settleEntry(
       entry({
         stake: 25,
-        legs: [leg({ legStatus: 'dnp' })],
+        legs: [leg({ status: 'dnp' }), leg({ legId: 'leg-2', status: 'dnp' })],
       }),
     );
 
