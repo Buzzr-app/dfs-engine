@@ -1,6 +1,6 @@
 {
   "name": "@buzzr/dfs-testkit",
-  "version": "3.0.1",
+  "version": "4.0.0",
   "description": "Fixture builders and mock providers for @buzzr/dfs-engine consumers.",
   "license": "MIT",
   "author": "Sarvesh Chidambaram",
@@ -29,7 +29,7 @@
     "format:check": "prettier --check src tests"
   },
   "dependencies": {
-    "@buzzr/dfs-engine": ">=3.0.1 <5"
+    "@buzzr/dfs-engine": "^4.0.0"
   },
   "engines": {
     "node": ">=22"

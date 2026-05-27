@@ -1,6 +1,6 @@
 {
   "name": "@buzzr/dfs-react",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Framework-agnostic display helpers for rendering @buzzr/dfs-engine settlements — turns DfsSettlementResult into a clean view-model for React, Vue, Svelte, or plain HTML.",
   "license": "MIT",
   "author": "Sarvesh Chidambaram",
@@ -37,7 +37,7 @@
     "display"
   ],
   "dependencies": {
-    "@buzzr/dfs-engine": ">=3.0.1 <5"
+    "@buzzr/dfs-engine": "^4.0.0"
   },
   "engines": {
     "node": ">=22"

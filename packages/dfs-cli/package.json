@@ -1,6 +1,6 @@
 {
   "name": "@buzzr/dfs-cli",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Command-line wrapper around @buzzr/dfs-engine — grade a DFS entry from JSON fixtures without writing code.",
   "license": "MIT",
   "author": "Sarvesh Chidambaram",
@@ -40,7 +40,7 @@
     "underdog"
   ],
   "dependencies": {
-    "@buzzr/dfs-engine": ">=3.0.1 <5"
+    "@buzzr/dfs-engine": "^4.0.0"
   },
   "engines": {
     "node": ">=22"

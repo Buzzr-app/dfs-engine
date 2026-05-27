@@ -1,6 +1,6 @@
 {
   "name": "@buzzr/dfs-provider-sportradar",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Optional Sportradar-shaped stat provider contract for @buzzr/dfs-engine.",
   "license": "MIT",
   "author": "Sarvesh Chidambaram",
@@ -36,7 +36,7 @@
     "settlement"
   ],
   "dependencies": {
-    "@buzzr/dfs-engine": ">=3.0.1 <5"
+    "@buzzr/dfs-engine": "^4.0.0"
   },
   "engines": {
     "node": ">=22"
