@@ -110,7 +110,7 @@ First non-US-major built-in sport, demonstrating the v0.2 plugin registry actual
 
 ### Added — docs site
 
-`typedoc` config + GitHub Actions workflow that builds API docs on `v*` tags and deploys to `sarveshsea.github.io/dfs-engine` via GitHub Pages.
+`typedoc` config + GitHub Actions workflow that builds API docs on `v*` tags and deploys to `buzzr-app.github.io/dfs-engine` via GitHub Pages.
 
 ### Added — JSDoc disambiguation
 

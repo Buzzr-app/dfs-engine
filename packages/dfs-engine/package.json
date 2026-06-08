@@ -51,13 +51,13 @@
     "settlement",
     "typescript"
   ],
-  "homepage": "https://github.com/sarveshsea/dfs-engine",
+  "homepage": "https://github.com/Buzzr-app/dfs-engine",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/sarveshsea/dfs-engine.git"
+    "url": "git+https://github.com/Buzzr-app/dfs-engine.git"
   },
   "bugs": {
-    "url": "https://github.com/sarveshsea/dfs-engine/issues"
+    "url": "https://github.com/Buzzr-app/dfs-engine/issues"
   },
   "engines": {
     "node": ">=22"

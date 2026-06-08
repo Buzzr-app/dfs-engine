@@ -1,7 +1,7 @@
 # @buzzr/dfs-engine
 
 [![npm version](https://img.shields.io/npm/v/@buzzr/dfs-engine.svg)](https://www.npmjs.com/package/@buzzr/dfs-engine)
-[![ci](https://github.com/sarveshsea/dfs-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/sarveshsea/dfs-engine/actions/workflows/ci.yml)
+[![ci](https://github.com/Buzzr-app/dfs-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/Buzzr-app/dfs-engine/actions/workflows/ci.yml)
 
 Pure-functional **DFS prop grading**, payout math, stat normalization, and policy-aware settlement for DFS pick'em apps. PrizePicks and Underdog ship as stable built-ins, and v4 gives you strict settlement inputs, structured validation, and custom book policies without forking. Drop-in TypeScript, zero runtime dependencies, ESM + CJS + `.d.ts` shipped.
 
@@ -296,7 +296,7 @@ if (!grade.ok) {
 
 The `PlayerGameLogEntryShape` the adapters consume is intentionally minimal — define your own gamelog rows that satisfy the shape (`{ date, minutes, points, ... }`) and pipe them in.
 
-See [CHANGELOG.md](./CHANGELOG.md) for what's new in each release. Looking to contribute? Start at [CONTRIBUTING.md](./CONTRIBUTING.md). Copy-paste-runnable demos live in [examples/README.md](./examples/README.md). Generated API docs: [sarveshsea.github.io/dfs-engine](https://sarveshsea.github.io/dfs-engine).
+See [CHANGELOG.md](./CHANGELOG.md) for what's new in each release. Looking to contribute? Start at [CONTRIBUTING.md](./CONTRIBUTING.md). Copy-paste-runnable demos live in [examples/README.md](./examples/README.md). Generated API docs: [buzzr-app.github.io/dfs-engine](https://buzzr-app.github.io/dfs-engine/).
 
 ## Performance
 

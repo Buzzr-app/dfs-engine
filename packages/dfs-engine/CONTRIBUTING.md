@@ -5,7 +5,7 @@ Thanks for considering a contribution. This package is intentionally small and f
 ## Getting set up
 
 ```bash
-git clone https://github.com/sarveshsea/dfs-engine
+git clone https://github.com/Buzzr-app/dfs-engine
 cd dfs-engine
 npm install
 npm run typecheck
