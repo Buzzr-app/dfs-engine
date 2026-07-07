@@ -70,6 +70,25 @@ const packages = [
     allowedDependencies: ['@buzzr/dfs-engine'],
     runtimeFiles: ['dist/index.js', 'dist/index.cjs'],
   },
+  {
+    name: '@buzzr/entertainment-engine',
+    path: packagePath('packages', 'entertainment-engine'),
+    allowedDependencies: [],
+    runtimeFiles: ['dist/index.js', 'dist/index.cjs'],
+    maxRuntimeBytes: engineRuntimeLimitBytes,
+  },
+  {
+    name: '@buzzr/mcp',
+    path: packagePath('packages', 'mcp'),
+    allowedDependencies: [
+      '@buzzr/bets-core',
+      '@buzzr/dfs-engine',
+      '@buzzr/entertainment-engine',
+      '@modelcontextprotocol/sdk',
+      'zod',
+    ],
+    runtimeFiles: ['dist/index.js', 'dist/cli.js'],
+  },
 ];
 
 for (const pkg of packages) {

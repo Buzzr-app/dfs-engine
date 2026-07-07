@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "baseUrl": ".",
+    "types": ["node"],
+    "paths": {
+      "@buzzr/dfs-engine": ["../dfs-engine/src/index.ts"],
+      "@buzzr/bets-core": ["../bets-core/src/index.ts"],
+      "@buzzr/entertainment-engine": ["../entertainment-engine/src/index.ts"]
+    }
+  },
+  "include": ["src"],
+  "exclude": ["node_modules", "dist", "tests"]
+}

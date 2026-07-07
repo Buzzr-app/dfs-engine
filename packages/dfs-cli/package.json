@@ -1,9 +1,18 @@
 {
   "name": "@buzzr/dfs-cli",
-  "version": "1.0.0",
+  "version": "5.0.0",
   "description": "Command-line wrapper around @buzzr/dfs-engine — grade a DFS entry from JSON fixtures without writing code.",
   "license": "MIT",
   "author": "Sarvesh Chidambaram",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Buzzr-app/dfs-engine.git",
+    "directory": "packages/dfs-cli"
+  },
+  "homepage": "https://github.com/Buzzr-app/dfs-engine/tree/main/packages/dfs-cli#readme",
+  "bugs": {
+    "url": "https://github.com/Buzzr-app/dfs-engine/issues"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -32,15 +41,21 @@
   },
   "keywords": [
     "dfs",
-    "buzzr",
+    "daily-fantasy-sports",
     "cli",
+    "command-line",
     "settlement",
     "grading",
     "prizepicks",
-    "underdog"
+    "underdog",
+    "pick-em",
+    "player-props",
+    "sports-betting",
+    "typescript",
+    "buzzr"
   ],
   "dependencies": {
-    "@buzzr/dfs-engine": "^4.0.0"
+    "@buzzr/dfs-engine": "^5.0.0"
   },
   "engines": {
     "node": ">=22"

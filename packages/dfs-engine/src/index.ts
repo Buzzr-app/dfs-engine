@@ -126,7 +126,27 @@ export {
   definePayoutTable,
   defineStatProvider,
   DRAFT_BOOK_POLICY_FIXTURES,
+  KALSHI_DRAFT_BOOK_POLICY,
 } from './engine';
+
+// v5 — batch settlement result shapes (engine.settleEntries).
+export type {
+  DfsBatchCacheStats,
+  DfsBatchEntryFailure,
+  DfsBatchSettlementContext,
+  DfsBatchSettlementResult,
+  DfsBatchSummary,
+} from './batch';
+
+// v5 — declarative (non-throwing) book-policy validation.
+export { validateBookPolicyDefinition } from './policy-validator';
+
+// v5 — draft Kalshi-style binary-contract policy building blocks.
+export {
+  KALSHI_CONTRACT_PRICE_METADATA_KEY,
+  KALSHI_DRAFT_POLICY_DEFINITION,
+  resolveKalshiContractPrice,
+} from './policies/kalshi';
 export type {
   BuiltInBookId,
   Clock,
@@ -166,6 +186,7 @@ export type {
   DfsSettlementResult,
   DfsTiePolicy,
   DfsV2EntryInput,
+  DfsV5ExplanationCode,
   DfsValidationSeverity,
   GameProvider,
   GameProviderRequest,

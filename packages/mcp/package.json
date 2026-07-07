@@ -1,0 +1,66 @@
+{
+  "name": "@buzzr/mcp",
+  "version": "5.0.0",
+  "description": "MCP server exposing the @buzzr sports engines to AI agents — DFS settlement, odds math, and entertainment predictions as tools.",
+  "license": "MIT",
+  "author": "Sarvesh Chidambaram",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "buzzr-mcp": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "eslint src tests",
+    "format": "prettier --write src tests",
+    "format:check": "prettier --check src tests"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "ai-agents",
+    "claude",
+    "sports-betting",
+    "dfs",
+    "odds",
+    "predictions",
+    "buzzr"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Buzzr-app/dfs-engine.git",
+    "directory": "packages/mcp"
+  },
+  "homepage": "https://github.com/Buzzr-app/dfs-engine/tree/main/packages/mcp",
+  "bugs": {
+    "url": "https://github.com/Buzzr-app/dfs-engine/issues"
+  },
+  "dependencies": {
+    "@buzzr/bets-core": "^5.0.0",
+    "@buzzr/dfs-engine": "^5.0.0",
+    "@buzzr/entertainment-engine": "^5.0.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^4.4.3"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
