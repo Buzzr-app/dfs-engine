@@ -1,8 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import {
-  KALSHI_DRAFT_POLICY_DEFINITION,
-  validateBookPolicyDefinition,
-} from '../src';
+import { KALSHI_DRAFT_POLICY_DEFINITION, validateBookPolicyDefinition } from '../src';
 
 const validPolicy = () => ({
   ...KALSHI_DRAFT_POLICY_DEFINITION,
@@ -24,9 +21,7 @@ describe('v5 validateBookPolicyDefinition', () => {
 
   test('rejects non-object candidates with policy.object_required', () => {
     for (const candidate of [null, undefined, 42, 'policy', []]) {
-      expect(codes(validateBookPolicyDefinition(candidate))).toContain(
-        'policy.object_required',
-      );
+      expect(codes(validateBookPolicyDefinition(candidate))).toContain('policy.object_required');
     }
   });
 
@@ -105,12 +100,12 @@ describe('v5 validateBookPolicyDefinition', () => {
 
   test('validates source refs', () => {
     const base = validPolicy();
-    expect(
-      codes(validateBookPolicyDefinition({ ...base, sources: 'espn' })),
-    ).toContain('policy.invalid_sources');
-    expect(
-      codes(validateBookPolicyDefinition({ ...base, sources: [{ label: '' }] })),
-    ).toContain('policy.invalid_source');
+    expect(codes(validateBookPolicyDefinition({ ...base, sources: 'espn' }))).toContain(
+      'policy.invalid_sources',
+    );
+    expect(codes(validateBookPolicyDefinition({ ...base, sources: [{ label: '' }] }))).toContain(
+      'policy.invalid_source',
+    );
     expect(
       codes(
         validateBookPolicyDefinition({

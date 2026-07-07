@@ -16,10 +16,7 @@ const contractEntry = (
   playTypeId: 'binary',
   stake: 10,
   displayedMultiplier: 3,
-  metadata:
-    contractPrice === null
-      ? {}
-      : { [KALSHI_CONTRACT_PRICE_METADATA_KEY]: contractPrice },
+  metadata: contractPrice === null ? {} : { [KALSHI_CONTRACT_PRICE_METADATA_KEY]: contractPrice },
   legs: [
     {
       legId: 'contract-1',
@@ -48,9 +45,7 @@ describe('v5 kalshi draft binary-contract policy', () => {
     expect(settlement.payout.total).toBeCloseTo(25, 6);
     expect(settlement.payout.withdrawable).toBeCloseTo(25, 6);
     expect(settlement.payout.bonus).toBe(0);
-    expect(settlement.explanationCodes).toContain(
-      'settlement.kalshi_binary_contract',
-    );
+    expect(settlement.explanationCodes).toContain('settlement.kalshi_binary_contract');
   });
 
   test('a lost contract pays zero', async () => {
@@ -83,9 +78,7 @@ describe('v5 kalshi draft binary-contract policy', () => {
     // Without the kalshi policy the engine falls back to generic pricing:
     // no contract-pricing explanation code, and the payout follows the
     // displayed multiplier (10 * 3 = 30) instead of 100/contractPrice (25).
-    expect(settlement.explanationCodes).not.toContain(
-      'settlement.kalshi_binary_contract',
-    );
+    expect(settlement.explanationCodes).not.toContain('settlement.kalshi_binary_contract');
     expect(settlement.payout.total).not.toBeCloseTo(25, 6);
   });
 });

@@ -193,14 +193,22 @@ describe('v5 batch settlement (engine.settleEntries)', () => {
     const engine = createDfsEngine({ bookPolicies: [explodingBook] });
 
     const batch = await engine.settleEntries([
-      entry({ entryId: 'ok-1', bookId: 'exploding-book', legs: [leg({ legId: 'a-1', actual: 30 })] }),
+      entry({
+        entryId: 'ok-1',
+        bookId: 'exploding-book',
+        legs: [leg({ legId: 'a-1', actual: 30 })],
+      }),
       entry({
         entryId: 'boom',
         bookId: 'exploding-book',
         metadata: { explode: true },
         legs: [leg({ legId: 'b-1', actual: 30 })],
       }),
-      entry({ entryId: 'ok-2', bookId: 'exploding-book', legs: [leg({ legId: 'c-1', actual: 30 })] }),
+      entry({
+        entryId: 'ok-2',
+        bookId: 'exploding-book',
+        legs: [leg({ legId: 'c-1', actual: 30 })],
+      }),
     ]);
 
     expect(batch.results.map((result) => result.entryId)).toEqual(['ok-1', 'ok-2']);
@@ -323,8 +331,12 @@ describe('v5 batch settlement (engine.settleEntries)', () => {
     });
     const engine = createDfsEngine({ bookPolicies: [singleLegBook], statProviders: [provider] });
 
-    const first = await engine.settleEntry(entry({ entryId: 'solo-1', legs: [leg({ legId: 'a-1' })] }));
-    const second = await engine.settleEntry(entry({ entryId: 'solo-2', legs: [leg({ legId: 'b-1' })] }));
+    const first = await engine.settleEntry(
+      entry({ entryId: 'solo-1', legs: [leg({ legId: 'a-1' })] }),
+    );
+    const second = await engine.settleEntry(
+      entry({ entryId: 'solo-2', legs: [leg({ legId: 'b-1' })] }),
+    );
 
     expect(calls).toBe(2);
     expect(first.explanationCodes).not.toContain('batch_cache_hit');

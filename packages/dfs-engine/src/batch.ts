@@ -80,10 +80,7 @@ export type DfsBatchSettlementResult = {
  * single-entry behavior is untouched.
  */
 export interface DfsBatchStatCache {
-  extractStat(
-    provider: StatProvider,
-    request: StatProviderRequest,
-  ): Promise<StatProviderResult>;
+  extractStat(provider: StatProvider, request: StatProviderRequest): Promise<StatProviderResult>;
   getGameLog(
     provider: StatProvider,
     request: StatProviderGameLogInput,

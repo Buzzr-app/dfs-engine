@@ -98,20 +98,14 @@ function validatePlayTypes(policy: Record<string, unknown>, errors: DfsValidatio
   playTypes.forEach((candidate, index) => {
     const path = `playTypes.${index}`;
     if (!isPlainObject(candidate)) {
-      errors.push(
-        issue('policy.invalid_play_type', `playTypes.${index} must be an object.`, path),
-      );
+      errors.push(issue('policy.invalid_play_type', `playTypes.${index} must be an object.`, path));
       return;
     }
     const id = candidate.id;
     const hasId = typeof id === 'string' && id.trim().length > 0;
     if (!hasId || typeof candidate.displayName !== 'string' || !candidate.displayName.trim()) {
       errors.push(
-        issue(
-          'policy.invalid_play_type',
-          `playTypes.${index} needs an id and displayName.`,
-          path,
-        ),
+        issue('policy.invalid_play_type', `playTypes.${index} needs an id and displayName.`, path),
       );
     }
     if (hasId) {
@@ -169,11 +163,7 @@ function validateSources(policy: Record<string, unknown>, errors: DfsValidationI
   }
   sources.forEach((source, index) => {
     const path = `sources.${index}`;
-    if (
-      !isPlainObject(source) ||
-      typeof source.label !== 'string' ||
-      !source.label.trim()
-    ) {
+    if (!isPlainObject(source) || typeof source.label !== 'string' || !source.label.trim()) {
       errors.push(
         issue('policy.invalid_source', `sources.${index} needs a non-empty label.`, path),
       );
