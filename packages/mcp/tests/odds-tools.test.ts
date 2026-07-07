@@ -1,0 +1,124 @@
+import { describe, expect, it } from 'vitest';
+
+import { fairLineTool, kellyStakeTool, parlayValueTool } from '../src/tools/odds';
+import type { ToolResult } from '../src/tools/shared';
+
+function parseResult(result: ToolResult): Record<string, unknown> {
+  expect(result.content).toHaveLength(1);
+  return JSON.parse(result.content[0].text) as Record<string, unknown>;
+}
+
+describe('fair_line', () => {
+  it('splits a symmetric -110/-110 market at 50%', async () => {
+    const result = await fairLineTool.handler({ selected: -110, opposite: -110 });
+
+    expect(result.isError).toBeUndefined();
+    const fair = parseResult(result);
+    expect(fair.fairProbability).toBe(0.5);
+    expect(fair.fairAmericanOdds).toBe(-100);
+    expect(fair.overround as number).toBeCloseTo(0.0476, 3);
+    expect(fair.edgePercent).toBe(-2.38);
+  });
+
+  it('labels the selected side when provided', async () => {
+    const fair = parseResult(
+      await fairLineTool.handler({ selected: 145, opposite: -170, selectedSide: 'Knicks ML' }),
+    );
+
+    expect(fair.selectedSide).toBe('Knicks ML');
+    expect(fair.fairProbability as number).toBeGreaterThan(0);
+    expect(fair.fairProbability as number).toBeLessThan(0.5);
+  });
+
+  it('rejects zero American odds via schema validation', async () => {
+    const result = await fairLineTool.handler({ selected: 0, opposite: -110 });
+
+    expect(result.isError).toBe(true);
+    expect((parseResult(result).error as Record<string, unknown>).code).toBe('invalid_input');
+  });
+});
+
+describe('parlay_value', () => {
+  it('prices a two-leg -110/-110 parlay against its fair probability', async () => {
+    const legs = [
+      { selected: -110, opposite: -110 },
+      { selected: -110, opposite: -110 },
+    ];
+    const value = parseResult(await parlayValueTool.handler({ legs }));
+
+    expect(value.fairProbability).toBe(0.25);
+    expect(value.fairAmericanOdds).toBe(300);
+    expect(value.combinedLegOdds).toBe(264);
+    expect(value.offeredAmericanOdds).toBe(264);
+    expect(value.edgePercent as number).toBeLessThan(0);
+    expect(value.legFairProbabilities).toEqual([0.5, 0.5]);
+    expect(value.expectedValue).toBeUndefined();
+  });
+
+  it('computes expected value at a fair offered price', async () => {
+    const legs = [
+      { selected: -110, opposite: -110 },
+      { selected: -110, opposite: -110 },
+    ];
+    const value = parseResult(
+      await parlayValueTool.handler({ legs, offeredAmericanOdds: 300, stake: 100 }),
+    );
+
+    expect(value.offeredAmericanOdds).toBe(300);
+    expect(value.edgePercent).toBe(0);
+    expect(value.expectedValue).toEqual({ expectedValue: 0, expectedRoiPercent: 0 });
+  });
+
+  it('rejects an empty legs array', async () => {
+    const result = await parlayValueTool.handler({ legs: [] });
+
+    expect(result.isError).toBe(true);
+    expect((parseResult(result).error as Record<string, unknown>).code).toBe('invalid_input');
+  });
+});
+
+describe('kelly_stake', () => {
+  it('computes half-Kelly for a +100 coin flip with 55% win probability', async () => {
+    const stake = parseResult(
+      await kellyStakeTool.handler({
+        bankroll: 1000,
+        americanOdds: 100,
+        winProbability: 0.55,
+        fraction: 0.5,
+      }),
+    );
+
+    expect(stake.fullKellyFraction).toBe(0.1);
+    expect(stake.recommendedFraction).toBe(0.05);
+    expect(stake.recommendedStake).toBe(50);
+  });
+
+  it('defaults to quarter-Kelly', async () => {
+    const stake = parseResult(
+      await kellyStakeTool.handler({ bankroll: 1000, americanOdds: 100, winProbability: 0.55 }),
+    );
+
+    expect(stake.recommendedFraction).toBe(0.025);
+    expect(stake.recommendedStake).toBe(25);
+  });
+
+  it('clamps -EV bets to a zero stake', async () => {
+    const stake = parseResult(
+      await kellyStakeTool.handler({ bankroll: 1000, americanOdds: -200, winProbability: 0.55 }),
+    );
+
+    expect(stake.fullKellyFraction).toBe(0);
+    expect(stake.recommendedStake).toBe(0);
+  });
+
+  it('rejects out-of-range win probabilities', async () => {
+    const result = await kellyStakeTool.handler({
+      bankroll: 1000,
+      americanOdds: 100,
+      winProbability: 1.2,
+    });
+
+    expect(result.isError).toBe(true);
+    expect((parseResult(result).error as Record<string, unknown>).code).toBe('invalid_input');
+  });
+});

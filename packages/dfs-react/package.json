@@ -1,9 +1,18 @@
 {
   "name": "@buzzr/dfs-react",
-  "version": "1.0.0",
+  "version": "5.0.0",
   "description": "Framework-agnostic display helpers for rendering @buzzr/dfs-engine settlements — turns DfsSettlementResult into a clean view-model for React, Vue, Svelte, or plain HTML.",
   "license": "MIT",
   "author": "Sarvesh Chidambaram",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Buzzr-app/dfs-engine.git",
+    "directory": "packages/dfs-react"
+  },
+  "homepage": "https://github.com/Buzzr-app/dfs-engine/tree/main/packages/dfs-react#readme",
+  "bugs": {
+    "url": "https://github.com/Buzzr-app/dfs-engine/issues"
+  },
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -30,14 +39,22 @@
   },
   "keywords": [
     "dfs",
-    "buzzr",
+    "daily-fantasy-sports",
     "react",
+    "vue",
+    "svelte",
     "view-model",
+    "headless-ui",
     "settlement",
-    "display"
+    "betslip",
+    "player-props",
+    "prizepicks",
+    "underdog",
+    "typescript",
+    "buzzr"
   ],
   "dependencies": {
-    "@buzzr/dfs-engine": "^4.0.0"
+    "@buzzr/dfs-engine": "^5.0.0"
   },
   "engines": {
     "node": ">=22"

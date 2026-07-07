@@ -1,9 +1,18 @@
 {
   "name": "@buzzr/dfs-engine-test-vectors",
-  "version": "1.0.0",
+  "version": "5.0.0",
   "description": "Canonical reference fixtures for @buzzr/dfs-engine — golden entry/gamelog/settlement triples so external integrators can prove their wiring matches Buzzr's.",
   "license": "MIT",
   "author": "Sarvesh Chidambaram",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Buzzr-app/dfs-engine.git",
+    "directory": "packages/dfs-engine-test-vectors"
+  },
+  "homepage": "https://github.com/Buzzr-app/dfs-engine/tree/main/packages/dfs-engine-test-vectors#readme",
+  "bugs": {
+    "url": "https://github.com/Buzzr-app/dfs-engine/issues"
+  },
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -30,14 +39,20 @@
   },
   "keywords": [
     "dfs",
-    "buzzr",
+    "daily-fantasy-sports",
     "test-vectors",
     "fixtures",
-    "golden",
-    "settlement"
+    "golden-tests",
+    "conformance",
+    "settlement",
+    "grading",
+    "prizepicks",
+    "underdog",
+    "typescript",
+    "buzzr"
   ],
   "dependencies": {
-    "@buzzr/dfs-engine": "^4.0.0"
+    "@buzzr/dfs-engine": "^5.0.0"
   },
   "engines": {
     "node": ">=22"

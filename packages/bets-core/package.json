@@ -1,6 +1,6 @@
 {
   "name": "@buzzr/bets-core",
-  "version": "4.0.0",
+  "version": "5.0.0",
   "description": "Pure Buzzr Bets domain contracts, odds math, ROI rollups, and settlement adapters.",
   "license": "MIT",
   "author": "Sarvesh Chidambaram",
@@ -36,12 +36,28 @@
     "ev",
     "roi",
     "settlement",
-    "typescript"
+    "typescript",
+    "odds-converter",
+    "no-vig",
+    "fair-line",
+    "expected-value",
+    "kelly-criterion",
+    "closing-line-value",
+    "parlay-calculator"
   ],
   "engines": {
     "node": ">=22"
   },
   "publishConfig": {
     "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Buzzr-app/dfs-engine.git",
+    "directory": "packages/bets-core"
+  },
+  "homepage": "https://github.com/Buzzr-app/dfs-engine/tree/main/packages/bets-core",
+  "bugs": {
+    "url": "https://github.com/Buzzr-app/dfs-engine/issues"
   }
 }

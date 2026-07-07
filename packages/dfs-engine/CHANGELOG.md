@@ -1,5 +1,35 @@
 # Changelog
 
+## 5.0.0 — Batch Settlement + Declarative Policies
+
+Baselines the whole @buzzr family at v5. No breaking changes to the locked
+v4 canonical contracts — v5 is additive.
+
+### Added
+
+- **Batch settlement:** `engine.settleEntries(inputs, context?)` settles many
+  entries in one call with a shared per-call memoized stat cache. Providers
+  are called once per `(player, game, league)` key across the whole batch;
+  the result reports `cache: { providerCalls, cacheHits }`, an ordered
+  `results` array, a `summary` count, and per-entry `failures` that never
+  abort the rest of the batch.
+- **Declarative policy validation:** `validateBookPolicyDefinition(candidate)`
+  checks a book-policy object without registering it, returning the same
+  machine-readable issue format as `validateDfsEntryInput`
+  (`policy.playtypes_empty`, `policy.invalid_pick_count`,
+  `policy.unknown_payout_model`, ...). Non-eng teams can lint policy JSON
+  before it ever reaches `defineBookPolicy`.
+- **Prediction-market draft policy:** `KALSHI_DRAFT_BOOK_POLICY` models
+  binary-contract settlement (stake × 100 / contractPrice on win) as a
+  draft/experimental policy, opt-in via
+  `createDfsEngine({ bookPolicies: [KALSHI_DRAFT_BOOK_POLICY] })`.
+- **Richer explanation codes** across DNP/push/void/rescue and payout
+  resolution paths, plus `batch_cache_hit` in batch settlements.
+
+### Migration notes
+
+None required from 4.x — all 4.x code compiles and behaves identically.
+
 ## 4.0.0
 
 ### Major Changes

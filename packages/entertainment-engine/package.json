@@ -1,0 +1,60 @@
+{
+  "name": "@buzzr/entertainment-engine",
+  "version": "5.0.0",
+  "description": "Transparent sports entertainment scoring, hybrid ML prediction, and personalized game recommendations for Buzzr.",
+  "license": "MIT",
+  "author": "Sarvesh Chidambaram",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm,cjs --dts --sourcemap --clean --treeshake --target es2022",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "eslint src tests",
+    "format": "prettier --write src tests",
+    "format:check": "prettier --check src tests"
+  },
+  "keywords": [
+    "sports",
+    "entertainment-score",
+    "prediction",
+    "machine-learning",
+    "recommendations",
+    "buzzr",
+    "sports-analytics",
+    "game-recommendations",
+    "watchability",
+    "excitement-score",
+    "win-probability",
+    "sports-data"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Buzzr-app/dfs-engine.git",
+    "directory": "packages/entertainment-engine"
+  },
+  "homepage": "https://github.com/Buzzr-app/dfs-engine/tree/main/packages/entertainment-engine",
+  "bugs": {
+    "url": "https://github.com/Buzzr-app/dfs-engine/issues"
+  }
+}

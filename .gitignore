@@ -1,7 +1,13 @@
 node_modules
 dist
 coverage
-docs
+packages/*/docs
+/docs/*
+!/docs/launch
 *.log
 .DS_Store
 .vitest-cache
+
+# Local agent tooling
+.claude/
+.superpowers/

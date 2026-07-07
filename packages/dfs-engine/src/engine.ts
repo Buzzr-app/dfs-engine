@@ -2,6 +2,13 @@ import { computeBoostSplit, extractStatForProp, gradeLegFromActual } from './gra
 import type { BetStatus, PlayerGameLogEntryShape } from './grading';
 import { normalizeDfsPropType } from './prop-normalizer';
 import { DfsDefinitionError, DfsEngineInvariantError } from './errors';
+import { runBatchSettlement } from './batch';
+import type {
+  DfsBatchSettlementContext,
+  DfsBatchSettlementResult,
+  DfsBatchStatCache,
+} from './batch';
+import { KALSHI_DRAFT_POLICY_DEFINITION } from './policies/kalshi';
 import {
   validateDfsEntryInput,
   validateDfsSettlementContext,
@@ -454,6 +461,15 @@ export interface DfsEngine {
   lookupPayout(input: DfsPayoutLookupInput): DfsPayoutResolution | null;
   validateEntry(input: DfsEntryInput): DfsValidationResult<DfsEntryInput>;
   settleEntry(input: DfsEntryInput, context?: DfsSettlementContext): Promise<DfsSettlementResult>;
+  /**
+   * v5 — settles many entries in one call, sharing a per-call memoized
+   * stat cache across entries and isolating per-entry failures. See
+   * src/batch.ts for the result and cache-stat shapes.
+   */
+  settleEntries(
+    inputs: readonly DfsEntryInput[],
+    context?: DfsBatchSettlementContext,
+  ): Promise<DfsBatchSettlementResult>;
   explainSettlement(result: DfsSettlementResult): string;
   registerBookPolicy(policy: DfsBookPolicy): void;
   registerPayoutTable(table: DfsPayoutTableDefinition): void;
@@ -476,6 +492,41 @@ export type DfsPayoutLookupInput = {
   removedCount?: number;
   entry?: DfsEntryInput;
   decisions?: readonly DfsLegDecision[];
+};
+
+/**
+ * v5 — machine-readable explanation codes ADDED in 5.0.0. Purely additive:
+ * existing codes are unchanged, and `DfsSettlementResult.explanationCodes`
+ * stays `string[]` (a locked v4 contract).
+ *
+ * - `dnp_leg_removed` — a DNP leg was removed by the book's DNP policy.
+ * - `push_leg_removed` — a pushed leg was removed by the book's push policy.
+ * - `void_no_survivors` — every leg was removed (at least one DNP/void) and
+ *   the entry voided with a stake refund.
+ * - `refund_no_survivors` — every leg pushed and the stake was refunded.
+ * - `rescue_applied` — a leg arrived with a `rescued` status and was
+ *   excluded from payout math.
+ * - `payout_table_lookup` — the payout came from a fixed payout table.
+ * - `payout_displayed_multiplier` — the payout used the displayed multiplier.
+ * - `payout_custom_resolver` — the payout came from a policy payoutResolver.
+ * - `batch_cache_hit` — (batch only) at least one leg of this entry was
+ *   served from the shared `settleEntries` stat cache.
+ */
+export type DfsV5ExplanationCode =
+  | 'dnp_leg_removed'
+  | 'push_leg_removed'
+  | 'void_no_survivors'
+  | 'refund_no_survivors'
+  | 'rescue_applied'
+  | 'payout_table_lookup'
+  | 'payout_displayed_multiplier'
+  | 'payout_custom_resolver'
+  | 'batch_cache_hit';
+
+const PAYOUT_MODEL_EXPLANATION_CODES: Record<DfsPayoutModel, DfsV5ExplanationCode> = {
+  'fixed-table': 'payout_table_lookup',
+  'displayed-multiplier': 'payout_displayed_multiplier',
+  custom: 'payout_custom_resolver',
 };
 
 const EMPTY_PAYOUT: DfsPayoutSplit = { total: 0, withdrawable: 0, bonus: 0 };
@@ -648,6 +699,22 @@ const DEFAULT_BOOK_POLICIES: readonly DfsBookPolicy[] = [
     },
   }),
 ];
+
+/**
+ * DRAFT / EXPERIMENTAL — Kalshi-style binary-contract policy (v5).
+ *
+ * Same opt-in mechanics as the `DRAFT_BOOK_POLICY_FIXTURES` drafts: it is
+ * NOT registered by default; pass it to `createDfsEngine({ bookPolicies })`
+ * or `engine.registerBookPolicy(...)`. It ships as its own named export
+ * (rather than inside `DRAFT_BOOK_POLICY_FIXTURES`) because the exact
+ * contents of that fixture list are a locked v4 contract.
+ *
+ * See src/policies/kalshi.ts for pricing semantics (`contractPrice`
+ * metadata, win pays `stake * (100 / contractPrice)`, tie/void refunds).
+ */
+export const KALSHI_DRAFT_BOOK_POLICY: DfsBookPolicy = defineBookPolicy(
+  KALSHI_DRAFT_POLICY_DEFINITION,
+);
 
 export const DRAFT_BOOK_POLICY_FIXTURES: readonly DfsBookPolicy[] = [
   defineBookPolicy({
@@ -1086,6 +1153,10 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
     leg: DfsLegInput,
     context: DfsSettlementContext = {},
     entry?: DfsEntryInput,
+    // v5 internal seam: settleEntries injects a shared memo cache here.
+    // Not part of the public DfsEngine signature; absent for single-entry
+    // settlement, so v4 behavior is unchanged.
+    cache?: DfsBatchStatCache,
   ): Promise<DfsLegStatResult> {
     const contextStat = context.actualsByLegId?.[leg.legId];
     if (typeof contextStat === 'number' && Number.isFinite(contextStat)) {
@@ -1121,7 +1192,9 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
       matchedProvider = true;
       try {
         if (provider.extractStat) {
-          const result = await provider.extractStat({ leg, context });
+          const result = cache
+            ? await cache.extractStat(provider, { leg, context })
+            : await provider.extractStat({ leg, context });
           if (result.ok) {
             if (typeof result.actual !== 'number' || !Number.isFinite(result.actual)) {
               return statFailure(
@@ -1151,7 +1224,9 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
           }
         }
         if (provider.getGameLog && entry) {
-          const rows = await provider.getGameLog({ leg, entry, context });
+          const rows = cache
+            ? await cache.getGameLog(provider, { leg, entry, context })
+            : await provider.getGameLog({ leg, entry, context });
           if (!Array.isArray(rows)) {
             return statFailure(
               'invalid_provider_result',
@@ -1493,6 +1568,9 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
   async function settleEntry(
     input: DfsEntryInput,
     context: DfsSettlementContext = {},
+    // v5 internal seam: only settleEntries passes a cache. Public
+    // settleEntry callers never see or set this.
+    cache?: DfsBatchStatCache,
   ): Promise<DfsSettlementResult> {
     const settledAt =
       typeof context.settledAt === 'string' && isValidDate(context.settledAt)
@@ -1565,6 +1643,9 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
           message: `${leg.playerName} was marked ${outcome}.`,
         });
         explanationCodes.add(`leg.${outcome}`);
+        if (outcome === 'dnp') {
+          explanationCodes.add('dnp_leg_removed');
+        }
         continue;
       }
       if (
@@ -1590,10 +1671,13 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
           message: `${leg.playerName} was marked ${contextStatus}.`,
         });
         explanationCodes.add(`leg.${contextStatus}`);
+        if (contextStatus === 'rescued') {
+          explanationCodes.add('rescue_applied');
+        }
         continue;
       }
 
-      const stat = await extractLegStat(leg, context, entry);
+      const stat = await extractLegStat(leg, context, entry, cache);
       if (!stat.ok) {
         decisions.push({
           legId: leg.legId,
@@ -1633,6 +1717,7 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
           message: `${leg.playerName} pushed and was removed by policy.`,
         });
         explanationCodes.add('leg.push_removed');
+        explanationCodes.add('push_leg_removed');
       }
     }
 
@@ -1685,6 +1770,11 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
         message: 'All legs were removed by policy, so the entry returns stake.',
       });
       explanationCodes.add('settlement.all_legs_removed_refund');
+      explanationCodes.add(
+        decisions.every((decision) => decision.status === 'push')
+          ? 'refund_no_survivors'
+          : 'void_no_survivors',
+      );
       return {
         entryId: entry.entryId,
         bookId: entry.bookId,
@@ -1751,6 +1841,7 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
     };
 
     explanationCodes.add(payout.explanationCode);
+    explanationCodes.add(PAYOUT_MODEL_EXPLANATION_CODES[playType.payoutModel]);
     if (removed > 0) {
       explanationCodes.add('settlement.repriced_after_removed_legs');
       adjustments.push({
@@ -1801,6 +1892,15 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
 
     await config.settlementStore?.saveSettlement?.(result);
     return result;
+  }
+
+  function settleEntries(
+    inputs: readonly DfsEntryInput[],
+    context: DfsBatchSettlementContext = {},
+  ): Promise<DfsBatchSettlementResult> {
+    return runBatchSettlement(inputs, context, (input, settlementContext, batchCache) =>
+      settleEntry(input, settlementContext, batchCache),
+    );
   }
 
   function explainSettlement(result: DfsSettlementResult): string {
@@ -1943,6 +2043,7 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
     lookupPayout,
     validateEntry,
     settleEntry,
+    settleEntries,
     explainSettlement,
     registerBookPolicy,
     registerPayoutTable,

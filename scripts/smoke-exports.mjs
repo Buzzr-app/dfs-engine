@@ -54,6 +54,28 @@ const packages = [
     path: 'packages/dfs-engine-test-vectors',
     exports: ['TEST_VECTORS'],
   },
+  {
+    name: '@buzzr/entertainment-engine',
+    path: 'packages/entertainment-engine',
+    exports: [
+      'resolveBuzzScores',
+      'enrichGameRowWithBuzzScores',
+      'predictGame',
+      'predictGameWithDiagnostics',
+      'trainSGD',
+      'validateModel',
+      'extractFeatures',
+      'buildModelRunReport',
+      'rankGamesForUser',
+      'explainRecommendation',
+    ],
+  },
+  {
+    name: '@buzzr/mcp',
+    path: 'packages/mcp',
+    exports: ['createBuzzrMcpServer'],
+    esmOnly: true,
+  },
 ];
 
 function assert(condition, message) {
