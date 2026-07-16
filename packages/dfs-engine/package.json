@@ -22,7 +22,7 @@
   ],
   "scripts": {
     "build": "tsup",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --project tsconfig.type-tests.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "bench": "vitest bench --run",
