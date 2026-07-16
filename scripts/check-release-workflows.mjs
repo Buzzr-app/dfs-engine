@@ -5,6 +5,7 @@ const workflowPaths = [
   '.github/workflows/ci.yml',
   '.github/workflows/docs.yml',
   '.github/workflows/prove-mcp-published.yml',
+  '.github/workflows/release.yml',
 ];
 
 const workflows = await Promise.all(
@@ -38,6 +39,25 @@ const proof = workflows.find(({ path }) => path.endsWith('/prove-mcp-published.y
 for (const input of ['expected_version', 'expected_integrity', 'expected_git_head']) {
   assert.match(proof, new RegExp(`^      ${input}:$`, 'm'), `published proof must require ${input}`);
 }
+
+const release = workflows.find(({ path }) => path.endsWith('/release.yml'))?.body ?? '';
+for (const input of ['expected_version', 'expected_commit', 'confirm_publish']) {
+  assert.match(release, new RegExp(`^      ${input}:$`, 'm'), `release must require ${input}`);
+}
+assert.match(release, /^      id-token:\s+write$/m, 'npm publish job must mint an OIDC token');
+assert.match(release, /^    environment:\s+npm$/m, 'npm publish job must use the npm environment');
+assert.match(release, /node-version:\s+24/, 'release must use Node 24');
+assert.match(release, /npm@12\.0\.1/, 'release must pin the reviewed npm CLI');
+assert.match(
+  release,
+  /package-manager-cache:\s+false/,
+  'release builds must disable package-manager caching',
+);
+assert.match(release, /npm exec changeset publish/, 'release must publish through Changesets');
+assert.match(release, /NPM_CONFIG_PROVENANCE:\s+['"]true['"]/, 'release must request provenance');
+assert.match(release, /npm run proof:mcp:published/, 'release must prove the exact live MCP artifact');
+assert.match(release, /gh release create/, 'release must create the reviewed GitHub release');
+assert.doesNotMatch(release, /NPM_TOKEN|NODE_AUTH_TOKEN|secrets\./, 'release must not use tokens');
 for (const variable of ['EXPECTED_MCP_VERSION', 'EXPECTED_MCP_INTEGRITY', 'EXPECTED_GIT_HEAD']) {
   assert.match(
     proof,
