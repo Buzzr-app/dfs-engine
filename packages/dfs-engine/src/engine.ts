@@ -463,11 +463,21 @@ export type DfsSettlementResult = {
   adjustments: DfsSettlementAdjustment[];
   pendingReasons: string[];
   policyVersion: string | null;
-  policyStatus: DfsPolicyStatus | null;
-  policyVerification: DfsPolicyVerification | null;
+  /**
+   * Policy metadata added after v5.0. Optional so externally constructed
+   * legacy results remain source-compatible; engine-produced results always
+   * include this field.
+   */
+  policyStatus?: DfsPolicyStatus | null;
+  /** @see DfsSettlementResult.policyStatus */
+  policyVerification?: DfsPolicyVerification | null;
   sourceRefs: DfsBookSourceRef[];
-  /** The fixed payout table selected for this settlement's deterministic as-of. */
-  payoutTable: DfsSelectedPayoutTable | null;
+  /**
+   * The fixed payout table selected for this settlement's deterministic
+   * as-of. Optional for legacy object compatibility; engine-produced results
+   * always include this field.
+   */
+  payoutTable?: DfsSelectedPayoutTable | null;
   confidence: DfsSettlementConfidence;
   explanationCodes: string[];
   validation: DfsValidationResult<DfsEntryInput>;
@@ -516,6 +526,13 @@ export interface DfsEngine {
   registerLeagueAdapter(adapter: DfsLeagueAdapterDefinition): void;
   registerStatProvider(provider: StatProvider): void;
   getRegisteredBooks(): DfsBookId[];
+}
+
+/**
+ * Engine returned by {@link createDfsEngine}, including immutable policy
+ * snapshots added after the original v5 `DfsEngine` contract.
+ */
+export interface DfsEngineWithPolicySnapshots extends DfsEngine {
   getBookPolicies(): readonly DfsBookPolicySnapshot[];
 }
 
@@ -1212,7 +1229,7 @@ function adaptBuzzrLeg(leg: DfsBetLeg): DfsLegInput {
   };
 }
 
-export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
+export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngineWithPolicySnapshots {
   const clock = config.clock ?? (() => new Date());
   const bookPolicies = new Map<DfsBookId, DfsBookPolicy>();
   const payoutTables: DfsPayoutTableDefinition[] = DEFAULT_PAYOUT_TABLES.map((table) => ({

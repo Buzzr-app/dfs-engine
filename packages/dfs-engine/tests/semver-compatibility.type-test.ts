@@ -1,4 +1,10 @@
-import type { DfsEngine, DfsEntryInput, DfsSettlementResult } from '../src';
+import {
+  createDfsEngine,
+  type DfsEngine,
+  type DfsEngineWithPolicySnapshots,
+  type DfsEntryInput,
+  type DfsSettlementResult,
+} from '../src';
 
 const legacyEntry: DfsEntryInput = {
   entryId: 'legacy-entry',
@@ -77,5 +83,9 @@ const legacyExternalEngine: DfsEngine = {
   },
 };
 
+const currentEngine: DfsEngineWithPolicySnapshots = createDfsEngine();
+const currentPolicySnapshots = currentEngine.getBookPolicies();
+
 void legacySettlementResult;
 void legacyExternalEngine;
+void currentPolicySnapshots;

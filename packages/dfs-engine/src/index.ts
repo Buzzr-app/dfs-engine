@@ -158,6 +158,7 @@ export type {
   DfsBookValidationRules,
   DfsDnpPolicy,
   DfsEngine,
+  DfsEngineWithPolicySnapshots,
   DfsEngineAuditMetadata,
   DfsEngineConfig,
   DfsEntryInput,

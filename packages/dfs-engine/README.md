@@ -144,12 +144,14 @@ The operator-named built-ins are versioned compatibility profiles, not affiliate
 - **PrizePicks:** `status: "experimental"` with `verification.status: "partial"`. Standard Player Pick payout references were reviewed on 2026-07-16 from [PrizePicks Payouts](https://www.prizepicks.com/help-center/payouts) and [PrizePicks Potential Outcomes](https://www.prizepicks.com/help-center/potential-outcomes). Settlement behavior and variable lineup-specific payouts are not fully verified.
 - **Underdog:** `status: "experimental"` with `verification.status: "unverified"`. The [Underdog Sports Legal Center](https://legal.underdogsports.com/) is recorded as the rules entrypoint; current payout and settlement values in the compatibility snapshot have not been verified.
 
-The displayed lineup terms are authoritative. Record `placedAt` so the engine can select an effective-dated payout table, inspect `policyStatus`, `policyVerification`, `payoutTable`, `confidence`, `sourceRefs`, and `explanationCodes` on every result, and obtain explicit operator rulings for DNPs, reboots, ties, rescues, voids, and corrections.
+The displayed lineup terms are authoritative. Record `placedAt` so the engine can select an effective-dated payout table, inspect `policyStatus`, `policyVerification`, `payoutTable`, `confidence`, `sourceRefs`, and `explanationCodes` on every engine-produced result, and obtain explicit operator rulings for DNPs, reboots, ties, rescues, voids, and corrections. The three policy metadata properties are optional in the public `DfsSettlementResult` type so legacy external result objects remain source-compatible, but `createDfsEngine()` always populates them at runtime.
 
 ```ts
 const policies = createDfsEngine().getBookPolicies();
 // Immutable snapshots with status, verification, sources, and play types.
 ```
+
+`createDfsEngine()` returns `DfsEngineWithPolicySnapshots`, which extends the legacy `DfsEngine` interface with `getBookPolicies()`. Existing external `DfsEngine` implementations do not need to add the discovery method.
 
 Draft fixtures are source metadata for future work. They are not registered by `createDfsEngine()` and cannot settle entries unless a caller deliberately supplies a complete custom implementation.
 
