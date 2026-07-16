@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
+import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import test from 'node:test';
+import { promisify } from 'node:util';
+import { pathToFileURL } from 'node:url';
 
 import { zipSync } from 'fflate';
 
@@ -10,6 +15,7 @@ const rootLock = JSON.parse(await readFile('package-lock.json', 'utf8'));
 const ciWorkflow = await readFile('.github/workflows/ci.yml', 'utf8');
 const mcpbTooling = await readFile('scripts/lib/mcpb-cli.mjs', 'utf8');
 const smitheryPublisher = await readFile('scripts/publish-smithery-bundle.mjs', 'utf8');
+const execFileAsync = promisify(execFile);
 
 const sampleTools = [
   { name: 'fair_line', description: 'Calculate a no-vig fair line.' },
@@ -119,6 +125,34 @@ test('uses integrity-locked local MCPB tooling without a credential-bearing subp
   });
   assert.doesNotMatch(mcpbTooling, /npm exec|@anthropic-ai\/mcpb/);
   assert.doesNotMatch(mcpbTooling, /\.\.\.process\.env/);
+  assert.doesNotMatch(mcpbTooling, /localeCompare/);
+});
+
+test('packs identical bytes across time zones', async () => {
+  const temporaryRoot = await mkdtemp(join(tmpdir(), 'buzzr-mcpb-timezone-'));
+  const sourceDirectory = join(temporaryRoot, 'source');
+  await mkdir(sourceDirectory);
+  await Promise.all([
+    writeFile(join(sourceDirectory, 'B.txt'), 'B\n'),
+    writeFile(join(sourceDirectory, 'a.txt'), 'a\n'),
+  ]);
+  const moduleUrl = pathToFileURL(resolve('scripts/lib/mcpb-cli.mjs')).href;
+  const script = `import { runMcpb } from ${JSON.stringify(moduleUrl)}; await runMcpb(['pack', process.argv[1], process.argv[2]]);`;
+  try {
+    const hashes = [];
+    for (const timeZone of ['UTC', 'America/Chicago']) {
+      const artifactPath = join(temporaryRoot, `${timeZone.replace('/', '-')}.mcpb`);
+      await execFileAsync(
+        process.execPath,
+        ['--input-type=module', '--eval', script, sourceDirectory, artifactPath],
+        { env: { TZ: timeZone }, maxBuffer: 1024 * 1024 },
+      );
+      hashes.push(createHash('sha256').update(await readFile(artifactPath)).digest('hex'));
+    }
+    assert.equal(hashes[0], hashes[1]);
+  } finally {
+    await rm(temporaryRoot, { recursive: true, force: true });
+  }
 });
 
 test('pins the official MCPB v0.4 schema and preflights hostile archives', async () => {
@@ -193,4 +227,6 @@ test('the publisher downloads and re-proves the accepted registry bundle', () =>
   assert.match(smitheryPublisher, /\/servers\/\$\{qualifiedName\}\/download/);
   assert.match(smitheryPublisher, /SMITHERY_EXPECTED_SHA256/);
   assert.match(smitheryPublisher, /prove-smithery-bundle\.mjs/);
+  assert.match(smitheryPublisher, /response\.body\.getReader\(\)/);
+  assert.doesNotMatch(smitheryPublisher, /response\.arrayBuffer\(\)/);
 });
