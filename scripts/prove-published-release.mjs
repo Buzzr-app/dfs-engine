@@ -1,17 +1,34 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { lstat, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 
+import { parseNpmViewMetadata } from './lib/npm-view-output.mjs';
+
 const execFileAsync = promisify(execFile);
 const expectedCommit = process.env.EXPECTED_RELEASE_COMMIT?.trim();
 const expectedIntegritiesJson = process.env.EXPECTED_RELEASE_INTEGRITIES?.trim();
+const releaseManifestPath = process.env.EXPECTED_RELEASE_MANIFEST_PATH?.trim();
+const expectedReleaseManifestSha512 = process.env.EXPECTED_RELEASE_MANIFEST_SHA512?.trim();
 assert.match(expectedCommit ?? '', /^[0-9a-f]{40}$/, 'EXPECTED_RELEASE_COMMIT is required');
 assert(expectedIntegritiesJson, 'EXPECTED_RELEASE_INTEGRITIES is required');
+assert(releaseManifestPath, 'EXPECTED_RELEASE_MANIFEST_PATH is required');
+assert.match(
+  expectedReleaseManifestSha512 ?? '',
+  /^[0-9a-f]{128}$/,
+  'EXPECTED_RELEASE_MANIFEST_SHA512 is required',
+);
 
-const release = JSON.parse(await readFile('release-manifest.json', 'utf8'));
+const releaseManifest = await readFile(releaseManifestPath);
+assert.equal(
+  createHash('sha512').update(releaseManifest).digest('hex'),
+  expectedReleaseManifestSha512,
+  'release manifest changed after authorization',
+);
+const release = JSON.parse(releaseManifest.toString('utf8'));
 const packages = release.packages.filter((entry) => entry.publish);
 const expectedIntegrities = JSON.parse(expectedIntegritiesJson);
 assert.deepEqual(
@@ -82,7 +99,7 @@ async function provePackage(entry, environment, cwd) {
     cwd,
     env: environment,
   });
-  const metadata = JSON.parse(stdout);
+  const metadata = parseNpmViewMetadata(stdout, entry.name);
   const expectedIntegrity = expectedIntegrities[entry.name];
   assert.equal(metadata.name, entry.name);
   assert.equal(metadata.version, entry.version);
