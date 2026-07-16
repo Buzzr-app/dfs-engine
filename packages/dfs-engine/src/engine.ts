@@ -32,6 +32,7 @@ export type BuiltInBookId = 'prizepicks' | 'underdog';
 export type DfsBookId = BuiltInBookId | string;
 export type DfsPlayTypeId = string;
 export type DfsPolicyStatus = 'stable' | 'draft' | 'experimental';
+export type DfsPolicyVerificationStatus = 'verified' | 'partial' | 'unverified';
 export type DfsPayoutModel = 'fixed-table' | 'displayed-multiplier' | 'custom';
 export type DfsSettlementConfidence = 'high' | 'medium' | 'low';
 export type DfsValidationSeverity = 'allow' | 'warn' | 'error';
@@ -42,6 +43,12 @@ export type DfsBookSourceRef = {
   url?: string;
   retrievedAt?: string;
   note?: string;
+};
+
+export type DfsPolicyVerification = {
+  status: DfsPolicyVerificationStatus;
+  reviewedAt?: string;
+  notes?: readonly string[];
 };
 
 export type DfsSelectedPayoutTable = {
@@ -177,6 +184,7 @@ export type DfsBookPolicy = {
   /** ISO timestamp or date-only value; date-only values begin at 00:00:00 UTC. */
   effectiveFrom: string;
   status: DfsPolicyStatus;
+  verification?: DfsPolicyVerification;
   sources: readonly DfsBookSourceRef[];
   playTypes: readonly DfsBookPlayType[];
   tiePolicy: DfsTiePolicy;
@@ -187,6 +195,17 @@ export type DfsBookPolicy = {
   validation?: DfsBookValidationRules;
   payoutResolver?: (input: DfsPayoutResolverInput) => DfsPayoutResolverResult;
 };
+
+export type DfsBookPolicySnapshot = Readonly<{
+  id: DfsBookId;
+  displayName: string;
+  version: string;
+  effectiveFrom: string;
+  status: DfsPolicyStatus;
+  verification: Readonly<DfsPolicyVerification> | null;
+  sources: readonly Readonly<DfsBookSourceRef>[];
+  playTypes: readonly Readonly<DfsBookPlayType>[];
+}>;
 
 export type DfsPayoutTableEntry = {
   picks?: number;
@@ -202,6 +221,7 @@ export type DfsPayoutTableDefinition = {
   /** ISO timestamp or date-only value; date-only values begin at 00:00:00 UTC. */
   effectiveFrom: string;
   sourceNotes?: readonly string[];
+  sources?: readonly DfsBookSourceRef[];
   entries: readonly DfsPayoutTableEntry[];
 };
 
@@ -439,6 +459,8 @@ export type DfsSettlementResult = {
   adjustments: DfsSettlementAdjustment[];
   pendingReasons: string[];
   policyVersion: string | null;
+  policyStatus: DfsPolicyStatus | null;
+  policyVerification: DfsPolicyVerification | null;
   sourceRefs: DfsBookSourceRef[];
   /** The fixed payout table selected for this settlement's deterministic as-of. */
   payoutTable: DfsSelectedPayoutTable | null;
@@ -490,6 +512,7 @@ export interface DfsEngine {
   registerLeagueAdapter(adapter: DfsLeagueAdapterDefinition): void;
   registerStatProvider(provider: StatProvider): void;
   getRegisteredBooks(): DfsBookId[];
+  getBookPolicies(): readonly DfsBookPolicySnapshot[];
 }
 
 export type DfsPayoutLookupInput = {
@@ -545,7 +568,7 @@ const PAYOUT_MODEL_EXPLANATION_CODES: Record<DfsPayoutModel, DfsV5ExplanationCod
 
 const EMPTY_PAYOUT: DfsPayoutSplit = { total: 0, withdrawable: 0, bonus: 0 };
 
-const PRIZEPICKS_POWER: readonly DfsPayoutTableEntry[] = [
+const PRIZEPICKS_POWER_2026_05: readonly DfsPayoutTableEntry[] = [
   { picks: 2, hits: 2, multiplier: 3 },
   { picks: 3, hits: 3, multiplier: 5 },
   { picks: 4, hits: 4, multiplier: 10 },
@@ -553,7 +576,7 @@ const PRIZEPICKS_POWER: readonly DfsPayoutTableEntry[] = [
   { picks: 6, hits: 6, multiplier: 37.5 },
 ];
 
-const PRIZEPICKS_FLEX: readonly DfsPayoutTableEntry[] = [
+const PRIZEPICKS_FLEX_2026_05: readonly DfsPayoutTableEntry[] = [
   { picks: 3, hits: 3, multiplier: 2.25 },
   { picks: 3, hits: 2, multiplier: 1.25 },
   { picks: 4, hits: 4, multiplier: 5 },
@@ -563,6 +586,27 @@ const PRIZEPICKS_FLEX: readonly DfsPayoutTableEntry[] = [
   { picks: 5, hits: 3, multiplier: 0.4 },
   { picks: 6, hits: 6, multiplier: 25 },
   { picks: 6, hits: 5, multiplier: 1.75 },
+  { picks: 6, hits: 4, multiplier: 0.4 },
+];
+
+const PRIZEPICKS_POWER_2026_07_02: readonly DfsPayoutTableEntry[] = [
+  { picks: 2, hits: 2, multiplier: 3 },
+  { picks: 3, hits: 3, multiplier: 6 },
+  { picks: 4, hits: 4, multiplier: 10 },
+  { picks: 5, hits: 5, multiplier: 20 },
+  { picks: 6, hits: 6, multiplier: 37.5 },
+];
+
+const PRIZEPICKS_FLEX_2026_07_02: readonly DfsPayoutTableEntry[] = [
+  { picks: 3, hits: 3, multiplier: 3 },
+  { picks: 3, hits: 2, multiplier: 1 },
+  { picks: 4, hits: 4, multiplier: 6 },
+  { picks: 4, hits: 3, multiplier: 1.5 },
+  { picks: 5, hits: 5, multiplier: 10 },
+  { picks: 5, hits: 4, multiplier: 2 },
+  { picks: 5, hits: 3, multiplier: 0.4 },
+  { picks: 6, hits: 6, multiplier: 25 },
+  { picks: 6, hits: 5, multiplier: 2 },
   { picks: 6, hits: 4, multiplier: 0.4 },
 ];
 
@@ -595,19 +639,33 @@ const UNDERDOG_FLEX: readonly DfsPayoutTableEntry[] = [
   { picks: 8, hits: 6, multiplier: 2 },
 ];
 
+const PRIZEPICKS_CURRENT_SOURCES: readonly DfsBookSourceRef[] = [
+  {
+    label: 'PrizePicks Payouts',
+    url: 'https://www.prizepicks.com/help-center/payouts',
+    retrievedAt: '2026-07-16',
+    note: 'Updated July 2, 2026; individual lineup details control and payouts may vary.',
+  },
+  {
+    label: 'PrizePicks Potential Outcomes',
+    url: 'https://www.prizepicks.com/help-center/potential-outcomes',
+    retrievedAt: '2026-07-16',
+    note: 'First-party standard Player Pick payout reference.',
+  },
+];
+
+const UNDERDOG_LEGAL_SOURCES: readonly DfsBookSourceRef[] = [
+  {
+    label: 'Underdog Sports Legal Center',
+    url: 'https://legal.underdogfantasy.com/',
+    retrievedAt: '2026-07-16',
+    note: 'Rules entrypoint only; current compatibility payout values remain unverified.',
+  },
+];
+
 const BUILT_IN_SOURCES: Record<BuiltInBookId, readonly DfsBookSourceRef[]> = {
-  prizepicks: [
-    {
-      label: 'PrizePicks payout and settlement compatibility profile',
-      note: 'Stable built-in profile matching @buzzr/dfs-engine v2 behavior.',
-    },
-  ],
-  underdog: [
-    {
-      label: 'Underdog payout and settlement compatibility profile',
-      note: 'Stable built-in profile matching @buzzr/dfs-engine v2 behavior.',
-    },
-  ],
+  prizepicks: [...PRIZEPICKS_CURRENT_SOURCES],
+  underdog: [...UNDERDOG_LEGAL_SOURCES],
 };
 
 const DEFAULT_PAYOUT_TABLES: readonly DfsPayoutTableDefinition[] = [
@@ -616,20 +674,56 @@ const DEFAULT_PAYOUT_TABLES: readonly DfsPayoutTableDefinition[] = [
     playTypeId: 'power',
     version: '2026-05',
     effectiveFrom: '2026-05-01',
-    entries: PRIZEPICKS_POWER,
+    sourceNotes: [
+      'Historical @buzzr/dfs-engine compatibility snapshot; no current source assertion.',
+    ],
+    sources: [],
+    entries: PRIZEPICKS_POWER_2026_05,
   },
   {
     bookId: 'prizepicks',
     playTypeId: 'flex',
     version: '2026-05',
     effectiveFrom: '2026-05-01',
-    entries: PRIZEPICKS_FLEX,
+    sourceNotes: [
+      'Historical @buzzr/dfs-engine compatibility snapshot; no current source assertion.',
+    ],
+    sources: [],
+    entries: PRIZEPICKS_FLEX_2026_05,
+  },
+  {
+    bookId: 'prizepicks',
+    playTypeId: 'power',
+    version: '2026-07-02-player-picks',
+    effectiveFrom: '2026-07-02',
+    sourceNotes: [
+      'PrizePicks Payouts (updated July 2, 2026): https://www.prizepicks.com/help-center/payouts',
+      'Standard Player Pick rates: https://www.prizepicks.com/help-center/potential-outcomes',
+      'The submitted lineup details remain authoritative because PrizePicks states payouts may vary.',
+    ],
+    sources: PRIZEPICKS_CURRENT_SOURCES,
+    entries: PRIZEPICKS_POWER_2026_07_02,
+  },
+  {
+    bookId: 'prizepicks',
+    playTypeId: 'flex',
+    version: '2026-07-02-player-picks',
+    effectiveFrom: '2026-07-02',
+    sourceNotes: [
+      'PrizePicks Payouts (updated July 2, 2026): https://www.prizepicks.com/help-center/payouts',
+      'Standard Player Pick rates: https://www.prizepicks.com/help-center/potential-outcomes',
+      'The submitted lineup details remain authoritative because PrizePicks states payouts may vary.',
+    ],
+    sources: PRIZEPICKS_CURRENT_SOURCES,
+    entries: PRIZEPICKS_FLEX_2026_07_02,
   },
   {
     bookId: 'underdog',
     playTypeId: 'underdog_standard',
     version: '2026-05',
     effectiveFrom: '2026-05-01',
+    sourceNotes: ['Unverified compatibility snapshot; the submitted lineup remains authoritative.'],
+    sources: UNDERDOG_LEGAL_SOURCES,
     entries: UNDERDOG_STANDARD,
   },
   {
@@ -637,6 +731,8 @@ const DEFAULT_PAYOUT_TABLES: readonly DfsPayoutTableDefinition[] = [
     playTypeId: 'underdog_flex',
     version: '2026-05',
     effectiveFrom: '2026-05-01',
+    sourceNotes: ['Unverified compatibility snapshot; the submitted lineup remains authoritative.'],
+    sources: UNDERDOG_LEGAL_SOURCES,
     entries: UNDERDOG_FLEX,
   },
 ];
@@ -647,7 +743,15 @@ const DEFAULT_BOOK_POLICIES: readonly DfsBookPolicy[] = [
     displayName: 'PrizePicks',
     version: '2026-05',
     effectiveFrom: '2026-05-01',
-    status: 'stable',
+    status: 'experimental',
+    verification: {
+      status: 'partial',
+      reviewedAt: '2026-07-16',
+      notes: [
+        'Standard Player Pick payout references were reviewed from first-party sources.',
+        'Settlement behavior and variable lineup-specific payouts are not fully verified.',
+      ],
+    },
     sources: BUILT_IN_SOURCES.prizepicks,
     playTypes: [
       {
@@ -682,7 +786,15 @@ const DEFAULT_BOOK_POLICIES: readonly DfsBookPolicy[] = [
     displayName: 'Underdog',
     version: '2026-05',
     effectiveFrom: '2026-05-01',
-    status: 'stable',
+    status: 'experimental',
+    verification: {
+      status: 'unverified',
+      reviewedAt: '2026-07-16',
+      notes: [
+        'The legal center was recorded as a rules entrypoint.',
+        'Current payout and settlement compatibility values have not been verified.',
+      ],
+    },
     sources: BUILT_IN_SOURCES.underdog,
     playTypes: [
       {
@@ -873,6 +985,15 @@ export function defineBookPolicy(policy: DfsBookPolicy): DfsBookPolicy {
   if (!['stable', 'draft', 'experimental'].includes(policy.status)) {
     throw new DfsDefinitionError('defineBookPolicy: status is invalid');
   }
+  if (
+    policy.verification &&
+    !['verified', 'partial', 'unverified'].includes(policy.verification.status)
+  ) {
+    throw new DfsDefinitionError('defineBookPolicy: verification.status is invalid');
+  }
+  if (policy.verification?.reviewedAt && !isValidDate(policy.verification.reviewedAt)) {
+    throw new DfsDefinitionError('defineBookPolicy: verification.reviewedAt must be parseable');
+  }
   if (!policy.playTypes.length) {
     throw new DfsDefinitionError('defineBookPolicy: at least one play type is required');
   }
@@ -912,8 +1033,23 @@ export function defineBookPolicy(policy: DfsBookPolicy): DfsBookPolicy {
   }
   return Object.freeze({
     ...policy,
-    sources: Object.freeze([...policy.sources]),
-    playTypes: Object.freeze(policy.playTypes.map((playType) => Object.freeze({ ...playType }))),
+    verification: policy.verification
+      ? Object.freeze({
+          ...policy.verification,
+          notes: policy.verification.notes
+            ? Object.freeze([...policy.verification.notes])
+            : undefined,
+        })
+      : undefined,
+    sources: Object.freeze(policy.sources.map((source) => Object.freeze({ ...source }))),
+    playTypes: Object.freeze(
+      policy.playTypes.map((playType) =>
+        Object.freeze({
+          ...playType,
+          pickCount: Object.freeze({ ...playType.pickCount }),
+        }),
+      ),
+    ),
   });
 }
 
@@ -929,6 +1065,16 @@ export function definePayoutTable(table: DfsPayoutTableDefinition): DfsPayoutTab
   }
   if (!table.entries.length) {
     throw new DfsDefinitionError('definePayoutTable: entries are required');
+  }
+  for (const [index, source] of (table.sources ?? []).entries()) {
+    if (!source.label || !source.label.trim()) {
+      throw new DfsDefinitionError(`definePayoutTable: sources.${index}.label is required`);
+    }
+    if (source.retrievedAt && !isValidDate(source.retrievedAt)) {
+      throw new DfsDefinitionError(
+        `definePayoutTable: sources.${index}.retrievedAt must be parseable`,
+      );
+    }
   }
   const rows = new Set<string>();
   for (const entry of table.entries) {
@@ -956,6 +1102,10 @@ export function definePayoutTable(table: DfsPayoutTableDefinition): DfsPayoutTab
   }
   return Object.freeze({
     ...table,
+    sourceNotes: table.sourceNotes ? Object.freeze([...table.sourceNotes]) : undefined,
+    sources: table.sources
+      ? Object.freeze(table.sources.map((source) => Object.freeze({ ...source })))
+      : undefined,
     entries: Object.freeze(table.entries.map((entry) => Object.freeze({ ...entry }))),
   });
 }
@@ -1096,6 +1246,14 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
 
   function getRegisteredBooks(): DfsBookId[] {
     return [...bookPolicies.keys()];
+  }
+
+  function getBookPolicies(): readonly DfsBookPolicySnapshot[] {
+    return Object.freeze(
+      [...bookPolicies.values()]
+        .sort((left, right) => String(left.id).localeCompare(String(right.id)))
+        .map(snapshotBookPolicy),
+    );
   }
 
   function resolvePolicy(
@@ -1684,6 +1842,7 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
     }
 
     const { policy, playType } = resolved;
+    const policyVerification = copyPolicyVerification(policy.verification);
     const payoutAsOf = entry.placedAt ?? settledAt;
     const payoutTable = selectedPayoutTable(
       playType.payoutModel === 'fixed-table'
@@ -1697,6 +1856,8 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
       message: `Selected ${policy.id}/${playType.id} policy for settlement.`,
       metadata: {
         policyVersion: policy.version,
+        policyStatus: policy.status,
+        policyVerification,
         payoutAsOf,
         payoutTable,
       },
@@ -1707,6 +1868,12 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
     const explanationCodes = new Set<string>();
     for (const warning of validation.warnings) {
       explanationCodes.add(warning.code);
+    }
+    if (policy.status !== 'stable') {
+      explanationCodes.add(`policy.status.${policy.status}`);
+    }
+    if (policy.verification && policy.verification.status !== 'verified') {
+      explanationCodes.add(`policy.verification.${policy.verification.status}`);
     }
 
     for (const leg of entry.legs) {
@@ -1835,6 +2002,8 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
         adjustments,
         pendingReasons,
         policyVersion: policy.version,
+        policyStatus: policy.status,
+        policyVerification,
         sourceRefs: [...policy.sources],
         payoutTable,
         confidence: 'low',
@@ -1878,9 +2047,11 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
         adjustments,
         pendingReasons,
         policyVersion: policy.version,
+        policyStatus: policy.status,
+        policyVerification,
         sourceRefs: [...policy.sources],
         payoutTable,
-        confidence: 'high',
+        confidence: capPolicyConfidence('high', policy),
         explanationCodes: [...explanationCodes],
         validation,
         provenance: {
@@ -1971,9 +2142,11 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
       adjustments,
       pendingReasons,
       policyVersion: policy.version,
+      policyStatus: policy.status,
+      policyVerification,
       sourceRefs: [...policy.sources],
       payoutTable: payout.payoutTable ?? null,
-      confidence: payout.confidence,
+      confidence: capPolicyConfidence(payout.confidence, policy),
       explanationCodes: [...explanationCodes],
       validation,
       provenance: {
@@ -2178,6 +2351,7 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
     registerLeagueAdapter,
     registerStatProvider,
     getRegisteredBooks,
+    getBookPolicies,
   };
 }
 
@@ -2478,8 +2652,70 @@ function selectedPayoutTable(
     version: table.version ?? null,
     effectiveFrom: table.effectiveFrom,
     sourceNotes: [...(table.sourceNotes ?? [])],
-    sources: policy.sources.map((source) => ({ ...source })),
+    sources: (table.sources ?? policy.sources).map((source) => ({ ...source })),
   };
+}
+
+function snapshotPolicyVerification(
+  verification: DfsPolicyVerification | undefined,
+): Readonly<DfsPolicyVerification> | null {
+  if (!verification) {
+    return null;
+  }
+  return Object.freeze({
+    ...verification,
+    notes: verification.notes ? Object.freeze([...verification.notes]) : undefined,
+  });
+}
+
+function copyPolicyVerification(
+  verification: DfsPolicyVerification | undefined,
+): DfsPolicyVerification | null {
+  return verification
+    ? {
+        ...verification,
+        notes: verification.notes ? [...verification.notes] : undefined,
+      }
+    : null;
+}
+
+function capPolicyConfidence(
+  confidence: DfsSettlementConfidence,
+  policy: DfsBookPolicy,
+): DfsSettlementConfidence {
+  const ranks: Record<DfsSettlementConfidence, number> = { low: 0, medium: 1, high: 2 };
+  let maximum: DfsSettlementConfidence = 'high';
+  if (policy.status === 'draft') {
+    maximum = 'low';
+  } else if (policy.status === 'experimental') {
+    maximum = 'medium';
+  }
+  if (policy.verification?.status === 'unverified') {
+    maximum = 'low';
+  } else if (policy.verification?.status === 'partial' && ranks[maximum] > ranks.medium) {
+    maximum = 'medium';
+  }
+  return ranks[confidence] <= ranks[maximum] ? confidence : maximum;
+}
+
+function snapshotBookPolicy(policy: DfsBookPolicy): DfsBookPolicySnapshot {
+  return Object.freeze({
+    id: policy.id,
+    displayName: policy.displayName,
+    version: policy.version,
+    effectiveFrom: policy.effectiveFrom,
+    status: policy.status,
+    verification: snapshotPolicyVerification(policy.verification),
+    sources: Object.freeze(policy.sources.map((source) => Object.freeze({ ...source }))),
+    playTypes: Object.freeze(
+      policy.playTypes.map((playType) =>
+        Object.freeze({
+          ...playType,
+          pickCount: Object.freeze({ ...playType.pickCount }),
+        }),
+      ),
+    ),
+  });
 }
 
 function roundPayoutSplit(payout: DfsPayoutSplit): DfsPayoutSplit {
@@ -2517,6 +2753,8 @@ function pendingResult(input: {
     adjustments: [],
     pendingReasons: input.pendingReasons,
     policyVersion: null,
+    policyStatus: null,
+    policyVerification: null,
     sourceRefs: [],
     payoutTable: null,
     confidence: 'low',
