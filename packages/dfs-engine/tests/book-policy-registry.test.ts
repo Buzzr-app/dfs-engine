@@ -211,6 +211,7 @@ describe('Book Policy Registry 3.0', () => {
     const scalingPolicy = defineBookPolicy({
       ...customPolicy,
       id: 'scaling-book',
+      payoutSplit: { type: 'underdog_bonus_split' },
       playTypes: [
         {
           id: 'all-in',
@@ -257,6 +258,22 @@ describe('Book Policy Registry 3.0', () => {
       status: 'won',
       multiplier: 3,
       payout: { total: 30, withdrawable: 30, bonus: 0 },
+    });
+    expect(
+      engine.lookupPayout({
+        bookId: 'scaling-book',
+        playTypeId: 'all-in',
+        stake: 10,
+        displayedMultiplier: 7,
+        pickCount: 2,
+        hits: 2,
+        removedCount: 1,
+        entry: originalEntry,
+      }),
+    ).toMatchObject({
+      status: 'won',
+      multiplier: 3.5,
+      payout: { total: 35, withdrawable: 30, bonus: 5 },
     });
   });
 
