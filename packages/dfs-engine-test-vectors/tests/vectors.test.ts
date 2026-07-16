@@ -33,10 +33,14 @@ describe('@buzzr/dfs-engine-test-vectors', () => {
         payout: vector.expected.payout,
         pendingReasons: vector.expected.pendingReasons,
         policyVersion: vector.expected.policyVersion,
+        policyStatus: vector.expected.policyStatus,
         payoutTable: vector.expected.payoutTable,
         confidence: vector.expected.confidence,
         explanationCodes: vector.expected.explanationCodes,
       });
+      expect(result.policyVerification?.status ?? null, `${vector.name} policy verification`).toBe(
+        vector.expected.policyVerificationStatus,
+      );
       expect(
         result.validation.errors.map((issue) => issue.code),
         `${vector.name} validation errors`,
@@ -68,6 +72,14 @@ describe('@buzzr/dfs-engine-test-vectors', () => {
         expect(actualLeg?.actual, `${vector.name} leg ${expectedLeg.legId} actual`).toBe(
           expectedLeg.actual,
         );
+        expect(
+          actualLeg?.pendingReason ?? null,
+          `${vector.name} leg ${expectedLeg.legId} pending reason`,
+        ).toBe(expectedLeg.pendingReason);
+        expect(
+          actualLeg?.provider.source,
+          `${vector.name} leg ${expectedLeg.legId} provider source`,
+        ).toBe(expectedLeg.providerSource);
       }
     }
   });
