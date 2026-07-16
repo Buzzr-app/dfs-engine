@@ -59,4 +59,36 @@ describe('release safety contracts', () => {
     expect(publishedProof).toContain('Published MCP closing line call');
     expect(publishedProof).toContain('Published MCP bet history call');
   });
+
+  it('binds the live npm proof to reviewed integrity, git head, provenance, and registry origin', () => {
+    expect(publishedProof).toContain('EXPECTED_MCP_INTEGRITY');
+    expect(publishedProof).toContain('EXPECTED_GIT_HEAD');
+    expect(publishedProof).toContain("'dist.attestations.provenance'");
+    expect(publishedProof).toContain("'dist.tarball'");
+    expect(publishedProof).toContain("'gitHead'");
+    expect(publishedProof).toContain("'https://registry.npmjs.org'");
+    expect(publishedProof).toContain('assert.equal(integrity, expectedIntegrity');
+    expect(publishedProof).toContain('assert.equal(gitHead, expectedGitHead');
+  });
+
+  it('runs npm and npx with isolated home, app-data, temp, registry, and config paths', () => {
+    for (const variable of [
+      'HOME',
+      'USERPROFILE',
+      'APPDATA',
+      'LOCALAPPDATA',
+      'TEMP',
+      'TMP',
+      'TMPDIR',
+      'npm_config_userconfig',
+      'npm_config_globalconfig',
+      'npm_config_registry',
+      'npm_config_ignore_scripts',
+    ]) {
+      expect(publishedProof).toContain(`${variable}:`);
+    }
+    expect(publishedProof).toContain("npm_config_registry: 'https://registry.npmjs.org/'");
+    expect(publishedProof).toContain("npm_config_ignore_scripts: 'true'");
+    expect(publishedProof).not.toMatch(/const inheritedEnvironmentKeys = \[[\s\S]*?'HOME'/);
+  });
 });
