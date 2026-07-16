@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { createDfsEngine, DRAFT_BOOK_POLICY_FIXTURES } from '@buzzr/dfs-engine';
+
 import {
   gradeDfsEntriesTool,
   gradeDfsEntryTool,
@@ -243,7 +245,7 @@ describe('validate_dfs_entry', () => {
 });
 
 describe('list_book_policies', () => {
-  it('labels built-in books executable and draft fixtures non-executable', async () => {
+  it('lists executable policies from the engine authoritative snapshots', async () => {
     const result = await listBookPoliciesTool.handler({});
 
     expect(result.isError).toBeUndefined();
@@ -251,14 +253,100 @@ describe('list_book_policies', () => {
     const books = listing.books as Array<Record<string, unknown>>;
     expect(listing.count).toBe(books.length);
 
-    const prizepicks = books.find((book) => book.id === 'prizepicks');
-    expect(prizepicks).toBeDefined();
-    expect(prizepicks?.source).toBe('built_in');
-    expect(prizepicks?.executable).toBe(true);
-    const playTypeIds = (prizepicks?.playTypes as Array<Record<string, unknown>>).map(
-      (playType) => playType.id,
-    );
-    expect(playTypeIds).toEqual(expect.arrayContaining(['power', 'flex']));
+    const snapshots = createDfsEngine().getBookPolicies();
+    const executableBooks = books.filter((book) => book.executable === true);
+    expect(executableBooks).toHaveLength(snapshots.length);
+
+    for (const snapshot of snapshots) {
+      expect(executableBooks.find((book) => book.id === snapshot.id)).toEqual({
+        ...snapshot,
+        executable: true,
+        source: 'engine_policy',
+      });
+    }
+
+    expect(executableBooks.find((book) => book.id === 'prizepicks')).toMatchObject({
+      version: '2026-05',
+      effectiveFrom: '2026-05-01',
+      status: 'experimental',
+      verification: { status: 'partial', reviewedAt: '2026-07-16' },
+      sources: [
+        expect.objectContaining({
+          label: expect.any(String),
+          url: expect.stringMatching(/^https:\/\/www\.prizepicks\.com\//),
+          retrievedAt: '2026-07-16',
+        }),
+        expect.any(Object),
+      ],
+      playTypes: [
+        expect.objectContaining({
+          id: 'power',
+          payoutModel: 'fixed-table',
+          pickCount: { min: 2, max: 6 },
+          allOrNothing: true,
+          scaleDisplayedMultiplier: true,
+        }),
+        expect.objectContaining({
+          id: 'flex',
+          payoutModel: 'fixed-table',
+          pickCount: { min: 3, max: 6 },
+          flex: true,
+          scaleDisplayedMultiplier: true,
+        }),
+      ],
+    });
+
+    expect(executableBooks.find((book) => book.id === 'underdog')).toMatchObject({
+      version: '2026-05',
+      effectiveFrom: '2026-05-01',
+      status: 'experimental',
+      verification: { status: 'unverified', reviewedAt: '2026-07-16' },
+      sources: [
+        expect.objectContaining({
+          label: expect.any(String),
+          url: 'https://legal.underdogsports.com/',
+          retrievedAt: '2026-07-16',
+        }),
+      ],
+      playTypes: [
+        expect.objectContaining({
+          id: 'underdog_standard',
+          payoutModel: 'fixed-table',
+          pickCount: { min: 2, max: 8 },
+          allOrNothing: true,
+          scaleDisplayedMultiplier: true,
+        }),
+        expect.objectContaining({
+          id: 'underdog_flex',
+          payoutModel: 'fixed-table',
+          pickCount: { min: 3, max: 8 },
+          flex: true,
+          scaleDisplayedMultiplier: true,
+        }),
+      ],
+    });
+  });
+
+  it('keeps every draft fixture complete and explicitly metadata-only', async () => {
+    const listing = parseResult(await listBookPoliciesTool.handler({}));
+    const books = listing.books as Array<Record<string, unknown>>;
+    const draftBooks = books.filter((book) => book.source === 'draft_fixture');
+
+    expect(draftBooks).toHaveLength(DRAFT_BOOK_POLICY_FIXTURES.length);
+    for (const fixture of DRAFT_BOOK_POLICY_FIXTURES) {
+      expect(draftBooks.find((book) => book.id === fixture.id)).toEqual({
+        id: fixture.id,
+        displayName: fixture.displayName,
+        version: fixture.version,
+        effectiveFrom: fixture.effectiveFrom,
+        status: fixture.status,
+        verification: fixture.verification ?? null,
+        sources: fixture.sources,
+        playTypes: fixture.playTypes,
+        executable: false,
+        source: 'draft_fixture',
+      });
+    }
 
     const sleeper = books.find((book) => book.id === 'sleeper');
     expect(sleeper).toBeDefined();
