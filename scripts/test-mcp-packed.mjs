@@ -145,7 +145,9 @@ async function exerciseRealClient(consumerDirectory, cache, expectedVersion) {
       arguments: { selected: 0, opposite: -110 },
     });
     assert.equal(invalid.isError, true);
-    assert.equal(parseToolResult(invalid).error.code, 'invalid_input');
+    assert.equal(invalid.content.length, 1);
+    assert.equal(invalid.content[0].type, 'text');
+    assert.match(invalid.content[0].text, /^MCP error -32602: Input validation error:/);
 
     const concurrent = await Promise.all(
       Array.from({ length: 12 }, (_, index) =>
@@ -274,7 +276,7 @@ try {
   );
 
   process.stdout.write(
-    `@buzzr/mcp packed artifact passed: ${protocol.toolCount} tools, real stdio client, invalid input, concurrency, malformed-input recovery, stdout purity, and clean shutdown\n`,
+    `@buzzr/mcp packed artifact passed: ${protocol.toolCount} tools, real stdio client, schema rejection, concurrency, malformed-input recovery, stdout purity, and clean shutdown\n`,
   );
 } finally {
   await rm(temporaryRoot, { recursive: true, force: true });

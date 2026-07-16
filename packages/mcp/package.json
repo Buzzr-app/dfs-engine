@@ -15,6 +15,7 @@
     }
   },
   "bin": {
+    "mcp": "./dist/cli.js",
     "buzzr-mcp": "./dist/cli.js"
   },
   "files": [
