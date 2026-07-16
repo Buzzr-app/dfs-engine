@@ -25,7 +25,7 @@
     "size:check": "node scripts/check-package-size.mjs",
     "audit:high": "npm audit --audit-level=high",
     "check:workflows": "node scripts/check-release-workflows.mjs",
-    "verify": "npm run typecheck && npm run lint && npm run format:check && npm test && npm run test:coverage && npm run build && npm run test:mcp:packed && npm run docs && npm run smoke:exports && npm run size:check && npm run pack:smoke",
+    "verify": "npm run typecheck && npm run lint && npm run format:check && npm test && npm run test:coverage && npm run build && npm run test:mcp:packed && npm run docs && npm run smoke:exports && npm run size:check && npm run pack:smoke && npm run check:workflows && npm run audit:high",
     "pack:smoke": "npm pack --workspaces --dry-run",
     "test:mcp:packed": "npm run build --workspace @buzzr/bets-core --workspace @buzzr/dfs-engine --workspace @buzzr/entertainment-engine --workspace @buzzr/mcp && node scripts/test-mcp-packed.mjs",
     "proof:mcp:published": "node scripts/prove-mcp-published.mjs"

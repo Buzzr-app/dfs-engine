@@ -26,7 +26,7 @@ for (const { path, body } of workflows) {
     );
   }
 
-  const jobCount = [...body.matchAll(/^  [a-zA-Z0-9_-]+:\s*$/gm)].length;
+  const jobCount = [...body.matchAll(/^    runs-on:\s+/gm)].length;
   const timeoutCount = [...body.matchAll(/^    timeout-minutes:\s+\d+\s*$/gm)].length;
   assert.equal(timeoutCount, jobCount, `${path} must bound every job with timeout-minutes`);
 }
@@ -39,7 +39,11 @@ for (const input of ['expected_version', 'expected_integrity', 'expected_git_hea
   assert.match(proof, new RegExp(`^      ${input}:$`, 'm'), `published proof must require ${input}`);
 }
 for (const variable of ['EXPECTED_MCP_VERSION', 'EXPECTED_MCP_INTEGRITY', 'EXPECTED_GIT_HEAD']) {
-  assert.match(proof, new RegExp(`^          ${variable}:`), `published proof must pass ${variable}`);
+  assert.match(
+    proof,
+    new RegExp(`^          ${variable}:`, 'm'),
+    `published proof must pass ${variable}`,
+  );
 }
 
 const rootPackage = JSON.parse(await readFile('package.json', 'utf8'));
