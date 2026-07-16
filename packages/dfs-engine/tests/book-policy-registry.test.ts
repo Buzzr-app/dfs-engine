@@ -154,6 +154,112 @@ describe('Book Policy Registry 3.0', () => {
     expect(result.explanationCodes).toContain('settlement.displayed_multiplier_payout');
   });
 
+  test('selects the payout table effective when the entry was placed and defers pre-effective entries', async () => {
+    const datedPolicy = defineBookPolicy({
+      ...customPolicy,
+      id: 'dated-book',
+      version: '2026-01',
+      effectiveFrom: '2026-01-01',
+    });
+    const engine = createDfsEngine({
+      bookPolicies: [datedPolicy],
+      payoutTables: [
+        definePayoutTable({
+          bookId: 'dated-book',
+          playTypeId: 'all-in',
+          version: '2026-05',
+          effectiveFrom: '2026-05-01',
+          entries: [{ pickCount: 2, hits: 2, multiplier: 2 }],
+        }),
+        definePayoutTable({
+          bookId: 'dated-book',
+          playTypeId: 'all-in',
+          version: '2026-07',
+          effectiveFrom: '2026-07-01',
+          entries: [{ pickCount: 2, hits: 2, multiplier: 4 }],
+        }),
+      ],
+    });
+    const lookup = (placedAt: string) => {
+      const placedEntry = entry({ bookId: 'dated-book', placedAt });
+      return engine.lookupPayout({
+        bookId: 'dated-book',
+        playTypeId: 'all-in',
+        stake: 10,
+        pickCount: 2,
+        hits: 2,
+        entry: placedEntry,
+      });
+    };
+
+    expect(lookup('2026-06-15T12:00:00.000Z')).toMatchObject({ multiplier: 2 });
+    expect(lookup('2026-07-15T12:00:00.000Z')).toMatchObject({ multiplier: 4 });
+    expect(lookup('2026-04-30T23:59:59.000Z')).toBeNull();
+
+    await expect(
+      engine.settleEntry(entry({ bookId: 'dated-book', placedAt: '2026-04-30' }), {
+        actualsByLegId: { 'leg-1': 12, 'leg-2': 8 },
+      }),
+    ).resolves.toMatchObject({
+      status: 'pending',
+      payout: { total: 0, withdrawable: 0, bonus: 0 },
+      explanationCodes: expect.arrayContaining(['settlement.no_payout_resolution']),
+    });
+  });
+
+  test('scales a demoted fixed-table payout against the original all-hit tier', () => {
+    const scalingPolicy = defineBookPolicy({
+      ...customPolicy,
+      id: 'scaling-book',
+      playTypes: [
+        {
+          id: 'all-in',
+          displayName: 'All-In',
+          payoutModel: 'fixed-table',
+          pickCount: { min: 2, max: 3 },
+          scaleDisplayedMultiplier: true,
+        },
+      ],
+    });
+    const engine = createDfsEngine({
+      bookPolicies: [scalingPolicy],
+      payoutTables: [
+        definePayoutTable({
+          bookId: 'scaling-book',
+          playTypeId: 'all-in',
+          effectiveFrom: '2026-05-01',
+          entries: [
+            { pickCount: 2, hits: 2, multiplier: 3 },
+            { pickCount: 3, hits: 3, multiplier: 6 },
+          ],
+        }),
+      ],
+    });
+    const originalEntry = entry({
+      bookId: 'scaling-book',
+      displayedMultiplier: 6,
+      placedAt: '2026-06-01',
+      legs: [leg({ legId: 'a' }), leg({ legId: 'b' }), leg({ legId: 'c' })],
+    });
+
+    expect(
+      engine.lookupPayout({
+        bookId: 'scaling-book',
+        playTypeId: 'all-in',
+        stake: 10,
+        displayedMultiplier: 6,
+        pickCount: 2,
+        hits: 2,
+        removedCount: 1,
+        entry: originalEntry,
+      }),
+    ).toMatchObject({
+      status: 'won',
+      multiplier: 3,
+      payout: { total: 30, withdrawable: 30, bonus: 0 },
+    });
+  });
+
   test('supports custom payout resolvers', async () => {
     const resolverPolicy = defineBookPolicy({
       ...customPolicy,
