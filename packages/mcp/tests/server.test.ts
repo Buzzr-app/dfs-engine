@@ -14,11 +14,14 @@ const packageManifest = JSON.parse(readFileSync(resolve(here, '../package.json')
 
 const EXPECTED_TOOL_NAMES = [
   'grade_dfs_entry',
+  'grade_dfs_entries',
   'validate_dfs_entry',
   'list_book_policies',
   'fair_line',
+  'closing_line_value',
   'parlay_value',
   'kelly_stake',
+  'summarize_bet_history',
   'predict_game_buzz',
   'rank_games',
 ];
@@ -28,7 +31,7 @@ describe('tool catalog', () => {
     expect(SERVER_VERSION).toBe(packageManifest.version);
   });
 
-  it('ships all eight engine tools', () => {
+  it('ships all eleven engine tools', () => {
     expect(allTools.map((tool) => tool.name)).toEqual(EXPECTED_TOOL_NAMES);
   });
 

@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { fairLineTool, kellyStakeTool, parlayValueTool } from '../src/tools/odds';
+import {
+  closingLineValueTool,
+  fairLineTool,
+  kellyStakeTool,
+  parlayValueTool,
+} from '../src/tools/odds';
 import type { ToolResult } from '../src/tools/shared';
 
 function parseResult(result: ToolResult): Record<string, unknown> {
@@ -35,6 +40,37 @@ describe('fair_line', () => {
 
     expect(result.isError).toBe(true);
     expect((parseResult(result).error as Record<string, unknown>).code).toBe('invalid_input');
+  });
+});
+
+describe('closing_line_value', () => {
+  it('computes a versioned implied-probability delta', async () => {
+    const result = await closingLineValueTool.handler({
+      placedAmericanOdds: 110,
+      closingAmericanOdds: -105,
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(parseResult(result)).toEqual({
+      contractVersion: 1,
+      clvPercent: 3.6,
+      beatClosingLine: true,
+    });
+  });
+
+  it.each([
+    ['zero odds', { placedAmericanOdds: 0, closingAmericanOdds: -110 }],
+    [
+      'non-finite odds',
+      { placedAmericanOdds: Number.NEGATIVE_INFINITY, closingAmericanOdds: -110 },
+    ],
+  ])('rejects %s', async (_label, input) => {
+    const result = await closingLineValueTool.handler(input);
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result).error as Record<string, unknown>).toMatchObject({
+      code: 'invalid_input',
+    });
   });
 });
 

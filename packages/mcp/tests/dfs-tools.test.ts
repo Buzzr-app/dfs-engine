@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { gradeDfsEntryTool, listBookPoliciesTool, validateDfsEntryTool } from '../src/tools/dfs';
+import {
+  gradeDfsEntriesTool,
+  gradeDfsEntryTool,
+  listBookPoliciesTool,
+  serializeBatchFailure,
+  validateDfsEntryTool,
+} from '../src/tools/dfs';
 import type { ToolResult } from '../src/tools/shared';
 
 function parseResult(result: ToolResult): Record<string, unknown> {
@@ -55,6 +61,25 @@ describe('grade_dfs_entry', () => {
     expect(Array.isArray(settlement.explanationCodes)).toBe(true);
   });
 
+  it('preserves the complete settlement contract and adds a human explanation', async () => {
+    const settlement = parseResult(await gradeDfsEntryTool.handler(buildEntry()));
+
+    expect(settlement).toMatchObject({
+      entryId: 'entry-1',
+      bookId: 'prizepicks',
+      playTypeId: 'power',
+      stake: 10,
+      displayedMultiplier: 3,
+      baseMultiplier: null,
+      profitBoostPct: null,
+      validation: { ok: true, errors: [], warnings: [] },
+    });
+    expect(settlement.sourceRefs).toEqual(expect.any(Array));
+    expect(settlement.provenance).toMatchObject({ providers: expect.any(Array) });
+    expect(settlement.auditTrail).toEqual(expect.any(Array));
+    expect(settlement.explanation).toContain('entry-1 settled as won');
+  });
+
   it('grades a losing leg as a lost all-or-nothing entry', async () => {
     const entry = buildEntry();
     (entry.legs as Array<Record<string, unknown>>)[1].actual = 12;
@@ -83,6 +108,104 @@ describe('grade_dfs_entry', () => {
     const parsed = parseResult(result);
     expect((parsed.error as Record<string, unknown>).code).toBe('invalid_input');
   });
+
+  it.each([
+    ['non-finite numbers', { stake: Number.POSITIVE_INFINITY }],
+    ['invalid placedAt', { placedAt: 'July 16 sometime' }],
+    [
+      'duplicate leg ids',
+      {
+        legs: [
+          (buildEntry().legs as Array<Record<string, unknown>>)[0],
+          (buildEntry().legs as Array<Record<string, unknown>>)[0],
+        ],
+      },
+    ],
+    [
+      'more than 12 legs',
+      {
+        legs: Array.from({ length: 13 }, (_, index) => ({
+          ...(buildEntry().legs as Array<Record<string, unknown>>)[0],
+          legId: `leg-${index}`,
+        })),
+      },
+    ],
+  ])('rejects %s at the MCP boundary', async (_label, overrides) => {
+    const result = await gradeDfsEntryTool.handler(buildEntry(overrides));
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result).error as Record<string, unknown>).toMatchObject({
+      code: 'invalid_input',
+    });
+  });
+
+  it('does not execute published draft policy fixtures', async () => {
+    const result = parseResult(
+      await gradeDfsEntryTool.handler(buildEntry({ bookId: 'sleeper', playTypeId: 'over_under' })),
+    );
+
+    expect(result.status).toBe('pending');
+    expect(result.pendingReasons).toContain('missing_policy');
+    expect(result.explanationCodes).toContain('validation.unknown_book_or_play_type');
+  });
+});
+
+describe('grade_dfs_entries', () => {
+  it('settles a bounded batch and returns a versioned, serializable contract', async () => {
+    const result = await gradeDfsEntriesTool.handler({
+      entries: [buildEntry(), buildEntry({ entryId: 'entry-2' })],
+      concurrency: 2,
+    });
+
+    expect(result.isError).toBeUndefined();
+    const batch = parseResult(result);
+    expect(batch).toMatchObject({
+      contractVersion: 1,
+      summary: { total: 2, settled: 2, pending: 0, failed: 0 },
+      failures: [],
+      cache: { providerCalls: 0, cacheHits: 0 },
+    });
+    expect(batch.results).toEqual([
+      expect.objectContaining({ entryId: 'entry-1', explanation: expect.any(String) }),
+      expect.objectContaining({ entryId: 'entry-2', explanation: expect.any(String) }),
+    ]);
+  });
+
+  it.each([
+    [
+      'more than 50 entries',
+      {
+        entries: Array.from({ length: 51 }, (_, index) =>
+          buildEntry({ entryId: `entry-${index}` }),
+        ),
+      },
+    ],
+    ['concurrency below 1', { entries: [buildEntry()], concurrency: 0 }],
+    ['concurrency above 8', { entries: [buildEntry()], concurrency: 9 }],
+    ['duplicate entry ids', { entries: [buildEntry(), buildEntry()] }],
+  ])('rejects %s', async (_label, input) => {
+    const result = await gradeDfsEntriesTool.handler(input);
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result).error as Record<string, unknown>).toMatchObject({
+      code: 'invalid_input',
+    });
+  });
+
+  it('serializes Error failures without leaking stacks or non-JSON values', () => {
+    const serialized = serializeBatchFailure({
+      entryId: 'entry-failed',
+      index: 3,
+      error: new TypeError('policy resolver failed'),
+    });
+
+    expect(serialized).toEqual({
+      entryId: 'entry-failed',
+      index: 3,
+      error: { name: 'TypeError', message: 'policy resolver failed' },
+    });
+    expect(JSON.stringify(serialized)).not.toContain('stack');
+  });
 });
 
 describe('validate_dfs_entry', () => {
@@ -106,7 +229,7 @@ describe('validate_dfs_entry', () => {
 });
 
 describe('list_book_policies', () => {
-  it('lists built-in books and draft fixtures with play types', async () => {
+  it('labels built-in books executable and draft fixtures non-executable', async () => {
     const result = await listBookPoliciesTool.handler({});
 
     expect(result.isError).toBeUndefined();
@@ -117,6 +240,7 @@ describe('list_book_policies', () => {
     const prizepicks = books.find((book) => book.id === 'prizepicks');
     expect(prizepicks).toBeDefined();
     expect(prizepicks?.source).toBe('built_in');
+    expect(prizepicks?.executable).toBe(true);
     const playTypeIds = (prizepicks?.playTypes as Array<Record<string, unknown>>).map(
       (playType) => playType.id,
     );
@@ -126,5 +250,6 @@ describe('list_book_policies', () => {
     expect(sleeper).toBeDefined();
     expect(sleeper?.status).toBe('draft');
     expect(sleeper?.source).toBe('draft_fixture');
+    expect(sleeper?.executable).toBe(false);
   });
 });

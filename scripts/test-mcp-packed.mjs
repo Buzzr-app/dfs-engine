@@ -22,11 +22,14 @@ const workspaces = [
 ];
 const coreToolNames = [
   'grade_dfs_entry',
+  'grade_dfs_entries',
   'validate_dfs_entry',
   'list_book_policies',
   'fair_line',
+  'closing_line_value',
   'parlay_value',
   'kelly_stake',
+  'summarize_bet_history',
   'predict_game_buzz',
   'rank_games',
 ];
@@ -162,6 +165,53 @@ async function exerciseRealClient(consumerDirectory, cache, expectedVersion) {
     );
     assert.equal(dfs.status, 'won');
     assert.equal(dfs.payout.total, 30);
+    assert.equal(dfs.validation.ok, true);
+    assert(Array.isArray(dfs.auditTrail));
+    assert.match(dfs.explanation, /packed-proof settled as won/);
+
+    const dfsBatch = parseToolResult(
+      await withDeadline(
+        client.callTool({
+          name: 'grade_dfs_entries',
+          arguments: {
+            entries: [
+              {
+                entryId: 'packed-batch-proof',
+                bookId: 'prizepicks',
+                playTypeId: 'power',
+                stake: 10,
+                displayedMultiplier: 3,
+                legs: [
+                  {
+                    legId: 'leg-1',
+                    playerName: 'Player One',
+                    league: 'NBA',
+                    propType: 'points',
+                    line: 25.5,
+                    direction: 'over',
+                    actual: 31,
+                  },
+                  {
+                    legId: 'leg-2',
+                    playerName: 'Player Two',
+                    league: 'NBA',
+                    propType: 'points',
+                    line: 27.5,
+                    direction: 'over',
+                    actual: 33,
+                  },
+                ],
+              },
+            ],
+            concurrency: 1,
+          },
+        }),
+        'Packed MCP DFS batch call',
+      ),
+    );
+    assert.equal(dfsBatch.contractVersion, 1);
+    assert.equal(dfsBatch.summary.settled, 1);
+    assert.equal(dfsBatch.results[0].entryId, 'packed-batch-proof');
 
     const odds = parseToolResult(
       await withDeadline(
@@ -173,6 +223,48 @@ async function exerciseRealClient(consumerDirectory, cache, expectedVersion) {
       ),
     );
     assert.equal(odds.fairProbability, 0.5);
+
+    const closingLine = parseToolResult(
+      await withDeadline(
+        client.callTool({
+          name: 'closing_line_value',
+          arguments: { placedAmericanOdds: 110, closingAmericanOdds: -105 },
+        }),
+        'Packed MCP closing line call',
+      ),
+    );
+    assert.deepEqual(closingLine, {
+      contractVersion: 1,
+      clvPercent: 3.6,
+      beatClosingLine: true,
+    });
+
+    const betHistory = parseToolResult(
+      await withDeadline(
+        client.callTool({
+          name: 'summarize_bet_history',
+          arguments: {
+            bets: [
+              {
+                id: 'packed-bet',
+                userId: 'packed-user',
+                sportsbookSlug: 'draftkings',
+                kind: 'straight',
+                status: 'won',
+                stake: 10,
+                payout: 25,
+                placedAt: '2026-07-15T17:00:00.000Z',
+                settledAt: '2026-07-15T18:00:00.000Z',
+              },
+            ],
+            period: 'day',
+          },
+        }),
+        'Packed MCP bet history call',
+      ),
+    );
+    assert.equal(betHistory.contractVersion, 1);
+    assert.equal(betHistory.rollup.totalBets, 1);
 
     const entertainment = parseToolResult(
       await withDeadline(
