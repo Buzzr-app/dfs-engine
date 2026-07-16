@@ -186,7 +186,7 @@ export const gradeDfsEntryTool = defineTool({
 
 const gradeDfsEntriesSchema = z
   .object({
-    entries: boundedArray(batchEntrySchema, 25, 1),
+    entries: boundedArray(batchEntrySchema, 50, 1),
     concurrency: z.number().int().min(1).max(8).optional(),
   })
   .superRefine((value, context) => {
@@ -203,11 +203,11 @@ const gradeDfsEntriesSchema = z
       }
       entryIds.add(entry.entryId);
     }
-    if (totalLegs > 300) {
+    if (totalLegs > 600) {
       context.addIssue({
         code: 'custom',
         path: ['entries'],
-        message: 'A batch cannot contain more than 300 total legs.',
+        message: 'A batch cannot contain more than 600 total legs.',
       });
     }
   });
@@ -227,7 +227,7 @@ export const gradeDfsEntriesTool = defineTool({
   name: 'grade_dfs_entries',
   title: 'Grade DFS entries',
   description:
-    'Settle up to 25 DFS entries with @buzzr/dfs-engine batch settlement. ' +
+    'Settle up to 50 DFS entries with @buzzr/dfs-engine batch settlement. ' +
     'Returns full explainable settlement results, isolated serializable failures, ' +
     'summary counts, and per-call stat-cache metrics.',
   inputSchema: gradeDfsEntriesSchema,

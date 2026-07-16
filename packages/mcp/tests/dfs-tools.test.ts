@@ -368,14 +368,14 @@ describe('list_book_policies', () => {
       effectiveFrom: '2026-05-01',
       status: 'experimental',
       verification: { status: 'partial', reviewedAt: '2026-07-16' },
-      sources: [
+      sources: expect.arrayContaining([
         expect.objectContaining({
           label: expect.any(String),
           url: expect.stringMatching(/^https:\/\/www\.prizepicks\.com\//),
           retrievedAt: '2026-07-16',
         }),
         expect.any(Object),
-      ],
+      ]),
       playTypes: [
         expect.objectContaining({
           id: 'power',

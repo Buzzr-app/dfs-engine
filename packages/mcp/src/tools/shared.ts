@@ -44,14 +44,14 @@ export type BuzzrToolDefinition = {
 function fixedErrorResult(value: typeof RESULT_SERIALIZATION_FAILED | typeof RESULT_TOO_LARGE) {
   return {
     isError: true,
-    content: [{ type: 'text' as const, text: JSON.stringify(value, null, 2) }],
+    content: [{ type: 'text' as const, text: JSON.stringify(value) }],
   };
 }
 
 function serializeResult(value: unknown, isError = false): ToolResult {
   let text: string | undefined;
   try {
-    text = JSON.stringify(value, null, 2);
+    text = JSON.stringify(value);
   } catch {
     return fixedErrorResult(RESULT_SERIALIZATION_FAILED);
   }
@@ -67,7 +67,7 @@ function serializeResult(value: unknown, isError = false): ToolResult {
   };
 }
 
-/** Wraps a value as pretty-printed JSON text content. */
+/** Wraps a value as compact JSON text content. */
 export function jsonResult(value: unknown): ToolResult {
   return serializeResult(value);
 }

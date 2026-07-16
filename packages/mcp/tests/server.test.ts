@@ -77,7 +77,7 @@ describe('createBuzzrMcpServer', () => {
           entries: {
             type: 'array',
             minItems: 1,
-            maxItems: 25,
+            maxItems: 50,
             items: {
               type: 'object',
               properties: {
