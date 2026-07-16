@@ -158,7 +158,7 @@ function toDfsEntryInput(args: GradeDfsEntryArgs): DfsEntryInput {
   };
 }
 
-/** Engine with only the built-in stable book policies. */
+/** Engine with only the built-in executable compatibility policies. */
 function buildEngine() {
   return createDfsEngine();
 }
@@ -287,54 +287,18 @@ export const validateDfsEntryTool = defineTool({
   },
 });
 
-/**
- * Play-type metadata for the engine's built-in stable policies. The engine's
- * public API exposes registered book ids (getRegisteredBooks) but not the
- * built-in policy objects themselves, so this mirrors the ids/display names of
- * the built-ins shipped in @buzzr/dfs-engine v5.
- */
-const BUILT_IN_POLICY_SUMMARIES: readonly {
-  id: string;
-  displayName: string;
-  status: string;
-  playTypes: { id: string; displayName: string }[];
-}[] = [
-  {
-    id: 'prizepicks',
-    displayName: 'PrizePicks',
-    status: 'stable',
-    playTypes: [
-      { id: 'power', displayName: 'Power Play' },
-      { id: 'flex', displayName: 'Flex Play' },
-    ],
-  },
-  {
-    id: 'underdog',
-    displayName: 'Underdog',
-    status: 'stable',
-    playTypes: [
-      { id: 'underdog_standard', displayName: 'Standard' },
-      { id: 'underdog_flex', displayName: 'Flex' },
-    ],
-  },
-];
-
-function describePolicy(policy: DfsBookPolicy) {
+function describeDraftPolicy(policy: DfsBookPolicy) {
   return {
     id: policy.id,
     displayName: policy.displayName,
-    status: policy.status,
-    executable: false,
     version: policy.version,
+    effectiveFrom: policy.effectiveFrom,
+    status: policy.status,
+    verification: policy.verification ?? null,
+    sources: policy.sources,
+    playTypes: policy.playTypes,
+    executable: false as const,
     source: 'draft_fixture' as const,
-    playTypes: policy.playTypes.map((playType) => ({
-      id: playType.id,
-      displayName: playType.displayName,
-      payoutModel: playType.payoutModel,
-      pickCount: playType.pickCount,
-      allOrNothing: playType.allOrNothing ?? false,
-      flex: playType.flex ?? false,
-    })),
   };
 }
 
@@ -342,29 +306,18 @@ export const listBookPoliciesTool = defineTool({
   name: 'list_book_policies',
   title: 'List DFS book policies',
   description:
-    'Enumerate built-in stable policies that can be graded and published draft fixtures ' +
-    'that are metadata-only. Each policy includes an explicit executable flag.',
+    'Enumerate registered executable DFS compatibility policies from the engine and ' +
+    'published draft fixtures that are metadata-only. Includes version, effective date, ' +
+    'verification, source references, complete play-type metadata, and executable status.',
   inputSchema: z.object({}),
   run: () => {
     const engine = buildEngine();
-    const registeredIds = engine.getRegisteredBooks();
-    const builtInsById = new Map(BUILT_IN_POLICY_SUMMARIES.map((summary) => [summary.id, summary]));
-
-    const executableBooks = registeredIds.map((id) => {
-      const builtIn = builtInsById.get(id);
-      if (builtIn) {
-        return { ...builtIn, executable: true, source: 'built_in' as const };
-      }
-      return {
-        id,
-        displayName: id,
-        status: 'unknown',
-        executable: true,
-        source: 'engine' as const,
-        playTypes: [],
-      };
-    });
-    const draftBooks = DRAFT_BOOK_POLICY_FIXTURES.map(describePolicy);
+    const executableBooks = engine.getBookPolicies().map((policy) => ({
+      ...policy,
+      executable: true as const,
+      source: 'engine_policy' as const,
+    }));
+    const draftBooks = DRAFT_BOOK_POLICY_FIXTURES.map(describeDraftPolicy);
     const books = [...executableBooks, ...draftBooks];
 
     return jsonResult({ count: books.length, books });
