@@ -1,8 +1,12 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
+import { zipSync } from 'fflate';
+
 const rootManifest = JSON.parse(await readFile('package.json', 'utf8'));
+const rootLock = JSON.parse(await readFile('package-lock.json', 'utf8'));
 const ciWorkflow = await readFile('.github/workflows/ci.yml', 'utf8');
 const mcpbTooling = await readFile('scripts/lib/mcpb-cli.mjs', 'utf8');
 const smitheryPublisher = await readFile('scripts/publish-smithery-bundle.mjs', 'utf8');
@@ -106,8 +110,39 @@ test('the release gate builds and proves the MCPB on every supported platform', 
 
 test('uses integrity-locked local MCPB tooling without a credential-bearing subprocess', () => {
   assert.equal(rootManifest.devDependencies.fflate, '0.8.2');
+  assert.deepEqual(rootLock.packages['node_modules/fflate'], {
+    version: '0.8.2',
+    resolved: 'https://registry.npmjs.org/fflate/-/fflate-0.8.2.tgz',
+    integrity: 'sha512-cPJU47OaAoCbg0pBvzsgpTPhmhqI5eJjh/JIu8tPj5q+T7iLvW/JAYUqmE7KOB4R1ZyEhzBaIQpQpardBF5z8A==',
+    dev: true,
+    license: 'MIT',
+  });
   assert.doesNotMatch(mcpbTooling, /npm exec|@anthropic-ai\/mcpb/);
   assert.doesNotMatch(mcpbTooling, /\.\.\.process\.env/);
+});
+
+test('pins the official MCPB v0.4 schema and preflights hostile archives', async () => {
+  const schema = await readFile('smithery/mcpb-manifest-v0.4.schema.json');
+  assert.equal(
+    createHash('sha256').update(schema).digest('hex'),
+    '9e4fa3cdc4ae3872b3d76dd538a2517c4e9cf43a7ea2707819e11aedce09ee69',
+  );
+  const { inspectMcpbArchive } = await import('../scripts/lib/mcpb-cli.mjs');
+  assert.throws(
+    () => inspectMcpbArchive(zipSync({ '../escape.txt': new Uint8Array([1]) })),
+    /escapes|normalized/i,
+  );
+
+  const bomb = Buffer.from(zipSync({ 'safe.txt': new Uint8Array([1]) }));
+  const centralOffset = bomb.indexOf(Buffer.from([0x50, 0x4b, 0x01, 0x02]));
+  assert(centralOffset >= 0);
+  bomb.writeUInt32LE(100 * 1024 * 1024 + 1, centralOffset + 24);
+  assert.throws(() => inspectMcpbArchive(bomb), /declared content is too large/i);
+
+  const symlink = Buffer.from(zipSync({ 'link.txt': new Uint8Array([1]) }));
+  const symlinkCentralOffset = symlink.indexOf(Buffer.from([0x50, 0x4b, 0x01, 0x02]));
+  symlink.writeUInt32LE((0o120777 << 16) >>> 0, symlinkCentralOffset + 38);
+  assert.throws(() => inspectMcpbArchive(symlink), /symbolic link/i);
 });
 
 test('builds the full Smithery stdio server card required by the release API', async () => {

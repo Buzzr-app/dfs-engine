@@ -17,12 +17,12 @@ function deepFreeze(value) {
   return Object.freeze(value);
 }
 
-export function createSmitheryReleasePayload({ manifest, tools }) {
-  if (!isObject(manifest) || !SERVER_NAME.test(manifest.name)) {
-    throw new TypeError('Smithery release manifest must contain a safe server name.');
+export function createSmitheryReleasePayload({ serverInfo, tools }) {
+  if (!isObject(serverInfo) || !SERVER_NAME.test(serverInfo.name)) {
+    throw new TypeError('Smithery release serverInfo must contain a safe server name.');
   }
-  if (typeof manifest.version !== 'string' || !SEMANTIC_VERSION.test(manifest.version)) {
-    throw new TypeError('Smithery release manifest must contain an exact semantic version.');
+  if (typeof serverInfo.version !== 'string' || !SEMANTIC_VERSION.test(serverInfo.version)) {
+    throw new TypeError('Smithery release serverInfo must contain an exact semantic version.');
   }
   if (!Array.isArray(tools) || tools.length === 0) {
     throw new TypeError('Smithery release tools must be a non-empty array.');
@@ -48,7 +48,7 @@ export function createSmitheryReleasePayload({ manifest, tools }) {
     type: 'stdio',
     runtime: 'node',
     serverCard: {
-      serverInfo: { name: manifest.name, version: manifest.version },
+      serverInfo: { name: serverInfo.name, version: serverInfo.version },
       tools: copiedTools,
     },
   });
