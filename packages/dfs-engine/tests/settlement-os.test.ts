@@ -278,6 +278,24 @@ describe('v2 Settlement OS engine', () => {
       { actualsByLegId: { 'leg-1': 30, 'leg-2': 10 } },
     );
     expect(halfCent.payout).toEqual({ total: 1.01, withdrawable: 0.67, bonus: 0.34 });
+
+    for (const [stake, expectedTotal] of [
+      [10.075, 10.08],
+      [128.015, 128.02],
+    ] as const) {
+      const decimalHalf = await engine.settleEntry(
+        entry({
+          entryId: `decimal-half-${stake}`,
+          bookId: 'rounding-book',
+          playTypeId: 'main',
+          stake,
+          displayedMultiplier: 1,
+        }),
+        { actualsByLegId: { 'leg-1': 30, 'leg-2': 10 } },
+      );
+
+      expect(decimalHalf.payout.total).toBe(expectedTotal);
+    }
   });
 
   test('prices boosted Underdog flex payouts against the surviving hit count', async () => {

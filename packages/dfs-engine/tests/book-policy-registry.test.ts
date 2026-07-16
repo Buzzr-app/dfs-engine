@@ -154,7 +154,7 @@ describe('Book Policy Registry 3.0', () => {
     expect(result.explanationCodes).toContain('settlement.displayed_multiplier_payout');
   });
 
-  test('selects the payout table effective when the entry was placed and defers pre-effective entries', async () => {
+  test('selects payout tables by an explicit UTC as-of and audits the selected table', async () => {
     const datedPolicy = defineBookPolicy({
       ...customPolicy,
       id: 'dated-book',
@@ -162,6 +162,7 @@ describe('Book Policy Registry 3.0', () => {
       effectiveFrom: '2026-01-01',
     });
     const engine = createDfsEngine({
+      clock: () => new Date('2026-06-15T12:00:00.000Z'),
       bookPolicies: [datedPolicy],
       payoutTables: [
         definePayoutTable({
@@ -169,6 +170,7 @@ describe('Book Policy Registry 3.0', () => {
           playTypeId: 'all-in',
           version: '2026-05',
           effectiveFrom: '2026-05-01',
+          sourceNotes: ['May fixture schedule'],
           entries: [{ pickCount: 2, hits: 2, multiplier: 2 }],
         }),
         definePayoutTable({
@@ -176,6 +178,7 @@ describe('Book Policy Registry 3.0', () => {
           playTypeId: 'all-in',
           version: '2026-07',
           effectiveFrom: '2026-07-01',
+          sourceNotes: ['July fixture schedule'],
           entries: [{ pickCount: 2, hits: 2, multiplier: 4 }],
         }),
       ],
@@ -196,13 +199,72 @@ describe('Book Policy Registry 3.0', () => {
     expect(lookup('2026-07-15T12:00:00.000Z')).toMatchObject({ multiplier: 4 });
     expect(lookup('2026-04-30T23:59:59.000Z')).toBeNull();
 
+    const clockSelected = engine.lookupPayout({
+      bookId: 'dated-book',
+      playTypeId: 'all-in',
+      stake: 10,
+      pickCount: 2,
+      hits: 2,
+    });
+    expect(clockSelected).toMatchObject({
+      multiplier: 2,
+      payoutTable: {
+        version: '2026-05',
+        effectiveFrom: '2026-05-01',
+        sourceNotes: ['May fixture schedule'],
+        sources: datedPolicy.sources,
+      },
+    });
+
+    const settlementSelected = await engine.settleEntry(
+      entry({ bookId: 'dated-book' }),
+      {
+        settledAt: '2026-06-20T12:00:00.000Z',
+        actualsByLegId: { 'leg-1': 12, 'leg-2': 8 },
+      },
+    );
+    expect(settlementSelected).toMatchObject({
+      effectiveMultiplier: 2,
+      payoutTable: {
+        version: '2026-05',
+        effectiveFrom: '2026-05-01',
+        sourceNotes: ['May fixture schedule'],
+        sources: datedPolicy.sources,
+      },
+    });
+    expect(settlementSelected.auditTrail.at(-1)?.metadata).toMatchObject({
+      payoutTable: settlementSelected.payoutTable,
+    });
+
+    // Date-only effectiveFrom values are interpreted at UTC midnight.
     await expect(
-      engine.settleEntry(entry({ bookId: 'dated-book', placedAt: '2026-04-30' }), {
+      engine.settleEntry(entry({ bookId: 'dated-book' }), {
+        settledAt: '2026-06-30T23:59:59.999Z',
+        actualsByLegId: { 'leg-1': 12, 'leg-2': 8 },
+      }),
+    ).resolves.toMatchObject({
+      effectiveMultiplier: 2,
+      payoutTable: { version: '2026-05' },
+    });
+    await expect(
+      engine.settleEntry(entry({ bookId: 'dated-book' }), {
+        settledAt: '2026-07-01T00:00:00.000Z',
+        actualsByLegId: { 'leg-1': 12, 'leg-2': 8 },
+      }),
+    ).resolves.toMatchObject({
+      effectiveMultiplier: 4,
+      payoutTable: { version: '2026-07' },
+    });
+
+    await expect(
+      engine.settleEntry(entry({ bookId: 'dated-book' }), {
+        settledAt: '2026-04-30T23:59:59.999Z',
         actualsByLegId: { 'leg-1': 12, 'leg-2': 8 },
       }),
     ).resolves.toMatchObject({
       status: 'pending',
       payout: { total: 0, withdrawable: 0, bonus: 0 },
+      payoutTable: null,
       explanationCodes: expect.arrayContaining(['settlement.no_payout_resolution']),
     });
   });
