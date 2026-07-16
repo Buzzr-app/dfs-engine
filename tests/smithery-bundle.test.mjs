@@ -96,3 +96,47 @@ test('the release gate builds and proves the MCPB on every supported platform', 
     /mcp-packed-platforms:[\s\S]*run: npm run build:mcpb[\s\S]*run: npm run proof:mcpb/,
   );
 });
+
+test('builds the full Smithery stdio server card required by the release API', async () => {
+  const { createSmitheryReleasePayload } = await import('../scripts/lib/smithery-release.mjs');
+  const tools = [
+    {
+      name: 'fair_line',
+      description: 'Calculate a no-vig fair line.',
+      inputSchema: {
+        type: 'object',
+        properties: { selected: { type: 'number' } },
+        required: ['selected'],
+      },
+    },
+  ];
+  const payload = createSmitheryReleasePayload({
+    manifest: { name: 'buzzr-sports-engine', version: '5.1.0' },
+    tools,
+  });
+
+  assert.deepEqual(payload, {
+    type: 'stdio',
+    runtime: 'node',
+    serverCard: {
+      serverInfo: { name: 'buzzr-sports-engine', version: '5.1.0' },
+      tools,
+    },
+  });
+
+  tools[0].inputSchema.properties.selected.type = 'string';
+  assert.equal(payload.serverCard.tools[0].inputSchema.properties.selected.type, 'number');
+});
+
+test('rejects the incomplete MCPB tool summaries that Smithery release validation rejects', async () => {
+  const { createSmitheryReleasePayload } = await import('../scripts/lib/smithery-release.mjs');
+
+  assert.throws(
+    () =>
+      createSmitheryReleasePayload({
+        manifest: { name: 'buzzr-sports-engine', version: '5.1.0' },
+        tools: [{ name: 'fair_line', description: 'Missing its input schema.' }],
+      }),
+    /inputSchema/i,
+  );
+});
