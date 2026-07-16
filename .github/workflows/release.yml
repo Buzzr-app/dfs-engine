@@ -61,7 +61,9 @@ jobs:
       contents: read
       id-token: write
     outputs:
-      integrity: ${{ steps.pack.outputs.integrity }}
+      artifacts: ${{ steps.pack.outputs.artifacts }}
+      integrities: ${{ steps.pack.outputs.integrities }}
+      mcp-integrity: ${{ steps.pack.outputs.mcp-integrity }}
       reviewed-commit: ${{ needs.authorize-release.outputs.reviewed-commit }}
     steps:
       - name: Revalidate current main before checkout
@@ -81,7 +83,6 @@ jobs:
       - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
         with:
           node-version: 24
-          registry-url: https://registry.npmjs.org
           package-manager-cache: false
       - name: Validate checked-out release
         shell: bash
@@ -104,40 +105,131 @@ jobs:
           git diff --exit-code
           git diff --cached --exit-code
           test -z "$(git ls-files --others --exclude-standard)"
-      - name: Pack and hash the exact MCP artifact
+      - name: Pack and hash all five authorized artifacts
         id: pack
         shell: bash
         run: |
           set -euo pipefail
-          pack_json="$(npm pack --workspace @buzzr/mcp --json --pack-destination "$RUNNER_TEMP")"
-          filename="$(node -e 'const value=JSON.parse(process.argv[1]); process.stdout.write(value[0].filename)' "$pack_json")"
-          integrity="$(node scripts/compute-npm-integrity.mjs "$RUNNER_TEMP/$filename")"
-          echo "integrity=$integrity" >> "$GITHUB_OUTPUT"
-          echo "Expected MCP integrity: $integrity" >> "$GITHUB_STEP_SUMMARY"
+          artifacts_file="$RUNNER_TEMP/release-artifacts.json"
+          artifacts="$(node scripts/pack-release-artifacts.mjs \
+            --destination "$RUNNER_TEMP/release-packs" \
+            --output "$artifacts_file")"
+          integrities="$(node -e 'const a=require(process.argv[1]);process.stdout.write(JSON.stringify(Object.fromEntries(a.map(({name,integrity})=>[name,integrity]))))' "$artifacts_file")"
+          mcp_integrity="$(node -e 'const a=require(process.argv[1]);process.stdout.write(a.find(({name})=>name==="@buzzr/mcp").integrity)' "$artifacts_file")"
+          echo "artifacts=$artifacts" >> "$GITHUB_OUTPUT"
+          echo "integrities=$integrities" >> "$GITHUB_OUTPUT"
+          echo "mcp-integrity=$mcp_integrity" >> "$GITHUB_OUTPUT"
+          node -e 'const a=require(process.argv[1]);for(const x of a)console.log(`- ${x.name}@${x.version}: ${x.integrity}`)' "$artifacts_file" >> "$GITHUB_STEP_SUMMARY"
       - name: Publish changed packages through npm trusted publishing
         env:
           NPM_CONFIG_PROVENANCE: 'true'
         run: npm exec changeset publish
-      - name: Prove the exact live MCP artifact
+      - name: Prove all exact live npm artifacts
         shell: bash
         env:
+          EXPECTED_RELEASE_COMMIT: ${{ needs.authorize-release.outputs.reviewed-commit }}
+          EXPECTED_RELEASE_INTEGRITIES: ${{ steps.pack.outputs.integrities }}
           EXPECTED_MCP_VERSION: ${{ inputs.expected_version }}
-          EXPECTED_MCP_INTEGRITY: ${{ steps.pack.outputs.integrity }}
+          EXPECTED_MCP_INTEGRITY: ${{ steps.pack.outputs.mcp-integrity }}
           EXPECTED_GIT_HEAD: ${{ needs.authorize-release.outputs.reviewed-commit }}
         run: |
           set -euo pipefail
+          proof_succeeded=false
           for attempt in {1..12}; do
-            if npm run proof:mcp:published; then
-              exit 0
+            if node scripts/prove-published-release.mjs; then
+              proof_succeeded=true
+              break
             fi
             if [[ "$attempt" -lt 12 ]]; then
               sleep 10
             fi
           done
-          exit 1
+          test "$proof_succeeded" = true
+          npm run proof:mcp:published
+
+  publish-mcp-registry:
+    needs: publish-npm
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Revalidate current main before checkout
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_COMMIT: ${{ needs.publish-npm.outputs.reviewed-commit }}
+        run: |
+          set -euo pipefail
+          REMOTE_MAIN="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
+          test "$REMOTE_MAIN" = "$EXPECTED_COMMIT"
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ needs.publish-npm.outputs.reviewed-commit }}
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Install the reviewed MCP Registry publisher
+        shell: bash
+        run: |
+          set -euo pipefail
+          publisher_dir="$RUNNER_TEMP/mcp-publisher-v1.7.9"
+          archive="$RUNNER_TEMP/mcp-publisher_linux_amd64-v1.7.9.tar.gz"
+          mkdir -p "$publisher_dir"
+          curl --proto '=https' --proto-redir '=https' --tlsv1.2 --fail --silent --show-error --location \
+            --output "$archive" \
+            'https://github.com/modelcontextprotocol/registry/releases/download/v1.7.9/mcp-publisher_linux_amd64.tar.gz'
+          printf '%s  %s\n' 'ab128162b0616090b47cf245afe0a23f3ef08936fdce19074f5ba0a4469281ac' "$archive" | sha256sum --check --strict
+          tar --extract --gzip --file "$archive" --directory "$publisher_dir" \
+            --no-same-owner mcp-publisher
+          chmod 0755 "$publisher_dir/mcp-publisher"
+          "$publisher_dir/mcp-publisher" --help >/dev/null
+          echo "$publisher_dir" >> "$GITHUB_PATH"
+      - name: Publish the exact server metadata when absent
+        shell: bash
+        run: |
+          set -euo pipefail
+          probe_status=1
+          for attempt in {1..3}; do
+            set +e
+            MCP_REGISTRY_ALLOW_MISSING=1 node scripts/prove-mcp-registry-record.mjs
+            probe_status=$?
+            set -e
+            if [[ "$probe_status" -eq 0 || "$probe_status" -eq 3 ]]; then
+              break
+            fi
+            sleep 5
+          done
+          if [[ "$probe_status" -eq 3 ]]; then
+            mcp-publisher login github-oidc
+            if ! mcp-publisher publish; then
+              node scripts/prove-mcp-registry-record.mjs
+            fi
+          elif [[ "$probe_status" -ne 0 ]]; then
+            exit "$probe_status"
+          fi
+      - name: Prove the exact official MCP Registry record
+        shell: bash
+        run: |
+          set -euo pipefail
+          proof_succeeded=false
+          for attempt in {1..12}; do
+            if node scripts/prove-mcp-registry-record.mjs; then
+              proof_succeeded=true
+              break
+            fi
+            if [[ "$attempt" -lt 12 ]]; then
+              sleep 10
+            fi
+          done
+          test "$proof_succeeded" = true
 
   github-release:
-    needs: publish-npm
+    needs: [publish-npm, publish-mcp-registry]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -149,11 +241,31 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_VERSION: ${{ inputs.expected_version }}
           RELEASE_COMMIT: ${{ needs.publish-npm.outputs.reviewed-commit }}
-          MCP_INTEGRITY: ${{ needs.publish-npm.outputs.integrity }}
+          RELEASE_ARTIFACTS: ${{ needs.publish-npm.outputs.artifacts }}
         run: |
           set -euo pipefail
           tag="v$RELEASE_VERSION"
-          release_note="Published from $RELEASE_COMMIT with reviewed @buzzr/mcp integrity $MCP_INTEGRITY."
+          notes_file="$RUNNER_TEMP/release-notes.md"
+          node --input-type=module -e '
+            import assert from "node:assert/strict";
+            const artifacts = JSON.parse(process.env.RELEASE_ARTIFACTS);
+            assert.equal(artifacts.length, 5);
+            const lines = [
+              `Buzzr public toolkit release \`v${process.env.RELEASE_VERSION}\`.`,
+              "",
+              `Published from reviewed commit \`${process.env.RELEASE_COMMIT}\` through npm trusted publishing with provenance.`,
+              "",
+              "| Package | Version | npm integrity |",
+              "| --- | --- | --- |",
+            ];
+            for (const artifact of artifacts) {
+              assert.match(artifact.name, /^@buzzr\/[a-z0-9-]+$/);
+              assert.match(artifact.version, /^\d+\.\d+\.\d+$/);
+              assert.match(artifact.integrity, /^sha512-[A-Za-z0-9+/]+={0,2}$/);
+              lines.push(`| \`${artifact.name}\` | \`${artifact.version}\` | \`${artifact.integrity}\` |`);
+            }
+            process.stdout.write(`${lines.join("\n")}\n`);
+          ' > "$notes_file"
 
           if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" --silent 2>/dev/null; then
             tag_commit="$(gh api "repos/$GITHUB_REPOSITORY/commits/$tag" --jq '.sha')"
@@ -162,7 +274,10 @@ jobs:
 
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             existing_body="$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json body --jq '.body')"
-            grep -Fqx "$release_note" <<< "$existing_body"
+            EXPECTED_NOTES="$(cat "$notes_file")" EXISTING_BODY="$existing_body" node --input-type=module -e '
+              import assert from "node:assert/strict";
+              assert(process.env.EXISTING_BODY.includes(process.env.EXPECTED_NOTES.trim()));
+            '
             exit 0
           fi
 
@@ -171,4 +286,4 @@ jobs:
             --target "$RELEASE_COMMIT" \
             --title "$tag" \
             --generate-notes \
-            --notes "$release_note"
+            --notes-file "$notes_file"

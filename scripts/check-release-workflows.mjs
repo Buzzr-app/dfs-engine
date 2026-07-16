@@ -33,7 +33,11 @@ for (const { path, body } of workflows) {
 }
 
 const ci = workflows.find(({ path }) => path.endsWith('/ci.yml'))?.body ?? '';
-assert.match(ci, /^permissions:\n  contents:\s+read$/m, 'CI must use explicit read-only permissions');
+assert.match(
+  ci,
+  /^permissions:\n  contents:\s+read$/m,
+  'CI must use explicit read-only permissions',
+);
 for (const command of [
   'npm run check:docs',
   'npm run check:links',
@@ -44,7 +48,11 @@ for (const command of [
 
 const proof = workflows.find(({ path }) => path.endsWith('/prove-mcp-published.yml'))?.body ?? '';
 for (const input of ['expected_version', 'expected_integrity', 'expected_git_head']) {
-  assert.match(proof, new RegExp(`^      ${input}:$`, 'm'), `published proof must require ${input}`);
+  assert.match(
+    proof,
+    new RegExp(`^      ${input}:$`, 'm'),
+    `published proof must require ${input}`,
+  );
 }
 
 const release = workflows.find(({ path }) => path.endsWith('/release.yml'))?.body ?? '';
@@ -60,12 +68,15 @@ assert.match(
 );
 const authorizeJobStart = release.indexOf('  authorize-release:');
 const publishJobStart = release.indexOf('  publish-npm:');
+const registryJobStart = release.indexOf('  publish-mcp-registry:');
 const githubReleaseJobStart = release.indexOf('  github-release:');
 assert.notEqual(authorizeJobStart, -1, 'release must define the authorization job');
 assert.notEqual(publishJobStart, -1, 'release must define the npm publish job');
+assert.notEqual(registryJobStart, -1, 'release must define the MCP Registry publish job');
 assert.notEqual(githubReleaseJobStart, -1, 'release must define the GitHub release job');
 const authorizeJob = release.slice(authorizeJobStart, publishJobStart);
-const publishJob = release.slice(publishJobStart, githubReleaseJobStart);
+const publishJob = release.slice(publishJobStart, registryJobStart);
+const registryJob = release.slice(registryJobStart, githubReleaseJobStart);
 assert.match(
   authorizeJob,
   /^    permissions:\n      contents:\s+read$/m,
@@ -117,7 +128,11 @@ assert.match(
 );
 assert.match(release, /npm exec changeset publish/, 'release must publish through Changesets');
 assert.match(release, /NPM_CONFIG_PROVENANCE:\s+['"]true['"]/, 'release must request provenance');
-assert.match(release, /npm run proof:mcp:published/, 'release must prove the exact live MCP artifact');
+assert.match(
+  release,
+  /npm run proof:mcp:published/,
+  'release must prove the exact live MCP artifact',
+);
 assert.match(release, /gh release create/, 'release must create the reviewed GitHub release');
 assert.match(release, /gh release view/, 'GitHub release creation must be safe to rerun');
 assert.doesNotMatch(release, /NPM_TOKEN|NODE_AUTH_TOKEN|secrets\./, 'release must not use tokens');
@@ -209,7 +224,11 @@ assert.doesNotMatch(
   'MCP publication must not execute a curl pipe or resolve a mutable latest asset',
 );
 assert.match(release, /mcp-publisher login github-oidc/, 'MCP publication must use GitHub OIDC');
-assert.match(release, /mcp-publisher publish/, 'release must publish server.json to the MCP Registry');
+assert.match(
+  release,
+  /mcp-publisher publish/,
+  'release must publish server.json to the MCP Registry',
+);
 assert.match(
   release,
   /node scripts\/prove-mcp-registry-record\.mjs/,
@@ -220,8 +239,57 @@ assert.match(
   /registry\.modelcontextprotocol\.io\/v0\.1\/servers/,
   'MCP registry proof must use the official frozen v0.1 API',
 );
+assert.match(
+  registryJob,
+  /^    needs:\s+publish-npm$/m,
+  'MCP Registry publication must wait for the complete npm proof',
+);
+assert.match(
+  registryJob,
+  /^    permissions:\n      contents:\s+read\n      id-token:\s+write$/m,
+  'MCP Registry publication must use only contents-read and OIDC permissions',
+);
+const registryMainCheck = registryJob.indexOf('name: Revalidate current main before checkout');
+const registryCheckout = registryJob.indexOf('uses: actions/checkout@');
+assert.ok(
+  registryMainCheck >= 0 && registryMainCheck < registryCheckout,
+  'the MCP OIDC job must revalidate current main before checking out repository code',
+);
+assert.doesNotMatch(
+  registryJob.slice(0, registryMainCheck),
+  /^\s+(uses|run):/m,
+  'the current-main revalidation must be the MCP OIDC job first step',
+);
+const publisherDownload = registryJob.indexOf('curl --proto');
+const publisherChecksum = registryJob.indexOf('sha256sum --check --strict');
+const publisherExtract = registryJob.indexOf('tar --extract');
+assert.ok(
+  publisherDownload >= 0 &&
+    publisherDownload < publisherChecksum &&
+    publisherChecksum < publisherExtract,
+  'MCP publisher must be downloaded, checksum-verified, then extracted in that order',
+);
+assert.match(
+  registryJob,
+  /MCP_REGISTRY_ALLOW_MISSING=1/,
+  'reruns must distinguish an exact existing MCP record from a missing record',
+);
+assert.match(
+  release,
+  /^  github-release:\n    needs:\s+\[publish-npm, publish-mcp-registry\]$/m,
+  'GitHub release creation must wait for both npm and MCP Registry proof',
+);
 assert.match(rootPackage.scripts.verify, /npm run check:workflows/, 'verify must check workflows');
-assert.match(rootPackage.scripts.verify, /npm run audit:high/, 'verify must reject high-risk advisories');
+assert.match(
+  rootPackage.scripts.verify,
+  /npm run test:release-supply-chain/,
+  'verify must execute release supply-chain regression tests',
+);
+assert.match(
+  rootPackage.scripts.verify,
+  /npm run audit:high/,
+  'verify must reject high-risk advisories',
+);
 assert.equal(
   rootPackage.scripts['check:links'],
   'node scripts/check-doc-links.mjs',
@@ -232,6 +300,10 @@ assert.equal(
   'node scripts/check-doc-links.mjs --external',
   'package scripts must expose the external documentation link check',
 );
-assert.match(rootPackage.scripts.verify, /npm run check:links/, 'verify must check local doc links');
+assert.match(
+  rootPackage.scripts.verify,
+  /npm run check:links/,
+  'verify must check local doc links',
+);
 
 console.log(`Verified ${workflowPaths.length} release workflows use bounded, immutable controls.`);

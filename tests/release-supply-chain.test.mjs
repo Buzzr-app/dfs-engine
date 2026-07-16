@@ -82,6 +82,7 @@ function releaseManifest(definitions = packageDefinitions) {
     tag: 'v5.1.0',
     registry: {
       npm: 'https://registry.npmjs.org/',
+      mcpApi: 'https://registry.modelcontextprotocol.io/v0.1',
       mcpServerName: 'io.github.Buzzr-app/dfs-engine',
       mcpPackage: '@buzzr/mcp',
       repository: 'https://github.com/Buzzr-app/dfs-engine',
@@ -141,7 +142,7 @@ async function createFixture({ definitions = packageDefinitions, manifest, chang
       },
     ],
   });
-  await writeJson(root, 'release-manifest.json', manifest ?? releaseManifest(definitions));
+  await writeJson(root, 'release-manifest.json', manifest ?? releaseManifest());
   await writeJson(root, '.changeset/config.json', {});
   if (changeset) {
     await writeFile(join(root, '.changeset', 'leftover.md'), changeset);
@@ -158,7 +159,9 @@ function runChecker(root) {
 }
 
 afterEach(async () => {
-  await Promise.all(temporaryRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
+  await Promise.all(
+    temporaryRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })),
+  );
 });
 
 test('accepts the exact reviewed ten-package and five-publish release manifest', async () => {

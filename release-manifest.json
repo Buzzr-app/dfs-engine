@@ -1,0 +1,101 @@
+{
+  "releaseVersion": "5.1.0",
+  "tag": "v5.1.0",
+  "registry": {
+    "npm": "https://registry.npmjs.org/",
+    "mcpApi": "https://registry.modelcontextprotocol.io/v0.1",
+    "mcpServerName": "io.github.Buzzr-app/dfs-engine",
+    "mcpPackage": "@buzzr/mcp",
+    "repository": "https://github.com/Buzzr-app/dfs-engine",
+    "workflowPath": ".github/workflows/release.yml",
+    "ref": "refs/heads/main"
+  },
+  "packages": [
+    {
+      "name": "@buzzr/bets-core",
+      "path": "packages/bets-core",
+      "version": "5.0.0",
+      "publish": false,
+      "internalDependencies": {}
+    },
+    {
+      "name": "@buzzr/dfs-cli",
+      "path": "packages/dfs-cli",
+      "version": "5.0.1",
+      "publish": true,
+      "internalDependencies": {
+        "@buzzr/dfs-engine": "^5.1.0"
+      }
+    },
+    {
+      "name": "@buzzr/dfs-engine",
+      "path": "packages/dfs-engine",
+      "version": "5.1.0",
+      "publish": true,
+      "internalDependencies": {}
+    },
+    {
+      "name": "@buzzr/dfs-engine-test-vectors",
+      "path": "packages/dfs-engine-test-vectors",
+      "version": "5.1.0",
+      "publish": true,
+      "internalDependencies": {
+        "@buzzr/dfs-engine": "5.1.0"
+      }
+    },
+    {
+      "name": "@buzzr/dfs-provider-espn",
+      "path": "packages/dfs-provider-espn",
+      "version": "5.0.0",
+      "publish": false,
+      "internalDependencies": {
+        "@buzzr/dfs-engine": "^5.0.0"
+      }
+    },
+    {
+      "name": "@buzzr/dfs-provider-sportradar",
+      "path": "packages/dfs-provider-sportradar",
+      "version": "5.0.0",
+      "publish": false,
+      "internalDependencies": {
+        "@buzzr/dfs-engine": "^5.0.0"
+      }
+    },
+    {
+      "name": "@buzzr/dfs-react",
+      "path": "packages/dfs-react",
+      "version": "5.0.0",
+      "publish": false,
+      "internalDependencies": {
+        "@buzzr/dfs-engine": "^5.0.0"
+      }
+    },
+    {
+      "name": "@buzzr/dfs-testkit",
+      "path": "packages/dfs-testkit",
+      "version": "5.0.1",
+      "publish": true,
+      "internalDependencies": {
+        "@buzzr/dfs-engine": "^5.1.0"
+      }
+    },
+    {
+      "name": "@buzzr/entertainment-engine",
+      "path": "packages/entertainment-engine",
+      "version": "5.0.0",
+      "publish": false,
+      "internalDependencies": {}
+    },
+    {
+      "name": "@buzzr/mcp",
+      "path": "packages/mcp",
+      "version": "5.1.0",
+      "publish": true,
+      "internalDependencies": {
+        "@buzzr/bets-core": "5.0.0",
+        "@buzzr/dfs-engine": "5.1.0",
+        "@buzzr/entertainment-engine": "5.0.0"
+      }
+    }
+  ]
+}
