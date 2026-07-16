@@ -51,6 +51,15 @@ describe('release guardrails', () => {
     expect(workflow).toContain('npm run proof:mcp:published');
   });
 
+  test('proves an immutable published MCP artifact without forwarding parent secrets', () => {
+    const proof = readText('scripts/prove-mcp-published.mjs');
+
+    expect(proof).not.toContain('...process.env');
+    expect(proof).toContain('@buzzr/mcp@${expectedVersion}');
+    expect(proof).toContain('dist.integrity');
+    expect(proof).toContain('assert.match(expectedVersion');
+  });
+
   test('keeps runtime dependencies intentionally tiny', () => {
     const betsCore = readPackageJson('packages/bets-core/package.json');
     const engine = readPackageJson('packages/dfs-engine/package.json');
