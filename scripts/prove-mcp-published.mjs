@@ -23,6 +23,13 @@ const coreToolNames = [
   'rank_games',
 ];
 
+function execNpm(args, options) {
+  if (process.env.npm_execpath) {
+    return execFileAsync(process.execPath, [process.env.npm_execpath, ...args], options);
+  }
+  return execFileAsync(process.platform === 'win32' ? 'npm.cmd' : 'npm', args, options);
+}
+
 function parseToolResult(result) {
   assert.equal(result.content.length, 1);
   assert.equal(result.content[0].type, 'text');
@@ -61,8 +68,7 @@ const environment = {
 };
 
 try {
-  const { stdout: latestOutput } = await execFileAsync(
-    'npm',
+  const { stdout: latestOutput } = await execNpm(
     ['view', '@buzzr/mcp', 'dist-tags.latest', '--json'],
     { cwd: temporaryRoot, env: environment },
   );

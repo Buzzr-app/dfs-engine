@@ -32,6 +32,13 @@ const coreToolNames = [
 ];
 const maxCapturedBytes = 256 * 1024;
 
+function execNpm(args, options) {
+  if (process.env.npm_execpath) {
+    return execFileAsync(process.execPath, [process.env.npm_execpath, ...args], options);
+  }
+  return execFileAsync(process.platform === 'win32' ? 'npm.cmd' : 'npm', args, options);
+}
+
 function captureOutput(capture, chunk, label) {
   if (capture.overflow) {
     return;
@@ -70,8 +77,7 @@ function commandEnvironment(cache) {
 }
 
 async function packWorkspace(workspace, destination, cache) {
-  const { stdout } = await execFileAsync(
-    'npm',
+  const { stdout } = await execNpm(
     ['pack', '--workspace', workspace, '--json', '--pack-destination', destination],
     { cwd: root, env: commandEnvironment(cache), maxBuffer: 10 * 1024 * 1024 },
   );
@@ -321,15 +327,11 @@ try {
   assert.notEqual(cliFile.mode & 0o111, 0, 'Packed MCP CLI is not executable');
 
   const tarballs = packed.map((artifact) => join(packsDirectory, artifact.filename));
-  await execFileAsync(
-    'npm',
-    ['install', '--ignore-scripts', '--no-audit', '--no-fund', ...tarballs],
-    {
-      cwd: consumerDirectory,
-      env: commandEnvironment(cache),
-      maxBuffer: 20 * 1024 * 1024,
-    },
-  );
+  await execNpm(['install', '--ignore-scripts', '--no-audit', '--no-fund', ...tarballs], {
+    cwd: consumerDirectory,
+    env: commandEnvironment(cache),
+    maxBuffer: 20 * 1024 * 1024,
+  });
 
   const installedPackagePath = join(consumerDirectory, 'node_modules', '@buzzr', 'mcp');
   const installedManifest = JSON.parse(
