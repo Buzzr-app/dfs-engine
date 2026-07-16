@@ -8,6 +8,7 @@ import {
 
 const PRIZEPICKS_PAYOUTS_URL = 'https://www.prizepicks.com/help-center/payouts';
 const PRIZEPICKS_OUTCOMES_URL = 'https://www.prizepicks.com/help-center/potential-outcomes';
+const PRIZEPICKS_DNP_URL = 'https://www.prizepicks.com/help-center/dnps-reboots-and-ties';
 const UNDERDOG_LEGAL_URL = 'https://legal.underdogsports.com/';
 
 function leg(index: number): DfsLegInput {
@@ -190,6 +191,7 @@ describe('built-in policy truthfulness', () => {
       sources: expect.arrayContaining([
         expect.objectContaining({ url: PRIZEPICKS_PAYOUTS_URL, retrievedAt: '2026-07-16' }),
         expect.objectContaining({ url: PRIZEPICKS_OUTCOMES_URL, retrievedAt: '2026-07-16' }),
+        expect.objectContaining({ url: PRIZEPICKS_DNP_URL, retrievedAt: '2026-07-16' }),
       ]),
     });
     expect(underdog).toMatchObject({
