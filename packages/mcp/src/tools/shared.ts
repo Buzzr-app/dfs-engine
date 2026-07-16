@@ -6,6 +6,7 @@ const MAX_VALIDATION_MESSAGE_LENGTH = 200;
 const MAX_VALIDATION_PATH_SEGMENTS = 8;
 const MAX_VALIDATION_PATH_STRING_LENGTH = 64;
 const MAX_TOOL_RESULT_BYTES = 1_048_576;
+let processWideInFlightCalls = 0;
 const RESULT_SERIALIZATION_FAILED = {
   error: {
     code: 'result_serialization_failed',
@@ -106,19 +107,17 @@ export function defineTool<Schema extends z.ZodType>(definition: {
   inputSchema: Schema;
   run: (input: z.output<Schema>) => Promise<ToolResult> | ToolResult;
 }): BuzzrToolDefinition {
-  let inFlightCalls = 0;
-
   return {
     name: definition.name,
     title: definition.title,
     description: definition.description,
     inputSchema: definition.inputSchema,
     handler: async (args: unknown): Promise<ToolResult> => {
-      if (inFlightCalls >= MAX_IN_FLIGHT_CALLS) {
+      if (processWideInFlightCalls >= MAX_IN_FLIGHT_CALLS) {
         return errorResult('server_busy', 'The server is handling too many requests. Retry later.');
       }
 
-      inFlightCalls += 1;
+      processWideInFlightCalls += 1;
       try {
         const parsed = definition.inputSchema.safeParse(args ?? {});
         if (!parsed.success) {
@@ -132,7 +131,7 @@ export function defineTool<Schema extends z.ZodType>(definition: {
       } catch {
         return errorResult('tool_execution_failed', 'Tool execution failed.');
       } finally {
-        inFlightCalls -= 1;
+        processWideInFlightCalls -= 1;
       }
     },
   };
