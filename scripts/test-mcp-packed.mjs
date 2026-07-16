@@ -39,6 +39,13 @@ function execNpm(args, options) {
   return execFileAsync(process.platform === 'win32' ? 'npm.cmd' : 'npm', args, options);
 }
 
+function npmCommand(args) {
+  if (process.env.npm_execpath) {
+    return { command: process.execPath, args: [process.env.npm_execpath, ...args] };
+  }
+  return { command: process.platform === 'win32' ? 'npm.cmd' : 'npm', args };
+}
+
 function captureOutput(capture, chunk, label) {
   if (capture.overflow) {
     return;
@@ -94,9 +101,10 @@ function parseToolResult(result) {
 }
 
 async function exerciseRealClient(consumerDirectory, cache, expectedVersion) {
+  const npm = npmCommand(['exec', '--offline', '--', 'mcp']);
   const transport = new StdioClientTransport({
-    command: 'npm',
-    args: ['exec', '--offline', '--', 'mcp'],
+    command: npm.command,
+    args: npm.args,
     cwd: consumerDirectory,
     env: commandEnvironment(cache),
     stderr: 'pipe',
@@ -324,7 +332,9 @@ try {
   assert(mcpPack, 'Missing packed @buzzr/mcp artifact');
   const cliFile = mcpPack.files.find((file) => file.path === 'dist/cli.js');
   assert(cliFile, 'Packed @buzzr/mcp is missing dist/cli.js');
-  assert.notEqual(cliFile.mode & 0o111, 0, 'Packed MCP CLI is not executable');
+  if (process.platform !== 'win32') {
+    assert.notEqual(cliFile.mode & 0o111, 0, 'Packed MCP CLI is not executable');
+  }
 
   const tarballs = packed.map((artifact) => join(packsDirectory, artifact.filename));
   await execNpm(['install', '--ignore-scripts', '--no-audit', '--no-fund', ...tarballs], {

@@ -80,7 +80,7 @@ try {
   );
 
   const transport = new StdioClientTransport({
-    command: 'npx',
+    command: process.platform === 'win32' ? 'npx.cmd' : 'npx',
     args: ['-y', '@buzzr/mcp'],
     cwd: temporaryRoot,
     env: environment,
