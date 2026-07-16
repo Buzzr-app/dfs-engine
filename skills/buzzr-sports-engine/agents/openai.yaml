@@ -1,0 +1,8 @@
+interface:
+  display_name: "Buzzr Sports Engine"
+  short_description: "Auditable sports math and DFS settlement"
+  brand_color: "#FF6B35"
+  default_prompt: "Use $buzzr-sports-engine to settle a DFS entry or calculate sportsbook odds with explicit provenance."
+
+policy:
+  allow_implicit_invocation: true
