@@ -18,6 +18,11 @@ function requirePattern(text, pattern, message) {
 }
 
 const clientContracts = [
+  [
+    'Smithery',
+    /### Smithery/,
+    /npx -y smithery@1\.2\.0 mcp add sarveshsea\/buzzr-sports-engine --client codex/,
+  ],
   ['Claude Desktop', /### Claude Desktop/, /claude_desktop_config\.json/],
   [
     'Claude Code',
@@ -33,6 +38,13 @@ for (const [client, heading, setup] of clientContracts) {
   requirePattern(readme, heading, `@buzzr/mcp README must have a separate ${client} setup section`);
   requirePattern(readme, setup, `@buzzr/mcp README must provide copy-paste ${client} setup`);
 }
+
+requirePattern(readme, /local stdio MCPB/i, 'README must identify Smithery as local stdio');
+requirePattern(
+  readme,
+  /not a hosted HTTP service/i,
+  'README must not describe the Smithery distribution as a hosted MCP service',
+);
 
 for (const discoveryTerm of [
   /`initialize`/,

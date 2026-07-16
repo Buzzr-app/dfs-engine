@@ -8,7 +8,7 @@ This document defines the public package and local MCP security boundary. It is 
 - Integrity of the policy/table version and source metadata used for a decision.
 - Availability of the local MCP process.
 - Confidentiality of entries, bet history, identifiers, provider rows, and host environment data.
-- Integrity and provenance of published npm and GitHub release artifacts.
+- Integrity and provenance of published npm, GitHub, and Smithery release artifacts.
 
 ## Trust boundaries
 
@@ -18,6 +18,7 @@ This document defines the public package and local MCP security boundary. It is 
 | Data loader → `StatProvider` | Provider contract and runtime validator | Network/vendor response mapped by the caller |
 | MCP client → stdio server | Packed server artifact and MCP SDK | JSON-RPC frames, strings, arrays, IDs, odds, entries, game/history data |
 | npm/GitHub → local install | Reviewed release workflow, digest, `gitHead`, provenance | Registry/network delivery until verified |
+| Smithery → local install | Exact MCPB digest and runtime-discovered server card | Registry/network delivery until downloaded and verified |
 | Engine result → user decision | Deterministic output for the supplied profile and data | Operator rules, displayed terms, and real-world rulings outside the engine |
 
 The core engines trust neither caller input nor operator-named compatibility data as proof of a real operator outcome. Validate at system boundaries and retain the result's verification and provenance fields.
@@ -58,6 +59,12 @@ An MCP host can expose other capabilities in the same session. Treat text echoed
 
 Release proof must bind an npm artifact to the reviewed exact version, SHA-512 integrity, registry tarball origin, Git `gitHead`, and provenance attestation. CI uses packed-artifact real-client tests before publication, and the published proof runs in isolated temporary npm/home state with lifecycle scripts disabled.
 
+The Smithery MCPB repackages that exact npm artifact without adding secrets or
+a network transport. Publication discovers the full tool schemas from the real
+server, waits for a successful registry release, downloads the registry copy,
+compares its SHA-256 digest with the uploaded bundle, and replays the real-client
+proof against the downloaded bytes.
+
 Run `npm run audit:high` and `npm run verify` before release. An audit result is one signal, not proof that dependencies or the registry are uncompromised.
 
 ### Operator and financial risk
@@ -69,6 +76,7 @@ Odds, expected-value, Kelly, and settlement outputs are calculations from suppli
 ## Deployment guidance
 
 - Keep MCP on local stdio unless an embedding application adds its own authentication, authorization, rate limiting, TLS, request isolation, and audit policy.
+- Treat the Smithery listing as a local stdio distribution, not as a hosted service or a new trust boundary for tool calls.
 - Pin `@buzzr/mcp@5.1.0` when repeatability matters.
 - Run the server as a non-privileged user with the smallest environment and filesystem access the host permits.
 - Do not place secrets in MCP configuration because Buzzr needs none.

@@ -28,6 +28,22 @@ The server speaks MCP over stdio: JSON-RPC on stdin/stdout, logs on stderr.
 It exposes 11 tools with bounded inputs and outputs, and does not fetch live
 odds, box scores, operator accounts, or private user data.
 
+### Smithery
+
+The [Buzzr Sports Engine listing on
+Smithery](https://smithery.ai/servers/sarveshsea/buzzr-sports-engine) packages
+the exact published `@buzzr/mcp@5.1.0` artifact as a local stdio MCPB. It is a
+distribution and installation surface, not a hosted HTTP service. To add it to
+Codex through Smithery:
+
+```sh
+npx -y smithery@1.2.0 mcp add sarveshsea/buzzr-sports-engine --client codex
+```
+
+Smithery writes the corresponding MCP configuration for the selected client.
+Use the direct npm command above when you need both the server package and its
+launcher configuration pinned explicitly.
+
 ### Claude Desktop
 
 Add this to `claude_desktop_config.json` from **Settings → Developer → Edit

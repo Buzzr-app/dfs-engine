@@ -156,6 +156,19 @@ Add to your MCP client config (Claude Desktop, Claude Code, Cursor, …):
 
 The server exposes 11 tools for DFS validation and settlement, odds and bet-history math, and game scoring. It performs deterministic computation only; it does not fetch operator accounts, live odds, or box scores. See the [MCP install, client configuration, tool catalog, and error contracts](packages/mcp/README.md).
 
+The same exact `@buzzr/mcp@5.1.0` artifact is also published as the
+[Buzzr Sports Engine on Smithery](https://smithery.ai/servers/sarveshsea/buzzr-sports-engine).
+Smithery distributes it as a local stdio MCPB, so the tools still run on your
+machine and do not become a hosted HTTP service. For a Codex install through
+Smithery:
+
+```sh
+npx -y smithery@1.2.0 mcp add sarveshsea/buzzr-sports-engine --client codex
+```
+
+Use the direct version-pinned npm configuration above when you also need to pin
+the launcher rather than accept the Smithery-generated runner configuration.
+
 ## Verified Buzzr app integration
 
 The Buzzr mobile app’s `release/ios-2.0.0` branch vendors `@buzzr/bets-core`, `@buzzr/dfs-engine`, and `@buzzr/entertainment-engine` as local 5.0.0 tarballs and imports all three. That verified snapshot is not automatically upgraded to the public 5.1.0 toolkit; an app update remains a separate, deliberate release task.
@@ -209,6 +222,7 @@ For settlement correctness or security-sensitive issues, follow [SECURITY.md](SE
 - [All-package API index](docs/api-reference.md) — supported roots for all ten packages
 - [Buzzr Sports Engine skill](skills/buzzr-sports-engine/SKILL.md) — Codex workflow and safety contract
 - [MCP configuration](packages/mcp/README.md) — install and client setup
+- [Smithery distribution](https://smithery.ai/servers/sarveshsea/buzzr-sports-engine) — local stdio MCPB for all 11 tools
 
 ## License
 

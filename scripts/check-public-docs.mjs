@@ -233,8 +233,17 @@ for (const spec of packageReadmes) {
 
 for (const key of ['root', 'llms', 'mcp']) {
   requirePattern(key, /\b11 tools\b/i, 'state the current MCP tool count');
+  requireText(
+    key,
+    'https://smithery.ai/servers/sarveshsea/buzzr-sports-engine',
+    'link the live Smithery distribution',
+  );
 }
 requirePattern('agents', /\b11 tools\b/i, 'state the current MCP tool count');
+
+for (const key of ['root', 'llms', 'mcp']) {
+  requirePattern(key, /local stdio MCPB/i, 'describe the Smithery transport accurately');
+}
 
 const toolNames = [
   'grade_dfs_entry',

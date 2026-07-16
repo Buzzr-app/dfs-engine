@@ -31,6 +31,7 @@ Live app: [Buzzr Sports on the App Store](https://apps.apple.com/us/app/buzzr-sp
 - Repository skill: [skills/buzzr-sports-engine/SKILL.md](skills/buzzr-sports-engine/SKILL.md)
 - Install: `npx skills add https://github.com/Buzzr-app/dfs-engine --skill buzzr-sports-engine`
 - MCP install, client configuration, tools, and errors: [packages/mcp/README.md](packages/mcp/README.md)
+- Smithery distribution: [sarveshsea/buzzr-sports-engine](https://smithery.ai/servers/sarveshsea/buzzr-sports-engine), a local stdio MCPB containing the exact @buzzr/mcp@5.1.0 artifact and all 11 tools. It is not a hosted HTTP service.
 
 ## Docs
 
