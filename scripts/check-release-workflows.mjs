@@ -34,6 +34,13 @@ for (const { path, body } of workflows) {
 
 const ci = workflows.find(({ path }) => path.endsWith('/ci.yml'))?.body ?? '';
 assert.match(ci, /^permissions:\n  contents:\s+read$/m, 'CI must use explicit read-only permissions');
+for (const command of [
+  'npm run check:docs',
+  'npm run check:links',
+  'npm run check:links:external',
+]) {
+  assert.ok(ci.includes(`run: ${command}`), `CI must run ${command}`);
+}
 
 const proof = workflows.find(({ path }) => path.endsWith('/prove-mcp-published.yml'))?.body ?? '';
 for (const input of ['expected_version', 'expected_integrity', 'expected_git_head']) {
@@ -147,5 +154,16 @@ assert.match(docsDeploy, /^      id-token:\s+write$/m, 'only docs deploy may min
 const rootPackage = JSON.parse(await readFile('package.json', 'utf8'));
 assert.match(rootPackage.scripts.verify, /npm run check:workflows/, 'verify must check workflows');
 assert.match(rootPackage.scripts.verify, /npm run audit:high/, 'verify must reject high-risk advisories');
+assert.equal(
+  rootPackage.scripts['check:links'],
+  'node scripts/check-doc-links.mjs',
+  'package scripts must expose the complete local documentation link check',
+);
+assert.equal(
+  rootPackage.scripts['check:links:external'],
+  'node scripts/check-doc-links.mjs --external',
+  'package scripts must expose the external documentation link check',
+);
+assert.match(rootPackage.scripts.verify, /npm run check:links/, 'verify must check local doc links');
 
 console.log(`Verified ${workflowPaths.length} release workflows use bounded, immutable controls.`);
