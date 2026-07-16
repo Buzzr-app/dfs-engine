@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -13,8 +13,41 @@ const publishedProof = readFileSync(
   resolve(here, '../../../scripts/prove-mcp-published.mjs'),
   'utf8',
 );
+const rootManifest = JSON.parse(readFileSync(resolve(here, '../../../package.json'), 'utf8')) as {
+  scripts: Record<string, string>;
+};
+const ciWorkflow = readFileSync(resolve(here, '../../../.github/workflows/ci.yml'), 'utf8');
+const packedReleaseProofPath = resolve(here, '../../../scripts/test-release-artifacts.mjs');
 
 describe('release safety contracts', () => {
+  it('proves every public package from clean packed artifacts on Node 22', () => {
+    expect(rootManifest.scripts['test:packages:packed']).toBe(
+      'node scripts/test-release-artifacts.mjs',
+    );
+    expect(rootManifest.scripts.verify).toContain('npm run test:packages:packed');
+    expect(ciWorkflow).toContain('npm run test:packages:packed');
+    expect(existsSync(packedReleaseProofPath)).toBe(true);
+
+    if (!existsSync(packedReleaseProofPath)) return;
+    const packedReleaseProof = readFileSync(packedReleaseProofPath, 'utf8');
+    for (const packageName of [
+      '@buzzr/bets-core',
+      '@buzzr/dfs-cli',
+      '@buzzr/dfs-engine',
+      '@buzzr/dfs-engine-test-vectors',
+      '@buzzr/dfs-provider-espn',
+      '@buzzr/dfs-provider-sportradar',
+      '@buzzr/dfs-react',
+      '@buzzr/dfs-testkit',
+      '@buzzr/entertainment-engine',
+      '@buzzr/mcp',
+    ]) {
+      expect(packedReleaseProof).toContain(`'${packageName}'`);
+    }
+    expect(packedReleaseProof).toContain("'--ignore-scripts'");
+    expect(packedReleaseProof).toContain("'--package-lock=false'");
+  });
+
   it('derives the advertised server version from the package manifest', () => {
     expect(serverSource).toContain("from '../package.json'");
     expect(serverSource).not.toMatch(/SERVER_VERSION\s*=\s*['"`]\d/);
