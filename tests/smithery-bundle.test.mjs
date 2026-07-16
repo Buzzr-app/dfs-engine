@@ -83,10 +83,7 @@ test('rejects unsafe Smithery manifest inputs', async () => {
 test('derives a path-safe immutable MCPB filename from the exact version', async () => {
   const { smitheryBundleFilename } = await import('../scripts/lib/smithery-bundle.mjs');
 
-  assert.equal(
-    smitheryBundleFilename('5.1.0'),
-    'buzzr-sports-engine-5.1.0.mcpb',
-  );
+  assert.equal(smitheryBundleFilename('5.1.0'), 'buzzr-sports-engine-5.1.0.mcpb');
   assert.throws(() => smitheryBundleFilename('../../escape'), /semantic version/i);
 });
 
@@ -94,5 +91,8 @@ test('the release gate builds and proves the MCPB on every supported platform', 
   assert.equal(rootManifest.scripts['build:mcpb'], 'node scripts/build-smithery-bundle.mjs');
   assert.equal(rootManifest.scripts['proof:mcpb'], 'node scripts/prove-smithery-bundle.mjs');
   assert.match(rootManifest.scripts.verify, /npm run build:mcpb && npm run proof:mcpb/);
-  assert.match(ciWorkflow, /mcp-packed-platforms:[\s\S]*run: npm run build:mcpb[\s\S]*run: npm run proof:mcpb/);
+  assert.match(
+    ciWorkflow,
+    /mcp-packed-platforms:[\s\S]*run: npm run build:mcpb[\s\S]*run: npm run proof:mcpb/,
+  );
 });

@@ -1,0 +1,13 @@
+{
+  "name": "buzzr-sports-engine-mcpb-runtime",
+  "version": "5.1.0",
+  "private": true,
+  "description": "Locked runtime dependency graph for the Buzzr Sports Engine Smithery MCPB.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@buzzr/mcp": "5.1.0"
+  }
+}

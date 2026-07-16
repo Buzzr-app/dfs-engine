@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "qualifiedName": "sarveshsea/buzzr-sports-engine",
+  "package": "@buzzr/mcp",
+  "version": "5.1.0",
+  "gitHead": "c26ad054f999ea726eb29c93d75e5a0dd8a7ea7e",
+  "integrity": "sha512-5xWiYpL0CY4qtHWd9r23SnII4eBxFmr1D6jKilEV8BItleTsT3b8vBLr3F4id0YejlRGxPjeW/68Z4QCa1FzbA==",
+  "tarball": "https://registry.npmjs.org/@buzzr/mcp/-/mcp-5.1.0.tgz",
+  "registry": "https://registry.npmjs.org/"
+}
