@@ -122,4 +122,48 @@ describe('tool handler safety boundary', () => {
     releases.at(-1)?.();
     expect((parseResult(await recovered).index as number) ?? -1).toBe(33);
   });
+
+  it('shares the 32-call limit across distinct tool definitions', async () => {
+    const releases: Array<() => void> = [];
+    const buildHeldTool = (name: string) =>
+      defineTool({
+        name,
+        title: name,
+        description: 'Test-only tool.',
+        inputSchema: z.object({ index: z.number().int() }),
+        run: async ({ index }) => {
+          await new Promise<void>((resolve) => releases.push(resolve));
+          return jsonResult({ index });
+        },
+      });
+    const firstTool = buildHeldTool('global_limit_first');
+    const secondTool = buildHeldTool('global_limit_second');
+
+    const accepted = [
+      ...Array.from({ length: 20 }, (_, index) => firstTool.handler({ index })),
+      ...Array.from({ length: 12 }, (_, index) => secondTool.handler({ index: index + 20 })),
+    ];
+    await Promise.resolve();
+
+    const extraCall = secondTool.handler({ index: 32 });
+    let observed: ToolResult | null = null;
+    try {
+      observed = await Promise.race([
+        extraCall,
+        new Promise<null>((resolve) => setImmediate(() => resolve(null))),
+      ]);
+
+      expect(observed).not.toBeNull();
+      expect(observed?.isError).toBe(true);
+      expect(parseResult(observed as ToolResult).error).toEqual({
+        code: 'server_busy',
+        message: 'The server is handling too many requests. Retry later.',
+      });
+    } finally {
+      for (const release of releases) {
+        release();
+      }
+      await Promise.all([...accepted, extraCall]);
+    }
+  });
 });
