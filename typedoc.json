@@ -29,5 +29,6 @@
     "includeGroups": true
   },
   "githubPages": true,
-  "hideGenerator": true
+  "hideGenerator": true,
+  "treatWarningsAsErrors": true
 }
