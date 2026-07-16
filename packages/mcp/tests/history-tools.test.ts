@@ -71,6 +71,8 @@ describe('summarize_bet_history', () => {
     ['invalid placedAt', { bets: [bet({ placedAt: 'yesterday' })] }],
     ['invalid settledAt', { bets: [bet({ settledAt: 'tomorrow maybe' })] }],
     ['non-finite stake', { bets: [bet({ stake: Number.NaN })] }],
+    ['American odds between -100 and +100', { bets: [bet({ americanOdds: 99 })] }],
+    ['American odds above the magnitude limit', { bets: [bet({ americanOdds: -100_001 })] }],
   ])('rejects %s', async (_label, input) => {
     const result = await summarizeBetHistoryTool.handler(input);
 
