@@ -8,7 +8,7 @@ import {
 
 const PRIZEPICKS_PAYOUTS_URL = 'https://www.prizepicks.com/help-center/payouts';
 const PRIZEPICKS_OUTCOMES_URL = 'https://www.prizepicks.com/help-center/potential-outcomes';
-const UNDERDOG_LEGAL_URL = 'https://legal.underdogfantasy.com/';
+const UNDERDOG_LEGAL_URL = 'https://legal.underdogsports.com/';
 
 function leg(index: number): DfsLegInput {
   return {
