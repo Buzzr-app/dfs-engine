@@ -191,9 +191,9 @@ describe('grade_dfs_entries', () => {
 
   it.each([
     [
-      'more than 50 entries',
+      'more than 25 entries',
       {
-        entries: Array.from({ length: 51 }, (_, index) =>
+        entries: Array.from({ length: 26 }, (_, index) =>
           buildEntry({ entryId: `entry-${index}` }),
         ),
       },

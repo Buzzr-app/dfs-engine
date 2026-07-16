@@ -66,7 +66,7 @@ or in `.mcp.json`:
 | Tool                    | Engine                      | What it does                                                                                                                               |
 | ----------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | `grade_dfs_entry`       | @buzzr/dfs-engine           | Settle one 1–12-leg entry and return the full result plus explanation.                                                                      |
-| `grade_dfs_entries`     | @buzzr/dfs-engine           | Settle 1–50 entries, up to 600 total legs, with bounded concurrency and isolated failures.                                                   |
+| `grade_dfs_entries`     | @buzzr/dfs-engine           | Settle 1–25 entries, up to 300 total legs, with bounded concurrency and isolated failures.                                                   |
 | `validate_dfs_entry`    | @buzzr/dfs-engine           | Return structured engine validation issues for a candidate entry without settling it.                                                       |
 | `list_book_policies`    | @buzzr/dfs-engine           | List authoritative executable profile snapshots and metadata-only drafts, including status, verification, sources, and complete play types. |
 | `fair_line`             | @buzzr/bets-core            | Remove vig from both sides of one two-way market.                                                                                           |
@@ -105,10 +105,11 @@ drafts are metadata, not settlement implementations.
 
 ## Error contracts
 
-- A real MCP client's transport-schema rejection is JSON-RPC `-32602`.
-- A direct exported `tool.handler(...)` call with invalid input returns a bounded
-  `invalid_input` result. This direct-handler behavior is useful in tests but is
-  not the transport failure shape.
+- Invalid tool arguments return the same bounded `invalid_input` result through
+  an MCP client transport or a direct exported `tool.handler(...)` call. At most
+  eight compact validation issues are included; raw Zod errors are never returned.
+- Malformed JSON-RPC envelopes remain protocol errors owned by the MCP SDK and
+  are distinct from a valid `tools/call` request with invalid tool arguments.
 - `validate_dfs_entry` intentionally accepts a bounded candidate object and
   returns the engine's structured validation report.
 - Execution failures return generic `isError: true` results such as

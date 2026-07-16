@@ -76,15 +76,16 @@ Built-in operator-named policies are compatibility profiles. PrizePicks is exper
 MCP client
   -> newline-delimited JSON-RPC over stdin
   -> 2 MiB frame guard
-  -> MCP SDK schema validation
+  -> MCP SDK request-envelope handling
   -> process-wide 32-call guard
+  -> bounded handler-owned Zod validation
   -> one of 11 bounded tool handlers
   -> core engine
   -> at most 1 MiB serialized JSON text result
   -> JSON-RPC over stdout
 ```
 
-Transport-schema failures are JSON-RPC `-32602`. Direct exported handler calls use the package's bounded `invalid_input` result instead. Tool runtime errors are generic and do not expose internal error messages.
+Invalid tool arguments use the same bounded `invalid_input` result over a real MCP transport and through direct exported handlers. Handler-owned validation prevents raw SDK/Zod issue lists from bypassing the result-size cap. Malformed JSON-RPC envelopes remain MCP SDK protocol errors. Tool runtime errors are generic and do not expose internal error messages.
 
 The MCP process computes only from supplied data. It does not fetch live odds, box scores, operator accounts, or private user data.
 

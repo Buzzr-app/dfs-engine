@@ -44,7 +44,7 @@ Call `list_book_policies` before grading. Use only a policy/play type reported a
 
 Supply the slip's own `bookId`, `playTypeId`, `displayedMultiplier`, stake, placed timestamp, and leg details. Supply observed stats as `actual` or `actualsByLegId`; the MCP server does not fetch box scores. Mark DNP, void, or other operator rulings explicitly when known.
 
-Run `validate_dfs_entry` before grading untrusted or generated JSON. For one entry, call `grade_dfs_entry`. For 2–50 entries, call `grade_dfs_entries` and inspect both `results` and `failures`.
+Run `validate_dfs_entry` before grading untrusted or generated JSON. For one entry, call `grade_dfs_entry`. For 2–25 entries, call `grade_dfs_entries` and inspect both `results` and `failures`.
 
 In the answer, surface:
 
@@ -86,6 +86,6 @@ Keep operator rules as effective-dated data, preserve source metadata, validate 
 
 ## Report errors honestly
 
-MCP transport schema failures may arrive as JSON-RPC `-32602`. Direct tool-handler validation returns a structured `invalid_input` result. Other public errors are intentionally generic; do not infer internal details.
+Invalid tool arguments return a structured, bounded `invalid_input` result through MCP transports and direct handlers. Malformed JSON-RPC envelopes remain protocol errors. Other public errors are intentionally generic; do not infer internal details.
 
 If the tool is unavailable, input is missing, a policy is non-executable, or settlement remains pending, say exactly that and ask only for the missing evidence needed to proceed.

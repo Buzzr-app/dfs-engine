@@ -67,9 +67,11 @@ Fixtures emit v4-canonical shapes (`actual`, `status`, per-leg `legId` keys), so
 | You want to…                                          | Reach for                                                                                       |
 | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
 | Write unit tests for your own settlement integration  | **this package**                                                                                  |
-| Prove your wiring grades identically to Buzzr's       | [`@buzzr/dfs-engine-test-vectors`](https://www.npmjs.com/package/@buzzr/dfs-engine-test-vectors)  |
+| Replay versioned engine regression fixtures           | [`@buzzr/dfs-engine-test-vectors`](https://www.npmjs.com/package/@buzzr/dfs-engine-test-vectors)  |
 | Grade entries in production code                      | [`@buzzr/dfs-engine`](https://www.npmjs.com/package/@buzzr/dfs-engine)                            |
 | Grade entries from the command line                   | [`@buzzr/dfs-cli`](https://www.npmjs.com/package/@buzzr/dfs-cli)                                  |
+
+The regression fixtures are review gates for a matching engine version, not official operator conformance.
 
 ## Links
 

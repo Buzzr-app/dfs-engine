@@ -14,8 +14,8 @@
 - Bounded input frames, payloads, identifiers, arrays, concurrency, error detail,
   and serialized results; public runtime errors no longer expose internals.
 - Kept draft policy fixtures metadata-only and non-executable.
-- Documented the real-client JSON-RPC `-32602` schema failure separately from
-  direct-handler `invalid_input` results.
+- Unified real-client and direct-handler tool validation behind bounded
+  `invalid_input` results so SDK validation cannot amplify adversarial errors.
 
 ### Documentation
 

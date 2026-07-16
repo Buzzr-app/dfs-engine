@@ -162,7 +162,7 @@ requirePattern(
 );
 requirePattern(
   'mcp',
-  /(?:transport|MCP client)[\s\S]{0,180}`invalid_input`/i,
+  /(?:invalid tool arguments[\s\S]{0,180}`invalid_input`[\s\S]{0,180}(?:transport|MCP client)|(?:transport|MCP client)[\s\S]{0,180}`invalid_input`)/i,
   'document bounded transport validation failures',
 );
 requirePattern('mcp', /1[–-]25 entries/i, 'state the current batch entry bound');
@@ -214,9 +214,8 @@ requirePattern(
   /engine regression fixtures/i,
   'describe the package as engine regression fixtures',
 );
-for (const key of ['skill', 'skillTools']) {
-  requirePattern(key, /2[–-]25 entries/i, 'state the current batch entry bound');
-}
+requirePattern('skill', /2[–-]25 entries/i, 'state the current batch entry bound');
+requirePattern('skillTools', /1[–-]25 entries/i, 'state the current batch entry bound');
 requirePattern('skillTools', /300 total legs/i, 'state the current aggregate leg bound');
 
 requireText('baseline', '2026-07-09 through 2026-07-15', 'preserve the measured baseline window');

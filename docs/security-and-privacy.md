@@ -32,7 +32,7 @@ These controls reduce accidental and opportunistic resource abuse; they are not 
 
 ### Error and protocol leakage
 
-MCP protocol output is written to stdout and diagnostics are written to stderr. Public execution failures use generic error codes/messages; internal exception names, stack traces, paths, and raw error messages are not returned to tool callers. A real-client schema rejection is JSON-RPC `-32602`, while a direct exported handler call returns bounded `invalid_input` detail.
+MCP protocol output is written to stdout and diagnostics are written to stderr. Public execution failures use generic error codes/messages; internal exception names, stack traces, paths, and raw error messages are not returned to tool callers. Invalid tool arguments return the same bounded `invalid_input` detail through real MCP transports and direct handlers, preventing SDK-generated validation text from bypassing response limits.
 
 Do not add ordinary logs to stdout. They corrupt the stdio protocol and can expose host information.
 

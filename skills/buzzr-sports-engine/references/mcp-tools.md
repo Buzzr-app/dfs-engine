@@ -5,7 +5,7 @@ The local `@buzzr/mcp` server exposes 11 tools. It performs deterministic comput
 | Tool | Use | Principal limits |
 | --- | --- | --- |
 | `grade_dfs_entry` | Settle one DFS pick-em entry | 1–12 unique legs |
-| `grade_dfs_entries` | Settle a batch with isolated failures | 1–50 entries, 12 legs each, 600 total legs, concurrency 1–8 |
+| `grade_dfs_entries` | Settle a batch with isolated failures | 1–25 entries, 12 legs each, 300 total legs, concurrency 1–8 |
 | `validate_dfs_entry` | Validate a candidate engine entry without settlement | 64 KiB JSON, 1,000 top-level fields |
 | `list_book_policies` | Inspect executable compatibility profiles and non-executable drafts | No input |
 | `fair_line` | Remove vig from a two-way market | Both American prices required |
@@ -32,7 +32,7 @@ American odds must be within `[-100000, -100]` or `[100, 100000]`. Tool strings,
 
 ## Failure contracts
 
-- A real MCP client's schema rejection is JSON-RPC `-32602`.
-- Direct handler validation is an `invalid_input` error result with bounded issue details.
+- Invalid tool arguments return an `invalid_input` error result with bounded issue details through a real MCP client or a direct handler.
+- Malformed JSON-RPC envelopes remain protocol errors owned by the MCP SDK.
 - `server_busy`, `result_too_large`, `tool_execution_failed`, and `entry_settlement_failed` are intentionally generic public failures.
 - An oversized or incomplete stdio frame is rejected without entering a tool handler.
