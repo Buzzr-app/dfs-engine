@@ -657,7 +657,7 @@ const PRIZEPICKS_CURRENT_SOURCES: readonly DfsBookSourceRef[] = [
 const UNDERDOG_LEGAL_SOURCES: readonly DfsBookSourceRef[] = [
   {
     label: 'Underdog Sports Legal Center',
-    url: 'https://legal.underdogfantasy.com/',
+    url: 'https://legal.underdogsports.com/',
     retrievedAt: '2026-07-16',
     note: 'Rules entrypoint only; current compatibility payout values remain unverified.',
   },
