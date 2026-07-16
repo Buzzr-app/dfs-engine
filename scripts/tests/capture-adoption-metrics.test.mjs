@@ -165,6 +165,7 @@ test('requires explicit, completed UTC date windows', () => {
     /must not be after/,
   );
   assert.throws(() => validateCompleteUtcWindow('07-09-2026', '2026-07-15', now), /YYYY-MM-DD/);
+  assert.throws(() => validateCompleteUtcWindow('2026-02-30', '2026-07-15', now), /real UTC date/);
 });
 
 test('requires both CLI window boundaries', () => {
@@ -173,7 +174,41 @@ test('requires both CLI window boundaries', () => {
     endDate: '2026-07-15',
   });
   assert.throws(() => parseArguments(['--start', '2026-07-09']), /--start and --end are required/);
+  assert.throws(() => parseArguments(['--start', '--end', '2026-07-15']), /requires a YYYY-MM-DD/);
   assert.throws(() => parseArguments(['--start', '2026-07-09', '--wat']), /Unknown argument/);
+});
+
+test('rejects missing runtime dependencies and invalid capture timestamps', async () => {
+  await assert.rejects(
+    captureAdoptionMetrics({
+      startDate: '2026-07-09',
+      endDate: '2026-07-15',
+      capturedAt: 'not-a-date',
+      githubToken: 'test-token',
+      fetch: async () => jsonResponse({}),
+    }),
+    /capturedAt|Invalid time value/,
+  );
+  await assert.rejects(
+    captureAdoptionMetrics({
+      startDate: '2026-07-09',
+      endDate: '2026-07-15',
+      capturedAt: '2026-07-16T15:00:00.000Z',
+      githubToken: '',
+      fetch: async () => jsonResponse({}),
+    }),
+    /GitHub traffic requires/,
+  );
+  await assert.rejects(
+    captureAdoptionMetrics({
+      startDate: '2026-07-09',
+      endDate: '2026-07-15',
+      capturedAt: '2026-07-16T15:00:00.000Z',
+      githubToken: 'test-token',
+      fetch: null,
+    }),
+    /Fetch API implementation is required/,
+  );
 });
 
 test('captures source-backed adoption without claiming unique users', async () => {
@@ -223,7 +258,9 @@ test('captures source-backed adoption without claiming unique users', async () =
     url.startsWith('https://api.github.com/'),
   );
   assert(githubRequests.length >= 7);
-  assert(githubRequests.every(({ headers }) => headers.get('authorization') === 'Bearer test-token'));
+  assert(
+    githubRequests.every(({ headers }) => headers.get('authorization') === 'Bearer test-token'),
+  );
 });
 
 test('fails closed when an upstream response is not successful', async () => {
@@ -236,6 +273,17 @@ test('fails closed when an upstream response is not successful', async () => {
       fetch: async () => jsonResponse({ message: 'rate limited' }, 429),
     }),
     /429.*rate limited/,
+  );
+
+  await assert.rejects(
+    captureAdoptionMetrics({
+      startDate: '2026-07-09',
+      endDate: '2026-07-15',
+      capturedAt: '2026-07-16T15:00:00.000Z',
+      githubToken: 'test-token',
+      fetch: async () => new Response('not json', { status: 200 }),
+    }),
+    /returned non-JSON data/,
   );
 });
 
@@ -250,14 +298,12 @@ test('documents repeatable windows and keeps the network capture out of verify',
   assert.match(baseline, /D\+1 through D\+7/);
   assert.match(baseline, /D\+1 through D\+30/);
   assert.match(baseline, /privacy-preserving MCP adoption proxy/i);
+  assert.match(baseline, /npm run --silent capture:adoption/);
   assert.match(baseline, /GitHub Pages has no first-party analytics configured/i);
   assert.match(baseline, /referrer.*attribution/i);
   assert.doesNotMatch(checklist, /Docs site uniques\s*\|\s*1/i);
   assert.match(checklist, /GitHub repo page views \(trailing 14 days\)/i);
-  assert.equal(
-    manifest.scripts['capture:adoption'],
-    'node scripts/capture-adoption-metrics.mjs',
-  );
+  assert.equal(manifest.scripts['capture:adoption'], 'node scripts/capture-adoption-metrics.mjs');
   assert.equal(
     manifest.scripts['test:adoption-capture'],
     'node --test scripts/tests/capture-adoption-metrics.test.mjs',

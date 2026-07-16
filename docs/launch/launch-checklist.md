@@ -58,13 +58,26 @@ Sequenced end-to-end. Everything in `docs/launch/` is a draft the maintainer pub
 Measured baseline: 191 package downloads from 2026-07-09 through 2026-07-15
 (complete UTC days). See
 [the source snapshot](adoption-baseline-2026-07-16.md); package downloads are not
-unique users.
+unique users. Release day (day 0) is D, the UTC date when the first reviewed
+5.1.0 package is confirmed live. Capture +7 for D+1 through D+7 on or after D+8,
+and +30 for D+1 through D+30 on or after D+31. Use
+`npm run --silent capture:adoption -- --start YYYY-MM-DD --end YYYY-MM-DD` and retain its
+JSON output as evidence.
 
 | Metric                                      | Baseline | +7 days | +30 days |
 | ------------------------------------------- | -------: | ------- | -------- |
 | npm package downloads (family total)        |      191 |         |          |
+| `@buzzr/mcp` downloads (MCP adoption proxy) |        4 |         |          |
 | GitHub stars                                |        1 |         |          |
 | GitHub unique cloners (trailing 14 days)    |       37 |         |          |
-| Issues opened                               |        0 |         |          |
+| GitHub repo page views (trailing 14 days)   |        1 |         |          |
+| GitHub repo unique viewers (trailing 14 days) |      1 |         |          |
+| Issues opened (excluding pull requests)     |        0 |         |          |
 | MCP Registry records matching Buzzr         |        0 |         |          |
-| Docs site uniques                           |        1 |         |          |
+
+Also retain clones, top referrers, and top paths from each JSON snapshot. The
+GitHub traffic values are rolling 14-day repository metrics, not cumulative
+release windows. Referrers are incomplete attribution signals, and GitHub repo
+views do not measure the Pages docs site. GitHub Pages has no first-party
+analytics configured here, so do not report docs-site visits or uniques unless
+a separate reviewed analytics source is added later.
