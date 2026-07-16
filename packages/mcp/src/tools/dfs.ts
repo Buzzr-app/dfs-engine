@@ -315,7 +315,7 @@ export const listBookPoliciesTool = defineTool({
     const executableBooks = engine.getBookPolicies().map((policy) => ({
       ...policy,
       executable: true as const,
-      source: 'engine_policy' as const,
+      source: 'built_in' as const,
     }));
     const draftBooks = DRAFT_BOOK_POLICY_FIXTURES.map(describeDraftPolicy);
     const books = [...executableBooks, ...draftBooks];

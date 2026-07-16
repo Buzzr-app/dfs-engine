@@ -261,7 +261,7 @@ describe('list_book_policies', () => {
       expect(executableBooks.find((book) => book.id === snapshot.id)).toEqual({
         ...snapshot,
         executable: true,
-        source: 'engine_policy',
+        source: 'built_in',
       });
     }
 
