@@ -14,7 +14,7 @@
 | [`@buzzr/dfs-engine`](https://www.npmjs.com/package/@buzzr/dfs-engine)                            | DFS settlement OS: book policies, grading, payouts, audit trails, batch settlement   | `npm i @buzzr/dfs-engine`                  |
 | [`@buzzr/bets-core`](https://www.npmjs.com/package/@buzzr/bets-core)                              | Odds math: no-vig fair lines, parlays, EV, Kelly staking, CLV, period analytics      | `npm i @buzzr/bets-core`                   |
 | [`@buzzr/entertainment-engine`](https://www.npmjs.com/package/@buzzr/entertainment-engine)        | Transparent buzz scoring, hybrid ML predictions, personalized game recommendations   | `npm i @buzzr/entertainment-engine`        |
-| [`@buzzr/mcp`](https://www.npmjs.com/package/@buzzr/mcp)                                          | MCP server exposing the engines to AI agents (11 tools)                              | `npx -y @buzzr/mcp`                        |
+| [`@buzzr/mcp`](https://www.npmjs.com/package/@buzzr/mcp)                                          | MCP server exposing the engines to AI agents (11 tools)                              | `npx -y @buzzr/mcp@5.1.0`                  |
 | [`@buzzr/dfs-cli`](https://www.npmjs.com/package/@buzzr/dfs-cli)                                  | Grade a DFS entry from JSON on the command line                                      | `npm i -g @buzzr/dfs-cli`                  |
 | [`@buzzr/dfs-react`](https://www.npmjs.com/package/@buzzr/dfs-react)                              | Settlement → UI view-models (React/Vue/Svelte/vanilla; no React dep)                 | `npm i @buzzr/dfs-react`                   |
 | [`@buzzr/dfs-testkit`](https://www.npmjs.com/package/@buzzr/dfs-testkit)                          | Fixture builders + mock stat providers for tests                                     | `npm i -D @buzzr/dfs-testkit`              |
@@ -148,7 +148,7 @@ Add to your MCP client config (Claude Desktop, Claude Code, Cursor, …):
   "mcpServers": {
     "buzzr": {
       "command": "npx",
-      "args": ["-y", "@buzzr/mcp"]
+      "args": ["-y", "@buzzr/mcp@5.1.0"]
     }
   }
 }
@@ -159,6 +159,8 @@ The server exposes 11 tools for DFS validation and settlement, odds and bet-hist
 ## Verified Buzzr app integration
 
 The Buzzr mobile app’s `release/ios-2.0.0` branch vendors `@buzzr/bets-core`, `@buzzr/dfs-engine`, and `@buzzr/entertainment-engine` as local 5.0.0 tarballs and imports all three. That verified snapshot is not automatically upgraded to the public 5.1.0 toolkit; an app update remains a separate, deliberate release task.
+
+The live consumer is [Buzzr Sports on the App Store](https://apps.apple.com/us/app/buzzr-sports/id6760628256).
 
 ## Codex skill
 
@@ -185,11 +187,9 @@ Before publishing or cutting a release, run:
 
 ```bash
 npm run verify
-npm run audit:high
-node scripts/check-public-docs.mjs
 ```
 
-`verify` runs typecheck, lint, formatting, tests, coverage, build, packed-MCP real-client proof, API docs, export and package smoke checks, release-workflow and MCP Registry metadata checks, and the high-severity dependency audit. The public-docs contract is currently a separate explicit gate.
+`verify` runs typecheck, lint, formatting, tests, coverage, build, packed-package and real-client proofs, the repository skill proof, API docs, public-doc and local-link contracts, export and package smoke checks, release-workflow and MCP Registry metadata checks, and the high-severity dependency audit. CI additionally checks external links on Node 22.
 
 ## Reporting bugs
 

@@ -13,8 +13,11 @@ Replay these fixtures when wiring stat providers, persistence, or settlement orc
 ## Install
 
 ```bash
-npm install --save-dev @buzzr/dfs-engine-test-vectors @buzzr/dfs-engine
+npm install --save-dev @buzzr/dfs-engine-test-vectors@5.1.0 @buzzr/dfs-engine@5.1.0
 ```
+
+The fixtures and engine are pinned together because each vector describes one
+specific engine contract. Upgrade and review both versions together.
 
 ## 30-second quick start
 
@@ -87,10 +90,20 @@ describe('my-integration engine regression vectors', () => {
 
 ## Links
 
-- [Engine API docs](https://buzzr-app.github.io/dfs-engine/)
+- [All-package API index](../../docs/api-reference.md)
+- [Generated root-export reference](https://buzzr-app.github.io/dfs-engine/modules/_buzzr_dfs-engine-test-vectors.html)
 - [Monorepo & full package family](https://github.com/Buzzr-app/dfs-engine)
 - [Issues](https://github.com/Buzzr-app/dfs-engine/issues)
 
+## Compatibility and support
+
+Node.js >= 22 is supported. Import the supported API from `@buzzr/dfs-engine-test-vectors`.
+Deep `src/*` and `dist/*` imports are unsupported.
+
+Report vulnerabilities privately through [SECURITY.md](../../SECURITY.md). The
+[versioning and support policy](../../docs/versioning-and-support.md) defines the
+supported runtime and SemVer contract.
+
 ## License
 
-MIT
+[MIT](../../LICENSE)

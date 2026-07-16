@@ -189,8 +189,12 @@ rules engines or evidence of affiliation:
 - PrizePicks is experimental and partially verified. Standard payout references
   were reviewed on 2026-07-16 from
   [PrizePicks Payouts](https://www.prizepicks.com/help-center/payouts) and
-  [PrizePicks Potential Outcomes](https://www.prizepicks.com/help-center/potential-outcomes);
-  settlement behavior and variable lineup-specific payouts remain incomplete.
+  [PrizePicks Potential Outcomes](https://www.prizepicks.com/help-center/potential-outcomes),
+  with DNP behavior checked against
+  [DNPs, Reboots, and Ties](https://www.prizepicks.com/help-center/dnps-reboots-and-ties).
+  The compatibility policy treats a 2-pick Power entry with a DNP as a refund
+  when it falls below the two-pick minimum. Other settlement behavior and
+  variable lineup-specific payouts remain incomplete.
 - Underdog is experimental and unverified. The
   [Underdog Sports Legal Center](https://legal.underdogsports.com/) is the recorded
   rules entrypoint; the current compatibility payout and settlement values have
@@ -300,11 +304,20 @@ project, and verifies every installed skill file byte-for-byte.
 
 ## Compatibility
 
-- Node.js >= 22
+- Node.js >= 22 is supported.
 - `rank_games` requires `@buzzr/entertainment-engine` >= 5.0.0. Against an older
   engine build the tool degrades gracefully with an `engine_capability_missing`
   error result instead of crashing the server.
 
+Import the supported API from `@buzzr/mcp`. Deep `src/*` and `dist/*` imports are unsupported.
+See the [all-package API index](../../docs/api-reference.md) and the
+[generated root-export reference](https://buzzr-app.github.io/dfs-engine/modules/_buzzr_mcp.html).
+
+Report reproducible defects in [GitHub Issues](https://github.com/Buzzr-app/dfs-engine/issues).
+Report vulnerabilities privately through [SECURITY.md](../../SECURITY.md). The
+[versioning and support policy](../../docs/versioning-and-support.md) defines the
+supported runtime and SemVer contract.
+
 ## License
 
-MIT
+[MIT](../../LICENSE)

@@ -7,6 +7,8 @@ Pure-functional **DFS prop grading**, payout math, stat normalization, and polic
 
 **Sports covered:** NBA, WNBA, NCAAM/W, NFL, MLB, NHL, EPL, MLS, La Liga, NWSL, UEFA Champions League. ~70 props.
 
+## Install
+
 ```bash
 npm install @buzzr/dfs-engine
 ```
@@ -20,7 +22,7 @@ If you're building a DFS-adjacent tool — a bet tracker, parlay analyzer, EV ca
 - **What happens when a player doesn't play?** Apply a selected compatibility or custom policy, preserve the decision in the audit trail, and surface uncertainty instead of inventing an operator ruling.
 - **What stat goes into a `Pts + Rebs + Asts` leg?** Or `Pass + Rush + Rec Yds`? Or `Hitter FS`?
 
-There's no good open-source TypeScript package for any of this. Everyone reinvents it from scratch, usually wrong. This package was extracted from [Buzzr](https://buzzr.app) and is maintained as an independent, testable engine. Pure functions, strict runtime validation, and a release suite covering 300+ settlement tests keep code behavior auditable without claiming that an operator will issue the same ruling.
+There's no good open-source TypeScript package for any of this. Everyone reinvents it from scratch, usually wrong. This package was extracted from [Buzzr](https://apps.apple.com/us/app/buzzr-sports/id6760628256) and is maintained as an independent, testable engine. Pure functions, strict runtime validation, and a release suite covering 300+ settlement tests keep code behavior auditable without claiming that an operator will issue the same ruling.
 
 ## Quickstart
 
@@ -141,7 +143,7 @@ Optional SDK packages:
 
 The operator-named built-ins are versioned compatibility profiles, not affiliated or endorsed implementations:
 
-- **PrizePicks:** `status: "experimental"` with `verification.status: "partial"`. Standard Player Pick payout references were reviewed on 2026-07-16 from [PrizePicks Payouts](https://www.prizepicks.com/help-center/payouts) and [PrizePicks Potential Outcomes](https://www.prizepicks.com/help-center/potential-outcomes). Settlement behavior and variable lineup-specific payouts are not fully verified.
+- **PrizePicks:** `status: "experimental"` with `verification.status: "partial"`. Standard Player Pick references were reviewed on 2026-07-16 from [PrizePicks Payouts](https://www.prizepicks.com/help-center/payouts), [PrizePicks Potential Outcomes](https://www.prizepicks.com/help-center/potential-outcomes), and [DNPs, Reboots, and Ties](https://www.prizepicks.com/help-center/dnps-reboots-and-ties). The compatibility policy treats a 2-pick Power entry with a DNP as a refund when the remaining entry is below the two-pick minimum. Other settlement behavior and variable lineup-specific payouts remain incomplete.
 - **Underdog:** `status: "experimental"` with `verification.status: "unverified"`. The [Underdog Sports Legal Center](https://legal.underdogsports.com/) is recorded as the rules entrypoint; current payout and settlement values in the compatibility snapshot have not been verified.
 
 The displayed lineup terms are authoritative. Record `placedAt` so the engine can select an effective-dated payout table, inspect `policyStatus`, `policyVerification`, `payoutTable`, `confidence`, `sourceRefs`, and `explanationCodes` on every engine-produced result, and obtain explicit operator rulings for DNPs, reboots, ties, rescues, voids, and corrections. The three policy metadata properties are optional in the public `DfsSettlementResult` type so legacy external result objects remain source-compatible, but `createDfsEngine()` always populates them at runtime.
@@ -373,8 +375,20 @@ v4 settlement inputs are canonical: use `actual` on `DfsLegInput`, `status` for 
 
 ## Origin
 
-Extracted from [Buzzr](https://buzzr.app) and maintained in this public monorepo. The mobile app currently vendors the 5.0.0 engine tarball; later public-repository changes require a deliberate app upgrade. Operator-named policy outputs remain compatibility estimates subject to the displayed entry terms and current operator ruling.
+Extracted from [Buzzr](https://apps.apple.com/us/app/buzzr-sports/id6760628256) and maintained in this public monorepo. The mobile app currently vendors the 5.0.0 engine tarball; later public-repository changes require a deliberate app upgrade. Operator-named policy outputs remain compatibility estimates subject to the displayed entry terms and current operator ruling.
+
+## Compatibility and support
+
+Node.js >= 22 is supported. Import the supported API from `@buzzr/dfs-engine`.
+Deep `src/*` and `dist/*` imports are unsupported. See the
+[all-package API index](../../docs/api-reference.md) and the
+[generated root-export reference](https://buzzr-app.github.io/dfs-engine/modules/_buzzr_dfs-engine.html).
+
+Report reproducible defects in [GitHub Issues](https://github.com/Buzzr-app/dfs-engine/issues).
+Report vulnerabilities privately through [SECURITY.md](../../SECURITY.md). The
+[versioning and support policy](../../docs/versioning-and-support.md) defines the
+supported runtime and SemVer contract.
 
 ## License
 
-MIT © Sarvesh Chidambaram
+[MIT](../../LICENSE) © Sarvesh Chidambaram

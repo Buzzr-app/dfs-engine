@@ -75,10 +75,22 @@ The regression fixtures are review gates for a matching engine version, not offi
 
 ## Links
 
-- [Engine API docs](https://buzzr-app.github.io/dfs-engine/)
+- [All-package API index](../../docs/api-reference.md)
+- [Generated root-export reference](https://buzzr-app.github.io/dfs-engine/modules/_buzzr_dfs-testkit.html)
 - [Monorepo & full package family](https://github.com/Buzzr-app/dfs-engine)
 - [Issues](https://github.com/Buzzr-app/dfs-engine/issues)
 
+## Compatibility and support
+
+Node.js >= 22 is supported. Import the supported API from `@buzzr/dfs-testkit`.
+Deep `src/*` and `dist/*` imports are unsupported. The package is intended for
+development and test dependencies and uses the compatible `@buzzr/dfs-engine`
+range declared in its package manifest.
+
+Report vulnerabilities privately through [SECURITY.md](../../SECURITY.md). The
+[versioning and support policy](../../docs/versioning-and-support.md) defines the
+supported runtime and SemVer contract.
+
 ## License
 
-MIT
+[MIT](../../LICENSE)

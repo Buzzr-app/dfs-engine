@@ -8,6 +8,12 @@ Supabase, AsyncStorage, or app services — and it has zero runtime
 dependencies. Apps and jobs provide data through plain objects, then persist
 results however they choose.
 
+## Install
+
+```bash
+npm install @buzzr/entertainment-engine
+```
+
 ## Core API
 
 ```ts
@@ -140,3 +146,19 @@ adjustment, and individual signed factor deltas.
 - Training helpers accept already-built examples; Supabase extraction belongs
   in the consuming app or job.
 - `ENGINE_PACKAGE_VERSION` reports the package version (`5.0.0`).
+
+## Compatibility and support
+
+Node.js >= 22 is supported. Import the supported API from `@buzzr/entertainment-engine`.
+Deep `src/*` and `dist/*` imports are unsupported. See the
+[all-package API index](../../docs/api-reference.md) and the
+[generated root-export reference](https://buzzr-app.github.io/dfs-engine/modules/_buzzr_entertainment-engine.html).
+
+Report reproducible defects in [GitHub Issues](https://github.com/Buzzr-app/dfs-engine/issues).
+Report vulnerabilities privately through [SECURITY.md](../../SECURITY.md). The
+[versioning and support policy](../../docs/versioning-and-support.md) defines the
+supported runtime and SemVer contract.
+
+## License
+
+[MIT](../../LICENSE)

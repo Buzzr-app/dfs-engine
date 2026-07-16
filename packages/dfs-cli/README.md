@@ -122,10 +122,21 @@ const fromFiles = await runGradeFromFiles({
 
 ## Links
 
-- [Engine API docs](https://buzzr-app.github.io/dfs-engine/)
+- [All-package API index](../../docs/api-reference.md)
+- [Generated root-export reference](https://buzzr-app.github.io/dfs-engine/modules/_buzzr_dfs-cli.html)
 - [Monorepo & full package family](https://github.com/Buzzr-app/dfs-engine)
 - [Issues](https://github.com/Buzzr-app/dfs-engine/issues)
 
+## Compatibility and support
+
+Node.js >= 22 is supported. Use the `dfs-grade` executable for the command line.
+Import the supported API from `@buzzr/dfs-cli`.
+Deep `src/*` and `dist/*` imports are unsupported.
+
+Report vulnerabilities privately through [SECURITY.md](../../SECURITY.md). The
+[versioning and support policy](../../docs/versioning-and-support.md) defines the
+supported runtime and SemVer contract.
+
 ## License
 
-MIT
+[MIT](../../LICENSE)
