@@ -82,14 +82,33 @@ async function downloadSmitheryBundle(path) {
     const error = (await response.text()).slice(0, 2_000);
     throw new Error(`Smithery GET ${path} failed (${response.status}): ${error}`);
   }
-  const declaredLength = Number(response.headers.get('content-length'));
-  assert(
-    !Number.isFinite(declaredLength) || declaredLength <= maximumBundleBytes,
-    'Published Smithery bundle declares an excessive size',
-  );
-  const downloaded = Buffer.from(await response.arrayBuffer());
-  assert(downloaded.byteLength <= maximumBundleBytes, 'Published Smithery bundle is too large');
-  return downloaded;
+  const declaredLengthHeader = response.headers.get('content-length');
+  if (declaredLengthHeader !== null) {
+    const declaredLength = Number(declaredLengthHeader);
+    assert(
+      Number.isFinite(declaredLength) && declaredLength <= maximumBundleBytes,
+      'Published Smithery bundle declares an excessive size',
+    );
+  }
+  assert(response.body, 'Published Smithery bundle has no response body');
+  const reader = response.body.getReader();
+  const chunks = [];
+  let totalBytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      totalBytes += value.byteLength;
+      if (totalBytes > maximumBundleBytes) {
+        await reader.cancel('Published Smithery bundle exceeded the byte limit');
+        throw new Error('Published Smithery bundle is too large');
+      }
+      chunks.push(Buffer.from(value));
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return Buffer.concat(chunks, totalBytes);
 }
 
 function childEnvironment(temporaryRoot) {

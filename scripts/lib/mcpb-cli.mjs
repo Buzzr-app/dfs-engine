@@ -10,7 +10,7 @@ import { unzipSync, zipSync } from 'fflate';
 const schemaPath = fileURLToPath(
   new URL('../../smithery/mcpb-manifest-v0.4.schema.json', import.meta.url),
 );
-const archiveEpoch = new Date('1980-01-02T00:00:00.000Z');
+const archiveEpoch = new Date(1980, 0, 2, 0, 0, 0);
 const maximumArchiveEntries = 20_000;
 const maximumExtractedBytes = 100 * 1024 * 1024;
 
@@ -101,7 +101,7 @@ async function collectFiles(directory) {
   let totalBytes = 0;
   async function visit(current, prefix = '') {
     const entries = await readdir(current, { withFileTypes: true });
-    entries.sort((left, right) => left.name.localeCompare(right.name));
+    entries.sort((left, right) => (left.name < right.name ? -1 : left.name > right.name ? 1 : 0));
     for (const entry of entries) {
       const path = join(current, entry.name);
       const pathStat = await lstat(path);
