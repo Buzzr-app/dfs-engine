@@ -44,6 +44,13 @@ export type DfsBookSourceRef = {
   note?: string;
 };
 
+export type DfsSelectedPayoutTable = {
+  version: string | null;
+  effectiveFrom: string;
+  sourceNotes: string[];
+  sources: DfsBookSourceRef[];
+};
+
 export type DfsBookPlayType = {
   id: DfsPlayTypeId;
   displayName: string;
@@ -159,12 +166,15 @@ export type DfsPayoutResolution = {
   payout: DfsPayoutSplit;
   explanationCode: string;
   confidence: DfsSettlementConfidence;
+  /** Additive audit metadata for fixed-table resolutions. */
+  payoutTable?: DfsSelectedPayoutTable | null;
 };
 
 export type DfsBookPolicy = {
   id: DfsBookId;
   displayName: string;
   version: string;
+  /** ISO timestamp or date-only value; date-only values begin at 00:00:00 UTC. */
   effectiveFrom: string;
   status: DfsPolicyStatus;
   sources: readonly DfsBookSourceRef[];
@@ -189,6 +199,7 @@ export type DfsPayoutTableDefinition = {
   bookId: DfsBookId;
   playTypeId: DfsPlayTypeId;
   version?: string;
+  /** ISO timestamp or date-only value; date-only values begin at 00:00:00 UTC. */
   effectiveFrom: string;
   sourceNotes?: readonly string[];
   entries: readonly DfsPayoutTableEntry[];
@@ -429,6 +440,8 @@ export type DfsSettlementResult = {
   pendingReasons: string[];
   policyVersion: string | null;
   sourceRefs: DfsBookSourceRef[];
+  /** The fixed payout table selected for this settlement's deterministic as-of. */
+  payoutTable: DfsSelectedPayoutTable | null;
   confidence: DfsSettlementConfidence;
   explanationCodes: string[];
   validation: DfsValidationResult<DfsEntryInput>;
@@ -1102,16 +1115,15 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
   function findPayoutTable(
     bookId: DfsBookId,
     playTypeId: DfsPlayTypeId,
-    entry?: Pick<DfsEntryInput, 'placedAt'>,
+    asOf: string,
   ): DfsPayoutTableDefinition | null {
     const matching = payoutTables
       .map((table, index) => ({ table, index }))
       .filter(({ table }) => table.bookId === bookId && table.playTypeId === playTypeId);
-    const placedAt = entry?.placedAt ? Date.parse(entry.placedAt) : null;
-    const eligible =
-      placedAt == null
-        ? matching
-        : matching.filter(({ table }) => Date.parse(table.effectiveFrom) <= placedAt);
+    const asOfTimestamp = parseEffectiveTimestamp(asOf);
+    const eligible = matching.filter(
+      ({ table }) => parseEffectiveTimestamp(table.effectiveFrom) <= asOfTimestamp,
+    );
 
     return (
       eligible.sort((left, right) => {
@@ -1127,9 +1139,9 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
     playTypeId: DfsPlayTypeId,
     picks: number,
     hits: number,
-    entry?: Pick<DfsEntryInput, 'placedAt'>,
+    asOf: string,
   ): number | null {
-    const table = findPayoutTable(bookId, playTypeId, entry);
+    const table = findPayoutTable(bookId, playTypeId, asOf);
     if (!table) {
       return null;
     }
@@ -1139,7 +1151,7 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
     );
   }
 
-  function resolveBaseMultiplier(input: DfsPayoutLookupInput): number | null {
+  function resolveBaseMultiplier(input: DfsPayoutLookupInput, asOf: string): number | null {
     if (input.baseMultiplier != null) {
       return input.baseMultiplier;
     }
@@ -1149,11 +1161,15 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
       input.playTypeId,
       originalPickCount,
       originalPickCount,
-      input.entry,
+      asOf,
     );
   }
 
-  function normalizeEntry(input: DfsEntryInput): DfsEntryInput {
+  function normalizeEntry(
+    input: DfsEntryInput,
+    fallbackAsOf = clock().toISOString(),
+  ): DfsEntryInput {
+    const payoutAsOf = input.placedAt ?? fallbackAsOf;
     const baseMultiplier =
       input.baseMultiplier ??
       lookupTableMultiplier(
@@ -1161,7 +1177,7 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
         input.playTypeId,
         input.legs.length,
         input.legs.length,
-        input,
+        payoutAsOf,
       );
     return {
       ...input,
@@ -1492,6 +1508,7 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
     if (!resolved) {
       return null;
     }
+    const asOf = pseudoEntry.placedAt ?? clock().toISOString();
     return lookupPayoutForPolicy(
       {
         ...input,
@@ -1503,6 +1520,7 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
       },
       resolved.policy,
       resolved.playType,
+      asOf,
     );
   }
 
@@ -1651,7 +1669,7 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
       });
     }
 
-    const entry = normalizeEntry(input);
+    const entry = normalizeEntry(input, settledAt);
     const resolved = resolvePolicy(entry);
     if (!resolved) {
       return pendingResult({
@@ -1666,6 +1684,23 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
     }
 
     const { policy, playType } = resolved;
+    const payoutAsOf = entry.placedAt ?? settledAt;
+    const payoutTable = selectedPayoutTable(
+      playType.payoutModel === 'fixed-table'
+        ? findPayoutTable(entry.bookId, entry.playTypeId, payoutAsOf)
+        : null,
+      policy,
+    );
+    auditTrail.push({
+      at: settledAt,
+      code: 'settlement.policy_selected',
+      message: `Selected ${policy.id}/${playType.id} policy for settlement.`,
+      metadata: {
+        policyVersion: policy.version,
+        payoutAsOf,
+        payoutTable,
+      },
+    });
     const decisions: DfsLegDecision[] = [];
     const adjustments: DfsSettlementAdjustment[] = [];
     const pendingReasons: string[] = [];
@@ -1801,6 +1836,7 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
         pendingReasons,
         policyVersion: policy.version,
         sourceRefs: [...policy.sources],
+        payoutTable,
         confidence: 'low',
         explanationCodes: [...explanationCodes],
         validation,
@@ -1843,6 +1879,7 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
         pendingReasons,
         policyVersion: policy.version,
         sourceRefs: [...policy.sources],
+        payoutTable,
         confidence: 'high',
         explanationCodes: [...explanationCodes],
         validation,
@@ -1885,12 +1922,14 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
       },
       policy,
       playType,
+      payoutAsOf,
     ) ?? {
       status: losses > 0 ? 'lost' : 'pending',
       multiplier: 0,
       payout: EMPTY_PAYOUT,
       explanationCode: 'settlement.no_payout_resolution',
       confidence: 'low' as const,
+      payoutTable,
     };
 
     explanationCodes.add(payout.explanationCode);
@@ -1912,6 +1951,7 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
         hits,
         losses,
         removed,
+        payoutTable: payout.payoutTable ?? null,
       },
     });
 
@@ -1932,6 +1972,7 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
       pendingReasons,
       policyVersion: policy.version,
       sourceRefs: [...policy.sources],
+      payoutTable: payout.payoutTable ?? null,
       confidence: payout.confidence,
       explanationCodes: [...explanationCodes],
       validation,
@@ -1971,7 +2012,20 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
       },
     policy: DfsBookPolicy,
     playType: DfsBookPlayType,
+    asOf: string,
   ): DfsPayoutResolution | null {
+    const matchingTables = payoutTables.some(
+      (table) => table.bookId === input.bookId && table.playTypeId === input.playTypeId,
+    );
+    const tableDefinition =
+      playType.payoutModel === 'fixed-table'
+        ? findPayoutTable(input.bookId, input.playTypeId, asOf)
+        : null;
+    const payoutTable = selectedPayoutTable(tableDefinition, policy);
+    if (playType.payoutModel === 'fixed-table' && matchingTables && !tableDefinition) {
+      return null;
+    }
+
     if (playType.allOrNothing && input.losses > 0) {
       return {
         status: 'lost',
@@ -1979,6 +2033,7 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
         payout: EMPTY_PAYOUT,
         explanationCode: 'settlement.all_or_nothing_loss',
         confidence: 'high',
+        payoutTable,
       };
     }
 
@@ -2019,6 +2074,7 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
         payout,
         explanationCode: resolved.explanationCode ?? 'settlement.custom_payout',
         confidence: resolved.confidence ?? 'medium',
+        payoutTable: null,
       };
     }
 
@@ -2031,38 +2087,32 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
       explanationCode = 'settlement.displayed_multiplier_payout';
       baseForSplit = input.baseMultiplier ?? multiplier;
     } else {
-      const matchingTables = payoutTables.some(
-        (table) => table.bookId === input.bookId && table.playTypeId === input.playTypeId,
-      );
-      if (matchingTables && !findPayoutTable(input.bookId, input.playTypeId, input.entry)) {
-        return null;
-      }
       const tableMultiplier = lookupTableMultiplier(
         input.bookId,
         input.playTypeId,
         input.pickCount,
         input.hits,
-        input.entry,
+        asOf,
       );
       if (tableMultiplier == null) {
         multiplier = 0;
         explanationCode = 'settlement.no_payout_table_row';
       } else if (playType.scaleDisplayedMultiplier && input.displayedMultiplier != null) {
         const baseAllHit =
-          resolveBaseMultiplier(input) ??
+          resolveBaseMultiplier(input, asOf) ??
           lookupTableMultiplier(
             input.bookId,
             input.playTypeId,
             input.pickCount,
             input.pickCount,
-            input.entry,
+            asOf,
           );
         const allHit = lookupTableMultiplier(
           input.bookId,
           input.playTypeId,
           input.pickCount,
           input.pickCount,
-          input.entry,
+          asOf,
         );
         const originalPickCount = input.entry.legs.length || input.pickCount;
         const originalAllHit = lookupTableMultiplier(
@@ -2070,7 +2120,7 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
           input.playTypeId,
           originalPickCount,
           originalPickCount,
-          input.entry,
+          asOf,
         );
         if (baseAllHit && allHit) {
           multiplier = (input.displayedMultiplier * tableMultiplier) / baseAllHit;
@@ -2092,6 +2142,7 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
         payout: EMPTY_PAYOUT,
         explanationCode,
         confidence: 'high',
+        payoutTable,
       };
     }
 
@@ -2109,6 +2160,7 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
       payout,
       explanationCode,
       confidence: explanationCode === 'settlement.no_payout_table_row' ? 'low' : 'high',
+      payoutTable,
     };
   }
 
@@ -2390,11 +2442,44 @@ function assertFiniteNonNegative(value: number, label: string): void {
 }
 
 function isValidDate(value: string): boolean {
-  return Number.isFinite(Date.parse(value));
+  return Number.isFinite(parseEffectiveTimestamp(value));
 }
 
 function roundMoney(value: number): number {
-  return Math.round((value + Number.EPSILON) * 100) / 100;
+  return roundDecimalHalfUp(value, 2);
+}
+
+function roundDecimalHalfUp(value: number, places: number): number {
+  const sign = value < 0 ? -1 : 1;
+  const shifted = shiftDecimalExponent(Math.abs(value), places);
+  const roundingTolerance = Number.EPSILON * Math.max(1, shifted);
+  const rounded = sign * shiftDecimalExponent(Math.round(shifted + roundingTolerance), -places);
+  return Object.is(rounded, -0) ? 0 : rounded;
+}
+
+function shiftDecimalExponent(value: number, places: number): number {
+  const [coefficient, exponent = '0'] = value.toString().split('e');
+  return Number(`${coefficient}e${Number(exponent) + places}`);
+}
+
+function parseEffectiveTimestamp(value: string): number {
+  const normalized = /^\d{4}-\d{2}-\d{2}$/u.test(value) ? `${value}T00:00:00.000Z` : value;
+  return Date.parse(normalized);
+}
+
+function selectedPayoutTable(
+  table: DfsPayoutTableDefinition | null,
+  policy: DfsBookPolicy,
+): DfsSelectedPayoutTable | null {
+  if (!table) {
+    return null;
+  }
+  return {
+    version: table.version ?? null,
+    effectiveFrom: table.effectiveFrom,
+    sourceNotes: [...(table.sourceNotes ?? [])],
+    sources: policy.sources.map((source) => ({ ...source })),
+  };
 }
 
 function roundPayoutSplit(payout: DfsPayoutSplit): DfsPayoutSplit {
@@ -2433,6 +2518,7 @@ function pendingResult(input: {
     pendingReasons: input.pendingReasons,
     policyVersion: null,
     sourceRefs: [],
+    payoutTable: null,
     confidence: 'low',
     explanationCodes: [
       ...input.explanationCodes,

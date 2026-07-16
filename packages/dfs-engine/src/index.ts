@@ -175,6 +175,7 @@ export type {
   DfsPayoutSplitStrategy,
   DfsPayoutTableEntry,
   DfsPayoutTableDefinition,
+  DfsSelectedPayoutTable,
   DfsPlayTypeId,
   DfsPolicyStatus,
   DfsProviderProvenance,

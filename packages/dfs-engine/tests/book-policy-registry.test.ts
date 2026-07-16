@@ -216,13 +216,10 @@ describe('Book Policy Registry 3.0', () => {
       },
     });
 
-    const settlementSelected = await engine.settleEntry(
-      entry({ bookId: 'dated-book' }),
-      {
-        settledAt: '2026-06-20T12:00:00.000Z',
-        actualsByLegId: { 'leg-1': 12, 'leg-2': 8 },
-      },
-    );
+    const settlementSelected = await engine.settleEntry(entry({ bookId: 'dated-book' }), {
+      settledAt: '2026-06-20T12:00:00.000Z',
+      actualsByLegId: { 'leg-1': 12, 'leg-2': 8 },
+    });
     expect(settlementSelected).toMatchObject({
       effectiveMultiplier: 2,
       payoutTable: {
