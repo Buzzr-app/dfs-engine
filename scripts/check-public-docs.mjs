@@ -17,6 +17,10 @@ const files = {
   mcp: 'packages/mcp/README.md',
   cli: 'packages/dfs-cli/README.md',
   vectors: 'packages/dfs-engine-test-vectors/README.md',
+  testkit: 'packages/dfs-testkit/README.md',
+  vectorManifest: 'packages/dfs-engine-test-vectors/package.json',
+  skill: 'skills/buzzr-sports-engine/SKILL.md',
+  skillTools: 'skills/buzzr-sports-engine/references/mcp-tools.md',
   engineChangelog: 'packages/dfs-engine/CHANGELOG.md',
   mcpChangelog: 'packages/mcp/CHANGELOG.md',
   cliChangelog: 'packages/dfs-cli/CHANGELOG.md',
@@ -73,6 +77,11 @@ const staleClaims = [
   [/No package may add a runtime dependency outside/i, 'a zero-dependency rule for every package'],
   [/Golden vectors are conformance law/i, 'regression vectors as conformance law'],
   [/all packages currently release in lockstep/i, 'an unverified lockstep-release rule'],
+  [/JSON-RPC `-32602`/i, 'SDK-amplified tool argument errors'],
+  [/1[–-]50 entries/i, 'the retired 50-entry MCP batch limit'],
+  [/600 total legs/i, 'the retired 600-leg MCP batch limit'],
+  [/grades identically to Buzzr/i, 'production-conformance vectors'],
+  [/canonical reference fixtures/i, 'canonical operator fixtures'],
 ];
 
 for (const [pattern, label] of staleClaims) {
@@ -151,12 +160,13 @@ requirePattern(
   /(?:reject|cannot|never)[^\n]*draft/i,
   'explain that grading does not execute drafts',
 );
-requirePattern('mcp', /JSON-RPC `-32602`/i, 'document transport schema failures');
 requirePattern(
   'mcp',
-  /direct[\s\S]{0,180}`invalid_input`/i,
-  'document direct-handler validation failures',
+  /(?:transport|MCP client)[\s\S]{0,180}`invalid_input`/i,
+  'document bounded transport validation failures',
 );
+requirePattern('mcp', /1[–-]25 entries/i, 'state the current batch entry bound');
+requirePattern('mcp', /300 total legs/i, 'state the current aggregate leg bound');
 
 const mobileSnapshot =
   'The Buzzr mobile app’s `release/ios-2.0.0` branch vendors `@buzzr/bets-core`, `@buzzr/dfs-engine`, and `@buzzr/entertainment-engine` as local 5.0.0 tarballs and imports all three.';
@@ -193,6 +203,21 @@ for (const key of ['root', 'llms', 'vectors']) {
     'disclaim official operator conformance',
   );
 }
+requirePattern('testkit', /engine regression fixtures/i, 'route consumers to regression fixtures');
+requirePattern(
+  'testkit',
+  /not official operator conformance/i,
+  'disclaim official operator conformance',
+);
+requirePattern(
+  'vectorManifest',
+  /engine regression fixtures/i,
+  'describe the package as engine regression fixtures',
+);
+for (const key of ['skill', 'skillTools']) {
+  requirePattern(key, /2[–-]25 entries/i, 'state the current batch entry bound');
+}
+requirePattern('skillTools', /300 total legs/i, 'state the current aggregate leg bound');
 
 requireText('baseline', '2026-07-09 through 2026-07-15', 'preserve the measured baseline window');
 requirePattern(
