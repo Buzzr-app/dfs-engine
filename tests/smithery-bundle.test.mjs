@@ -4,6 +4,8 @@ import test from 'node:test';
 
 const rootManifest = JSON.parse(await readFile('package.json', 'utf8'));
 const ciWorkflow = await readFile('.github/workflows/ci.yml', 'utf8');
+const mcpbTooling = await readFile('scripts/lib/mcpb-cli.mjs', 'utf8');
+const smitheryPublisher = await readFile('scripts/publish-smithery-bundle.mjs', 'utf8');
 
 const sampleTools = [
   { name: 'fair_line', description: 'Calculate a no-vig fair line.' },
@@ -95,6 +97,17 @@ test('the release gate builds and proves the MCPB on every supported platform', 
     ciWorkflow,
     /mcp-packed-platforms:[\s\S]*run: npm run build:mcpb[\s\S]*run: npm run proof:mcpb/,
   );
+  assert.match(
+    ciWorkflow,
+    /os: \[ubuntu-latest, macos-latest, windows-latest\]/,
+    'Linux, macOS, and Windows must all build and prove the MCPB',
+  );
+});
+
+test('uses integrity-locked local MCPB tooling without a credential-bearing subprocess', () => {
+  assert.equal(rootManifest.devDependencies.fflate, '0.8.2');
+  assert.doesNotMatch(mcpbTooling, /npm exec|@anthropic-ai\/mcpb/);
+  assert.doesNotMatch(mcpbTooling, /\.\.\.process\.env/);
 });
 
 test('builds the full Smithery stdio server card required by the release API', async () => {
@@ -111,7 +124,7 @@ test('builds the full Smithery stdio server card required by the release API', a
     },
   ];
   const payload = createSmitheryReleasePayload({
-    manifest: { name: 'buzzr-sports-engine', version: '5.1.0' },
+    serverInfo: { name: 'buzzr', version: '5.1.0' },
     tools,
   });
 
@@ -119,7 +132,7 @@ test('builds the full Smithery stdio server card required by the release API', a
     type: 'stdio',
     runtime: 'node',
     serverCard: {
-      serverInfo: { name: 'buzzr-sports-engine', version: '5.1.0' },
+      serverInfo: { name: 'buzzr', version: '5.1.0' },
       tools,
     },
   });
@@ -134,9 +147,15 @@ test('rejects the incomplete MCPB tool summaries that Smithery release validatio
   assert.throws(
     () =>
       createSmitheryReleasePayload({
-        manifest: { name: 'buzzr-sports-engine', version: '5.1.0' },
+        serverInfo: { name: 'buzzr', version: '5.1.0' },
         tools: [{ name: 'fair_line', description: 'Missing its input schema.' }],
       }),
     /inputSchema/i,
   );
+});
+
+test('the publisher downloads and re-proves the accepted registry bundle', () => {
+  assert.match(smitheryPublisher, /\/servers\/\$\{qualifiedName\}\/download/);
+  assert.match(smitheryPublisher, /SMITHERY_EXPECTED_SHA256/);
+  assert.match(smitheryPublisher, /prove-smithery-bundle\.mjs/);
 });
