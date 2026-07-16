@@ -152,6 +152,74 @@ assert.match(docsDeploy, /^      pages:\s+write$/m, 'only docs deploy may write 
 assert.match(docsDeploy, /^      id-token:\s+write$/m, 'only docs deploy may mint the Pages token');
 
 const rootPackage = JSON.parse(await readFile('package.json', 'utf8'));
+const postPublishProof = await readFile('scripts/prove-published-release.mjs', 'utf8');
+const mcpRegistryProof = await readFile('scripts/prove-mcp-registry-record.mjs', 'utf8');
+const releaseManifest = JSON.parse(await readFile('release-manifest.json', 'utf8'));
+const publishedPackages = releaseManifest.packages.filter((entry) => entry.publish);
+assert.equal(releaseManifest.packages.length, 10, 'release manifest must cover all ten packages');
+assert.equal(publishedPackages.length, 5, 'release manifest must authorize exactly five publishes');
+assert.match(
+  release,
+  /node scripts\/pack-release-artifacts\.mjs/,
+  'release must prepack and hash every authorized artifact',
+);
+assert.match(
+  release,
+  /EXPECTED_RELEASE_INTEGRITIES/,
+  'release must pass the complete reviewed integrity map to published proof',
+);
+assert.match(
+  release,
+  /node scripts\/prove-published-release\.mjs/,
+  'release must prove every published package from a generic isolated consumer',
+);
+assert.match(
+  release,
+  /for attempt in \{1\.\.12\}/,
+  'post-publish registry convergence must use bounded retries',
+);
+assert.match(
+  release,
+  /RELEASE_ARTIFACTS/,
+  'GitHub release notes must receive the complete package and integrity set',
+);
+assert.match(
+  postPublishProof,
+  /\['audit', 'signatures'\]/,
+  'post-publish proof must verify npm registry signatures for the clean exact install',
+);
+assert.match(
+  postPublishProof,
+  /attestations/,
+  'post-publish proof must validate provenance attestations',
+);
+assert.match(
+  release,
+  /releases\/download\/v1\.7\.9\/mcp-publisher_linux_amd64\.tar\.gz/,
+  'MCP publication must pin the reviewed mcp-publisher v1.7.9 asset',
+);
+assert.match(
+  release,
+  /ab128162b0616090b47cf245afe0a23f3ef08936fdce19074f5ba0a4469281ac/,
+  'MCP publication must verify the reviewed publisher asset SHA-256',
+);
+assert.doesNotMatch(
+  release,
+  /releases\/latest|curl[^\n]*\|/,
+  'MCP publication must not execute a curl pipe or resolve a mutable latest asset',
+);
+assert.match(release, /mcp-publisher login github-oidc/, 'MCP publication must use GitHub OIDC');
+assert.match(release, /mcp-publisher publish/, 'release must publish server.json to the MCP Registry');
+assert.match(
+  release,
+  /node scripts\/prove-mcp-registry-record\.mjs/,
+  'release must prove the exact live official MCP Registry record',
+);
+assert.match(
+  mcpRegistryProof,
+  /registry\.modelcontextprotocol\.io\/v0\.1\/servers/,
+  'MCP registry proof must use the official frozen v0.1 API',
+);
 assert.match(rootPackage.scripts.verify, /npm run check:workflows/, 'verify must check workflows');
 assert.match(rootPackage.scripts.verify, /npm run audit:high/, 'verify must reject high-risk advisories');
 assert.equal(
