@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { delimiter, dirname, join, resolve } from 'node:path';
 import { promisify } from 'node:util';
@@ -10,12 +10,22 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 
 const execFileAsync = promisify(execFile);
 const expectedVersion = process.env.EXPECTED_MCP_VERSION?.trim();
+const expectedIntegrity = process.env.EXPECTED_MCP_INTEGRITY?.trim();
+const expectedGitHead = process.env.EXPECTED_GIT_HEAD?.trim();
 assert(expectedVersion, 'EXPECTED_MCP_VERSION is required');
 assert.match(
   expectedVersion,
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?$/,
   'EXPECTED_MCP_VERSION must be an exact semantic version',
 );
+assert(expectedIntegrity, 'EXPECTED_MCP_INTEGRITY is required');
+assert.match(
+  expectedIntegrity,
+  /^sha512-[A-Za-z0-9+/=]+$/,
+  'EXPECTED_MCP_INTEGRITY must be an exact sha512 npm integrity',
+);
+assert(expectedGitHead, 'EXPECTED_GIT_HEAD is required');
+assert.match(expectedGitHead, /^[0-9a-f]{40}$/i, 'EXPECTED_GIT_HEAD must be a 40-character SHA');
 const packageSpec = `@buzzr/mcp@${expectedVersion}`;
 const npmExecPath = process.env.npm_execpath;
 assert(npmExecPath, 'Run the published proof through npm so npm_execpath is available');
@@ -61,44 +71,50 @@ async function withDeadline(promise, label, timeoutMs = 30_000) {
 
 const temporaryRoot = await mkdtemp(join(tmpdir(), 'buzzr-mcp-published-'));
 const cache = join(temporaryRoot, 'npm-cache');
-const emptyUserConfig = join(temporaryRoot, 'empty.npmrc');
+const isolatedHome = join(temporaryRoot, 'home');
+const isolatedAppData = join(temporaryRoot, 'appdata');
+const isolatedLocalAppData = join(temporaryRoot, 'local-appdata');
+const isolatedTemp = join(temporaryRoot, 'tmp');
+const emptyUserConfig = join(temporaryRoot, 'empty-user.npmrc');
+const emptyGlobalConfig = join(temporaryRoot, 'empty-global.npmrc');
 const repositoryBin = resolve('node_modules', '.bin');
 const path = (process.env.PATH ?? '')
   .split(delimiter)
   .filter((entry) => resolve(entry) !== repositoryBin)
   .join(delimiter);
-const inheritedEnvironmentKeys = [
-  'APPDATA',
-  'COMSPEC',
-  'HOME',
-  'LANG',
-  'LC_ALL',
-  'LOCALAPPDATA',
-  'PATHEXT',
-  'SHELL',
-  'SYSTEMROOT',
-  'TEMP',
-  'TMP',
-  'TMPDIR',
-  'USERPROFILE',
-];
+const inheritedEnvironmentKeys = ['COMSPEC', 'LANG', 'LC_ALL', 'PATHEXT', 'SHELL', 'SYSTEMROOT'];
 const environment = Object.fromEntries(
   inheritedEnvironmentKeys.flatMap((key) =>
     process.env[key] === undefined ? [] : [[key, process.env[key]]],
   ),
 );
 Object.assign(environment, {
+  APPDATA: isolatedAppData,
+  HOME: isolatedHome,
+  LOCALAPPDATA: isolatedLocalAppData,
   NO_COLOR: '1',
   PATH: path,
+  TEMP: isolatedTemp,
+  TMP: isolatedTemp,
+  TMPDIR: isolatedTemp,
+  USERPROFILE: isolatedHome,
   npm_config_cache: cache,
   npm_config_userconfig: emptyUserConfig,
+  npm_config_globalconfig: emptyGlobalConfig,
+  npm_config_registry: 'https://registry.npmjs.org/',
+  npm_config_ignore_scripts: 'true',
   npm_config_audit: 'false',
   npm_config_fund: 'false',
   npm_config_update_notifier: 'false',
 });
 
 try {
-  await writeFile(emptyUserConfig, '');
+  await Promise.all(
+    [cache, isolatedHome, isolatedAppData, isolatedLocalAppData, isolatedTemp].map((directory) =>
+      mkdir(directory, { recursive: true }),
+    ),
+  );
+  await Promise.all([writeFile(emptyUserConfig, ''), writeFile(emptyGlobalConfig, '')]);
   const { stdout: latestOutput } = await execNpm(
     ['view', '@buzzr/mcp', 'dist-tags.latest', '--json'],
     { cwd: temporaryRoot, env: environment },
@@ -110,12 +126,28 @@ try {
     `npm latest is ${latest}; expected ${expectedVersion}. Refusing to prove the wrong release.`,
   );
 
-  const { stdout: integrityOutput } = await execNpm(
-    ['view', packageSpec, 'dist.integrity', '--json'],
-    { cwd: temporaryRoot, env: environment },
+  const viewField = async (field) => {
+    const { stdout } = await execNpm(['view', packageSpec, field, '--json'], {
+      cwd: temporaryRoot,
+      env: environment,
+    });
+    assert(stdout.trim(), `Published package has no ${field} metadata`);
+    return JSON.parse(stdout);
+  };
+  const [integrity, gitHead, tarball, provenance] = await Promise.all([
+    viewField('dist.integrity'),
+    viewField('gitHead'),
+    viewField('dist.tarball'),
+    viewField('dist.attestations.provenance'),
+  ]);
+  assert.equal(integrity, expectedIntegrity, 'Published integrity does not match reviewed release');
+  assert.equal(gitHead, expectedGitHead, 'Published gitHead does not match reviewed release');
+  assert.equal(
+    new URL(tarball).origin,
+    'https://registry.npmjs.org',
+    'Published tarball is not hosted by the npm registry',
   );
-  const integrity = JSON.parse(integrityOutput);
-  assert.match(integrity, /^sha512-[A-Za-z0-9+/=]+$/, 'Published package has no sha512 integrity');
+  assert(provenance, 'Published package has no npm provenance attestation');
 
   const transport = new StdioClientTransport({
     command: process.execPath,
