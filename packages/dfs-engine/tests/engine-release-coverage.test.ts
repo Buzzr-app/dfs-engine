@@ -541,7 +541,7 @@ describe('engine release branch guardrails', () => {
         hits: 1,
       }),
     ).toMatchObject({
-      status: 'lost',
+      status: 'pending',
       confidence: 'low',
       explanationCode: 'settlement.no_payout_table_row',
     });

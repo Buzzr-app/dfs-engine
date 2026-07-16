@@ -91,6 +91,48 @@ describe('Book Policy Registry 3.0', () => {
         sources: [{ label: 'Fixture rules', retrievedAt: 17 } as never],
       }),
     ).toThrow('sources.0.retrievedAt must be a string');
+    expect(() =>
+      definePayoutTable({
+        bookId: 'custom-book',
+        playTypeId: 'all-in',
+        effectiveFrom: '2026-05-01',
+        sources: [{ label: 'Fixture table', retrievedAt: new Date('2026-05-01') } as never],
+        entries: [{ pickCount: 2, hits: 2, multiplier: 3 }],
+      }),
+    ).toThrow('sources.0.retrievedAt must be a string');
+  });
+
+  test('prefers outcome-specific payout rows regardless of table order', () => {
+    const generic = { pickCount: 1, hits: 1, multiplier: 2 };
+    const tied = { pickCount: 1, hits: 1, pushes: 1, multiplier: 1.5 };
+
+    for (const entries of [
+      [generic, tied],
+      [tied, generic],
+    ]) {
+      const engine = createDfsEngine({
+        bookPolicies: [customPolicy],
+        payoutTables: [
+          definePayoutTable({
+            bookId: 'custom-book',
+            playTypeId: 'all-in',
+            effectiveFrom: '2026-05-01',
+            entries,
+          }),
+        ],
+      });
+      expect(
+        engine.lookupPayout({
+          bookId: 'custom-book',
+          playTypeId: 'all-in',
+          stake: 10,
+          pickCount: 1,
+          hits: 1,
+          pushes: 1,
+          removedCount: 1,
+        }),
+      ).toMatchObject({ status: 'won', multiplier: 1.5 });
+    }
   });
 
   test('settles a non-PrizePicks custom book with bookId/playTypeId and policy metadata', async () => {

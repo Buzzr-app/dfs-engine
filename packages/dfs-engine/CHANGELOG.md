@@ -27,6 +27,10 @@
 - Reject malformed verification notes and runtime date metadata without
   coercion, while preserving the legacy definition API's shallow nested
   mutability for minor-version compatibility.
+- Keep zero-loss settlements pending when no payout-table row exists instead
+  of converting missing policy data into a financial loss, prefer
+  outcome-specific rows over generic rows regardless of declaration order,
+  and validate payout-table source dates as strings at runtime.
 
 ### Documentation
 

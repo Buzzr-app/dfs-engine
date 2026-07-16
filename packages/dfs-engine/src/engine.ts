@@ -1127,10 +1127,17 @@ export function definePayoutTable(table: DfsPayoutTableDefinition): DfsPayoutTab
     if (!source.label || !source.label.trim()) {
       throw new DfsDefinitionError(`definePayoutTable: sources.${index}.label is required`);
     }
-    if (source.retrievedAt && !isValidDate(source.retrievedAt)) {
-      throw new DfsDefinitionError(
-        `definePayoutTable: sources.${index}.retrievedAt must be parseable`,
-      );
+    if (source.retrievedAt != null) {
+      if (typeof source.retrievedAt !== 'string') {
+        throw new DfsDefinitionError(
+          `definePayoutTable: sources.${index}.retrievedAt must be a string`,
+        );
+      }
+      if (!isValidDate(source.retrievedAt)) {
+        throw new DfsDefinitionError(
+          `definePayoutTable: sources.${index}.retrievedAt must be parseable`,
+        );
+      }
     }
   }
   const rows = new Set<string>();
@@ -1366,14 +1373,14 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngineWithPoli
     if (!table) {
       return null;
     }
-    return (
-      table.entries.find(
-        (entry) =>
-          tableEntryPicks(entry) === picks &&
-          entry.hits === hits &&
-          (entry.pushes == null || entry.pushes === (outcomes.pushes ?? 0)),
-      )?.multiplier ?? null
+    const candidates = table.entries.filter(
+      (entry) => tableEntryPicks(entry) === picks && entry.hits === hits,
     );
+    const outcomeSpecific = candidates.find(
+      (entry) => entry.pushes != null && entry.pushes === (outcomes.pushes ?? 0),
+    );
+    const generic = candidates.find((entry) => entry.pushes == null);
+    return (outcomeSpecific ?? generic)?.multiplier ?? null;
   }
 
   function resolveBaseMultiplier(input: DfsPayoutLookupInput, asOf: string): number | null {
@@ -2222,6 +2229,12 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngineWithPoli
 
     explanationCodes.add(payout.explanationCode);
     explanationCodes.add(PAYOUT_MODEL_EXPLANATION_CODES[playType.payoutModel]);
+    if (
+      payout.status === 'pending' &&
+      payout.explanationCode === 'settlement.no_payout_table_row'
+    ) {
+      pendingReasons.push('missing_payout_table_row');
+    }
     if (removed > 0) {
       explanationCodes.add('settlement.repriced_after_removed_legs');
       adjustments.push({
@@ -2446,7 +2459,12 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngineWithPoli
     });
     assertPayoutSplit(payout, 'payout');
     return {
-      status: multiplier > 0 ? 'won' : 'lost',
+      status:
+        multiplier > 0
+          ? 'won'
+          : explanationCode === 'settlement.no_payout_table_row' && input.losses === 0
+            ? 'pending'
+            : 'lost',
       multiplier,
       payout,
       explanationCode,

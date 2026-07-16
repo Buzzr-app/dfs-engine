@@ -101,4 +101,39 @@ describe('authoritative leg status regressions', () => {
       legs: [{ status: 'lost' }, { status: 'push' }],
     });
   });
+
+  test('never turns an unpriced zero-loss outcome into a financial loss', async () => {
+    const engine = createDfsEngine();
+    const prizePicks = await engine.settleEntry(
+      entry({
+        entryId: 'unpriced-prizepicks',
+        displayedMultiplier: 6,
+        legs: [leg(), leg({ legId: 'leg-2' }), leg({ legId: 'leg-3' })],
+      }),
+      {
+        legStatusesByLegId: { 'leg-1': 'won', 'leg-2': 'push', 'leg-3': 'push' },
+      },
+    );
+    expect(prizePicks).toMatchObject({
+      status: 'pending',
+      multiplier: 0,
+      payout: { total: 0, withdrawable: 0, bonus: 0 },
+      pendingReasons: ['missing_payout_table_row'],
+      explanationCodes: expect.arrayContaining(['settlement.no_payout_table_row']),
+    });
+
+    const underdog = await engine.settleEntry(
+      entry({
+        entryId: 'unpriced-underdog',
+        bookId: 'underdog',
+        playTypeId: 'underdog_standard',
+      }),
+      { legStatusesByLegId: { 'leg-1': 'won', 'leg-2': 'push' } },
+    );
+    expect(underdog).toMatchObject({
+      status: 'pending',
+      payout: { total: 0, withdrawable: 0, bonus: 0 },
+      pendingReasons: ['missing_payout_table_row'],
+    });
+  });
 });
