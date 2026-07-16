@@ -9,7 +9,7 @@ server that puts the whole @buzzr engine family in front of any MCP-capable agen
 in the underlying engines — this package is a thin, schema-validated tool surface:
 
 - [`@buzzr/dfs-engine`](https://www.npmjs.com/package/@buzzr/dfs-engine) — pick-em
-  settlement with real book policies (PrizePicks, Underdog, drafts)
+  settlement with versioned compatibility and custom policies
 - [`@buzzr/bets-core`](https://www.npmjs.com/package/@buzzr/bets-core) — no-vig fair
   lines, parlay pricing, expected value, Kelly staking
 - [`@buzzr/entertainment-engine`](https://www.npmjs.com/package/@buzzr/entertainment-engine) —
@@ -24,6 +24,8 @@ npx -y @buzzr/mcp
 ```
 
 The server speaks MCP over stdio: JSON-RPC on stdin/stdout, logs on stderr.
+It exposes 11 tools with bounded inputs and outputs, and does not fetch live
+odds, box scores, operator accounts, or private user data.
 
 ### Claude Desktop
 
@@ -61,21 +63,57 @@ or in `.mcp.json`:
 
 ## Tool catalog
 
-| Tool                 | Engine                       | What it does                                                                                                              |
-| -------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `grade_dfs_entry`    | @buzzr/dfs-engine            | Settle a DFS pick-em entry: applies the book policy (ties, DNPs, flex tables) and returns status, payout split, per-leg decisions, and explanation codes. |
-| `validate_dfs_entry` | @buzzr/dfs-engine            | Run the engine's runtime validators against a candidate entry; returns structured error/warning issues without settling.  |
-| `list_book_policies` | @buzzr/dfs-engine            | Enumerate the registered DFS books (built-in stable policies plus draft fixtures) with play types and policy status.       |
-| `fair_line`          | @buzzr/bets-core             | Remove the vig from a two-sided market: fair probability, fair American odds, overround, and edge vs. the offered price.   |
-| `parlay_value`       | @buzzr/bets-core             | Price a parlay: per-leg no-vig probabilities, fair combined odds, edge of the offered price, optional expected value.      |
-| `kelly_stake`        | @buzzr/bets-core             | Kelly-criterion stake sizing with fractional-Kelly support (defaults to quarter-Kelly).                                    |
-| `predict_game_buzz`  | @buzzr/entertainment-engine  | Predict a game's 1–10 entertainment (buzz) score with model confidence and weighted factor breakdown.                      |
-| `rank_games`         | @buzzr/entertainment-engine  | Rank candidate games for a user's taste profile: base score plus bounded personal-affinity and social adjustments.         |
+| Tool                    | Engine                      | What it does                                                                                                                               |
+| ----------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `grade_dfs_entry`       | @buzzr/dfs-engine           | Settle one 1–12-leg entry and return the full result plus explanation.                                                                      |
+| `grade_dfs_entries`     | @buzzr/dfs-engine           | Settle 1–50 entries, up to 600 total legs, with bounded concurrency and isolated failures.                                                   |
+| `validate_dfs_entry`    | @buzzr/dfs-engine           | Return structured engine validation issues for a candidate entry without settling it.                                                       |
+| `list_book_policies`    | @buzzr/dfs-engine           | List authoritative executable profile snapshots and metadata-only drafts, including status, verification, sources, and complete play types. |
+| `fair_line`             | @buzzr/bets-core            | Remove vig from both sides of one two-way market.                                                                                           |
+| `closing_line_value`    | @buzzr/bets-core            | Compare placed and closing prices for the same selection.                                                                                   |
+| `parlay_value`          | @buzzr/bets-core            | Price independent parlay legs, compare offered odds, and optionally calculate expected value.                                               |
+| `kelly_stake`           | @buzzr/bets-core            | Calculate full and fractional Kelly stakes from a supplied win probability.                                                                 |
+| `summarize_bet_history` | @buzzr/bets-core            | Summarize up to 500 bets with overall and UTC-period rollups, drawdown, and streaks.                                                         |
+| `predict_game_buzz`     | @buzzr/entertainment-engine | Predict one game's 1–10 entertainment score with confidence and factor detail.                                                              |
+| `rank_games`            | @buzzr/entertainment-engine | Rank 1–100 candidate games for a bounded taste profile.                                                                                     |
 
-Every tool validates its input with zod before touching an engine, and returns
-results as JSON text content. Failures come back as structured MCP error results
-(`isError: true` with `{ "error": { "code", "message" } }`) instead of protocol
-errors — agents can read and recover from them.
+Tool strings, identifiers, arrays, stdio frames, concurrent calls, and serialized
+results are bounded. American odds must be within `[-100000, -100]` or
+`[100, 100000]`. `grade_dfs_entries`, `closing_line_value`, and
+`summarize_bet_history` return string `contractVersion: "1"`.
+
+## DFS policy safety
+
+Operator-named policies are independent compatibility profiles, not official
+rules engines or evidence of affiliation:
+
+- PrizePicks is experimental and partially verified. Standard payout references
+  were reviewed on 2026-07-16 from
+  [PrizePicks Payouts](https://www.prizepicks.com/help-center/payouts) and
+  [PrizePicks Potential Outcomes](https://www.prizepicks.com/help-center/potential-outcomes);
+  settlement behavior and variable lineup-specific payouts remain incomplete.
+- Underdog is experimental and unverified. The
+  [Underdog Sports Legal Center](https://legal.underdogsports.com/) is the recorded
+  rules entrypoint; the current compatibility payout and settlement values have
+  not been verified.
+
+Displayed lineup terms are authoritative. Call `list_book_policies` before
+grading, inspect verification and sources, and obtain explicit operator rulings
+for DNPs, reboots, ties, rescues, voids, and corrections. The tool lists future
+fixtures with `executable: false`; grading tools reject draft book IDs because
+drafts are metadata, not settlement implementations.
+
+## Error contracts
+
+- A real MCP client's transport-schema rejection is JSON-RPC `-32602`.
+- A direct exported `tool.handler(...)` call with invalid input returns a bounded
+  `invalid_input` result. This direct-handler behavior is useful in tests but is
+  not the transport failure shape.
+- `validate_dfs_entry` intentionally accepts a bounded candidate object and
+  returns the engine's structured validation report.
+- Execution failures return generic `isError: true` results such as
+  `tool_execution_failed`, `entry_settlement_failed`, `server_busy`, or
+  `result_too_large`. Internal error details are not public.
 
 ## Example transcripts
 
@@ -101,7 +139,9 @@ errors — agents can read and recover from them.
 > ```
 >
 > Result: `"status": "won"`, `"payout": { "total": 30, "withdrawable": 30, "bonus": 0 }` —
-> both legs won, the 2-pick power table pays 3x.
+> both supplied actuals clear their lines and the submitted 3× displayed multiplier
+> is consistent with the selected compatibility table. Confirm the actual entry
+> details before treating this as an operator outcome.
 
 **"Is this parlay +EV?"**
 
@@ -141,6 +181,16 @@ await server.connect(myTransport);
 Individual tool definitions (`gradeDfsEntryTool`, `fairLineTool`, …) are exported
 too — each is `{ name, title, description, inputSchema, handler }`, and handlers
 can be called directly without any transport.
+
+## Codex skill
+
+The repository includes a
+[Buzzr Sports Engine skill](../../skills/buzzr-sports-engine/SKILL.md) with the
+11-tool routing guide, limits, response-reading order, and operator-safety rules:
+
+```sh
+npx skills add https://github.com/Buzzr-app/dfs-engine --skill buzzr-sports-engine
+```
 
 ## Compatibility
 

@@ -6,7 +6,9 @@
 [![types](https://img.shields.io/npm/types/@buzzr/dfs-cli)](https://www.npmjs.com/package/@buzzr/dfs-cli)
 [![license](https://img.shields.io/npm/l/@buzzr/dfs-cli)](https://github.com/Buzzr-app/dfs-engine/blob/main/LICENSE)
 
-**Grade a DFS pick'em entry from two JSON files — no code required.** A command-line wrapper around [`@buzzr/dfs-engine`](https://www.npmjs.com/package/@buzzr/dfs-engine), the settlement engine that grades PrizePicks/Underdog-style entries with book-accurate payout math and a full audit trail.
+**Grade a DFS pick'em entry from two JSON files — no code required.** This is a command-line wrapper around [`@buzzr/dfs-engine`](https://www.npmjs.com/package/@buzzr/dfs-engine), with bounded inputs, effective-dated compatibility tables, policy metadata, and a full audit trail.
+
+The operator-named built-ins are independent estimates: PrizePicks is experimental and partially verified; Underdog is experimental and unverified. Displayed entry terms are authoritative. Treat output as an audit aid, inspect `policyStatus`, `policyVerification`, `payoutTable`, `confidence`, `sourceRefs`, and `explanationCodes`, and confirm DNP, reboot, tie, rescue, void, and correction rulings with the operator.
 
 ## 30-second quick start
 
@@ -117,7 +119,7 @@ const fromFiles = await runGradeFromFiles({
 | Grade entries inside a TypeScript/JavaScript app    | [`@buzzr/dfs-engine`](https://www.npmjs.com/package/@buzzr/dfs-engine)                            |
 | Render results in a UI                              | [`@buzzr/dfs-react`](https://www.npmjs.com/package/@buzzr/dfs-react)                              |
 | Build fixtures for your own tests                   | [`@buzzr/dfs-testkit`](https://www.npmjs.com/package/@buzzr/dfs-testkit)                          |
-| Verify your integration grades identically to Buzzr | [`@buzzr/dfs-engine-test-vectors`](https://www.npmjs.com/package/@buzzr/dfs-engine-test-vectors)  |
+| Replay versioned engine regression cases           | [`@buzzr/dfs-engine-test-vectors`](https://www.npmjs.com/package/@buzzr/dfs-engine-test-vectors) |
 
 ## Links
 

@@ -1,5 +1,22 @@
 # @buzzr/dfs-engine-test-vectors
 
+## Unreleased (vNext)
+
+### Added
+
+- Expanded the public regression set from three happy paths to eleven fixtures,
+  including all-push, explicit-DNP repricing, missing-vs-unsupported stats,
+  duplicate-player warnings, wrong-date and ambiguous provider rows, and the
+  PrizePicks standard three-pick table effective 2026-07-02.
+- Pinned full top-level settlement behavior: payout, effective policy/table,
+  verification, confidence, validation, sources, provenance, explanations, audit
+  codes, pending reasons, and per-leg provider detail.
+
+### Documentation
+
+- Define the package as engine regression fixtures for the matching engine
+  version, not proof of current operator rules or official operator equivalence.
+
 ## 1.0.0
 
 ### Major Changes

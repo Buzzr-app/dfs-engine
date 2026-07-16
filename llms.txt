@@ -6,10 +6,10 @@ Key facts: all engine code is pure functions (no I/O; data providers are injecte
 
 ## Core packages
 
-- [@buzzr/dfs-engine](https://www.npmjs.com/package/@buzzr/dfs-engine): DFS settlement OS. Exports: createDfsEngine, defineStatProvider, defineBookPolicy, definePayoutTable, engine.settleEntry, engine.settleEntries (v5 batch with memoized stat cache), grading + payout + validation helpers. Built-in PrizePicks/Underdog-style book policies; v5 adds policy validation and a draft prediction-market policy.
+- [@buzzr/dfs-engine](https://www.npmjs.com/package/@buzzr/dfs-engine): DFS settlement OS. Exports: createDfsEngine, defineStatProvider, defineBookPolicy, definePayoutTable, engine.settleEntry, engine.settleEntries (v5 batch with memoized stat cache), grading + payout + validation helpers. PrizePicks is an experimental, partially verified compatibility profile; Underdog is experimental and unverified. Displayed lineup terms are authoritative. Draft fixtures are not registered for settlement.
 - [@buzzr/bets-core](https://www.npmjs.com/package/@buzzr/bets-core): Odds math. Exports: americanOddsToImpliedProbability, calculateNoVigFairLine, combineAmericanOdds, calculateParlayProbability, calculateParlayFairValue, calculateExpectedValue, calculateKellyStake, calculateClosingLineValue, calculateBetRollup, calculateRollupByPeriod, calculateDrawdown, calculateStreaks.
 - [@buzzr/entertainment-engine](https://www.npmjs.com/package/@buzzr/entertainment-engine): Buzz scoring + predictions. Exports: resolveBuzzScores, enrichGameRowWithBuzzScores, isMustWatch, MUST_WATCH_THRESHOLD, rankGamesForUser (v5 personalized recommendations, calibrated ML confidence).
-- [@buzzr/mcp](https://www.npmjs.com/package/@buzzr/mcp): MCP server (bin: buzzr-mcp; run: npx -y @buzzr/mcp) exposing the three engines as 8 tools for AI agents.
+- [@buzzr/mcp](https://www.npmjs.com/package/@buzzr/mcp): MCP server (bin: buzzr-mcp; run: npx -y @buzzr/mcp) exposing the three engines as 11 tools for AI agents. It computes from supplied data and does not fetch live odds, box scores, operator accounts, or private user data.
 
 ## Satellite packages
 
@@ -18,7 +18,17 @@ Key facts: all engine code is pure functions (no I/O; data providers are injecte
 - [@buzzr/dfs-testkit](https://www.npmjs.com/package/@buzzr/dfs-testkit): test fixtures + mocks; exports makeDfsEntry, makeDfsLeg, makeGameLogEntry, createMockStatProvider, makeInvalidDfsEntry.
 - [@buzzr/dfs-provider-espn](https://www.npmjs.com/package/@buzzr/dfs-provider-espn): ESPN-shaped StatProvider contract; exports createEspnStatProvider. No network I/O of its own.
 - [@buzzr/dfs-provider-sportradar](https://www.npmjs.com/package/@buzzr/dfs-provider-sportradar): Sportradar-shaped StatProvider contract; exports createSportradarStatProvider, sportradarRowToGameLog. No network I/O of its own.
-- [@buzzr/dfs-engine-test-vectors](https://www.npmjs.com/package/@buzzr/dfs-engine-test-vectors): golden { entry, gameLogsByLegId, expected } conformance fixtures; exports TEST_VECTORS.
+- [@buzzr/dfs-engine-test-vectors](https://www.npmjs.com/package/@buzzr/dfs-engine-test-vectors): engine regression fixtures for a matching @buzzr/dfs-engine version; exports TEST_VECTORS. They are not official operator conformance.
+
+## Verified Buzzr app integration
+
+The Buzzr mobile app’s `release/ios-2.0.0` branch vendors `@buzzr/bets-core`, `@buzzr/dfs-engine`, and `@buzzr/entertainment-engine` as local 5.0.0 tarballs and imports all three. That app snapshot is not automatically upgraded to the public repository’s vNext work.
+
+## Agent integration
+
+- Repository skill: [skills/buzzr-sports-engine/SKILL.md](skills/buzzr-sports-engine/SKILL.md)
+- Install: `npx skills add https://github.com/Buzzr-app/dfs-engine --skill buzzr-sports-engine`
+- MCP install, client configuration, tools, and errors: [packages/mcp/README.md](packages/mcp/README.md)
 
 ## Docs
 

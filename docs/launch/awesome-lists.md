@@ -11,7 +11,7 @@
 Proposed entry text:
 
 ```
-- [Buzzr Engines](https://github.com/Buzzr-app/dfs-engine) 📇 🏠 - DFS settlement, sportsbook odds math (no-vig lines, parlays, EV, Kelly), and game entertainment scoring as 8 tools backed by zero-dependency engines used in production.
+- [Buzzr Engines](https://github.com/Buzzr-app/dfs-engine) 📇 🏠 - Local 11-tool MCP server for DFS compatibility audits, sportsbook odds math, bet-history summaries, and game entertainment scoring.
 ```
 
 ## 2. awesome-typescript
@@ -22,7 +22,7 @@ Proposed entry text:
 Proposed entry text:
 
 ```
-- [@buzzr/dfs-engine](https://github.com/Buzzr-app/dfs-engine) — Zero-dependency, pure-functional DFS settlement engine: declarative book policies, grading, payout math, and audit trails, with published golden test vectors for conformance testing.
+- [@buzzr/dfs-engine](https://github.com/Buzzr-app/dfs-engine) — Zero-dependency TypeScript DFS settlement engine with declarative compatibility policies, audit trails, and versioned engine regression fixtures.
 ```
 
 ## 3. awesome-sports-analytics

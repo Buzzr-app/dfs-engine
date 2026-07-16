@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { access, readFile } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -42,14 +43,26 @@ const publicText = publicKeys.map((key) => docs[key]).join('\n');
 const staleClaims = [
   [/\b8 tools?\b/i, 'the retired eight-tool catalog'],
   [/book[- ]accurate/i, 'book-accurate operator behavior'],
-  [/mirrors?\s+PrizePicks(?:\s*\/\s*|\s+and\s+)Underdog(?:\s+settlement)?\s+rules/i, 'mirrored operator rules'],
-  [/PrizePicks and Underdog (?:ship as|are still) stable built-ins/i, 'stable built-in operator profiles'],
+  [
+    /mirrors?\s+PrizePicks(?:\s*\/\s*|\s+and\s+)Underdog(?:\s+settlement)?\s+rules/i,
+    'mirrored operator rules',
+  ],
+  [
+    /PrizePicks and Underdog (?:ship as|are still) stable built-ins/i,
+    'stable built-in operator profiles',
+  ],
   [/baseline:\s*~?24 downloads\/week/i, 'the superseded 24-download baseline'],
   [/\|\s*~?24\s*\|/i, 'the superseded 24-download metric row'],
-  [/grades identically to Buzzr(?:'s)? (?:production pipeline|grading)/i, 'production-conformance vectors'],
+  [
+    /grades identically to Buzzr(?:'s)? (?:production pipeline|grading)/i,
+    'production-conformance vectors',
+  ],
   [/prove(?:s)? your integration grades identically to Buzzr/i, 'production-conformance vectors'],
   [/passing conformance test/i, 'an overclaimed conformance test'],
-  [/published (?:golden )?(?:test )?vectors? for conformance testing/i, 'official-sounding conformance vectors'],
+  [
+    /published (?:golden )?(?:test )?vectors? for conformance testing/i,
+    'official-sounding conformance vectors',
+  ],
   [/published conformance vectors/i, 'official-sounding conformance vectors'],
 ];
 
@@ -91,9 +104,21 @@ for (const toolName of toolNames) {
 }
 
 for (const key of ['root', 'engine', 'mcp', 'cli']) {
-  requirePattern(key, /PrizePicks[^\n]*(?:experimental[^\n]*partial|partial[^\n]*experimental)/i, 'label the PrizePicks profile experimental and partially verified');
-  requirePattern(key, /Underdog[^\n]*(?:experimental[^\n]*unverified|unverified[^\n]*experimental)/i, 'label the Underdog profile experimental and unverified');
-  requirePattern(key, /displayed (?:lineup|entry|slip) terms? (?:are|remain|is) authoritative/i, 'make the displayed terms authoritative');
+  requirePattern(
+    key,
+    /PrizePicks[^\n]*(?:experimental[^\n]*partial|partial[^\n]*experimental)/i,
+    'label the PrizePicks profile experimental and partially verified',
+  );
+  requirePattern(
+    key,
+    /Underdog[^\n]*(?:experimental[^\n]*unverified|unverified[^\n]*experimental)/i,
+    'label the Underdog profile experimental and unverified',
+  );
+  requirePattern(
+    key,
+    /displayed (?:lineup|entry|slip) terms? (?:are|remain|is) authoritative/i,
+    'make the displayed terms authoritative',
+  );
 }
 
 for (const key of ['engine', 'mcp']) {
@@ -107,24 +132,32 @@ for (const key of ['engine', 'mcp']) {
     'https://www.prizepicks.com/help-center/potential-outcomes',
     'cite the reviewed PrizePicks standard outcomes source',
   );
-  requireText(
-    key,
-    'https://legal.underdogsports.com/',
-    'cite the canonical Underdog legal source',
-  );
+  requireText(key, 'https://legal.underdogsports.com/', 'cite the canonical Underdog legal source');
 }
 
 requirePattern('mcp', /executable:\s*false/i, 'explain that draft policies are non-executable');
-requirePattern('mcp', /(?:reject|cannot|never)[^\n]*draft/i, 'explain that grading does not execute drafts');
+requirePattern(
+  'mcp',
+  /(?:reject|cannot|never)[^\n]*draft/i,
+  'explain that grading does not execute drafts',
+);
 requirePattern('mcp', /JSON-RPC `-32602`/i, 'document transport schema failures');
-requirePattern('mcp', /direct[^\n]*`invalid_input`/i, 'document direct-handler validation failures');
+requirePattern(
+  'mcp',
+  /direct[\s\S]{0,180}`invalid_input`/i,
+  'document direct-handler validation failures',
+);
 
 const mobileSnapshot =
   'The Buzzr mobile app’s `release/ios-2.0.0` branch vendors `@buzzr/bets-core`, `@buzzr/dfs-engine`, and `@buzzr/entertainment-engine` as local 5.0.0 tarballs and imports all three.';
 requireText('root', mobileSnapshot, 'state the exact verified mobile integration snapshot');
 requireText('llms', mobileSnapshot, 'carry the exact verified mobile integration snapshot');
 for (const key of ['root', 'llms']) {
-  requirePattern(key, /not automatically (?:updated|upgraded)[^\n]*vNext/i, 'separate the app snapshot from vNext');
+  requirePattern(
+    key,
+    /not automatically (?:updated|upgraded)[^\n]*vNext/i,
+    'separate the app snapshot from vNext',
+  );
   requireText(
     key,
     'skills/buzzr-sports-engine/SKILL.md',
@@ -139,21 +172,59 @@ for (const key of ['root', 'llms']) {
 }
 
 for (const key of ['root', 'llms', 'vectors']) {
-  requirePattern(key, /engine regression fixtures/i, 'describe test vectors as engine regression fixtures');
-  requirePattern(key, /not official operator conformance/i, 'disclaim official operator conformance');
+  requirePattern(
+    key,
+    /engine regression fixtures/i,
+    'describe test vectors as engine regression fixtures',
+  );
+  requirePattern(
+    key,
+    /not official operator conformance/i,
+    'disclaim official operator conformance',
+  );
 }
 
 requireText('baseline', '2026-07-09 through 2026-07-15', 'preserve the measured baseline window');
-requirePattern('baseline', /\b191\b[^\n]*package downloads/i, 'preserve the measured family baseline');
-requirePattern('checklist', /baseline[^\n]*191[^\n]*2026-07-09[^\n]*2026-07-15/i, 'use the measured launch baseline');
+requirePattern(
+  'baseline',
+  /\b191\b[^\n]*package downloads/i,
+  'preserve the measured family baseline',
+);
+requirePattern(
+  'checklist',
+  /baseline[^\n]*191[^\n]*2026-07-09[^\n]*2026-07-15/i,
+  'use the measured launch baseline',
+);
 
 for (const key of ['checklist', 'awesomeLists', 'devto', 'reddit', 'showHn', 'twitter']) {
-  requirePattern(key, /\b(?:draft|drafts|prepared text only)\b/i, 'identify the material as a draft');
+  requirePattern(
+    key,
+    /\b(?:draft|drafts|prepared text only)\b/i,
+    'identify the material as a draft',
+  );
   requirePattern(key, /\bmanual(?:ly)?\b/i, 'require manual publication');
 }
 
 for (const key of ['engineChangelog', 'mcpChangelog', 'cliChangelog', 'vectorsChangelog']) {
-  requirePattern(key, /^## Unreleased \(vNext\)$/m, 'record the unreleased documentation contract without guessing a version');
+  requirePattern(
+    key,
+    /^## Unreleased \(vNext\)$/m,
+    'record the unreleased documentation contract without guessing a version',
+  );
+}
+
+for (const [key, content] of Object.entries(docs)) {
+  for (const match of content.matchAll(/\[[^\]]+\]\(([^)]+)\)/g)) {
+    const href = match[1].trim();
+    if (/^(?:https?:|mailto:|#)/i.test(href)) continue;
+    if (['link', 'url'].includes(href.toLowerCase())) continue;
+
+    const withoutAnchor = href.split('#', 1)[0].replace(/^<|>$/g, '');
+    const target = resolve(dirname(`${root}${files[key]}`), decodeURIComponent(withoutAnchor));
+    await access(target).catch(() => {
+      assert.fail(`${files[key]} contains a missing local link: ${href}`);
+    });
+  }
 }
 
 console.log(`Public docs contract passed for ${publicKeys.length} files.`);

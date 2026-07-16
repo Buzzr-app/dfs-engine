@@ -1,5 +1,12 @@
 # @buzzr/dfs-cli
 
+## Unreleased (vNext)
+
+- Document the matching engine's effective-dated compatibility metadata,
+  verification limits, and displayed-entry authority.
+- Direct users to versioned engine regression fixtures instead of claiming
+  production or official operator equivalence.
+
 ## 1.0.0
 
 ### Major Changes

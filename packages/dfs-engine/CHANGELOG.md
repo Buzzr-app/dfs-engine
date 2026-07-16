@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased (vNext)
+
+### Corrected
+
+- Reclassified the built-in PrizePicks profile as experimental and partially
+  verified, and the Underdog profile as experimental and unverified. Operator-named
+  profiles are independent compatibility estimates; displayed entry terms and
+  explicit operator rulings remain authoritative.
+- Added effective-dated PrizePicks standard Player Pick payout tables from the
+  first-party sources reviewed on 2026-07-16 while retaining the May 2026
+  compatibility snapshots for historical entry selection.
+- Added immutable policy verification/source snapshots to results and public
+  policy listing, confidence caps for incomplete verification, and explicit
+  explanation codes.
+- Corrected DNP/tie demotion scaling, date-aware provider-row selection,
+  all-push/all-DNP status handling, immutable batch cache annotations, and
+  half-cent payout rounding.
+
+### Documentation
+
+- Reframed test vectors as engine regression fixtures rather than proof of
+  operator behavior, and documented current source links and compatibility limits.
+
 ## 5.0.0 — Batch Settlement + Declarative Policies
 
 Baselines the whole @buzzr family at v5. No breaking changes to the locked
@@ -80,7 +103,8 @@ Turns the Settlement OS into a book-policy registry instead of a PrizePicks/Unde
 ### Changed
 
 - `DfsEntryInput` now prefers `bookId` and `playTypeId`.
-- PrizePicks and Underdog are still stable built-ins, but their payout/tie/DNP behavior now flows through the policy registry.
+- The bundled PrizePicks and Underdog compatibility behavior flows through the
+  policy registry. vNext corrects their public status and verification metadata.
 - `adaptBuzzrBetInput(...)` emits the v3 entry shape while preserving the current Buzzr `CreateDfsBetInput` migration path.
 - `@buzzr/dfs-testkit` fixture entries now use valid v3 book/play IDs.
 

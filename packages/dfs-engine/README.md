@@ -3,7 +3,7 @@
 [![npm version](https://img.shields.io/npm/v/@buzzr/dfs-engine.svg)](https://www.npmjs.com/package/@buzzr/dfs-engine)
 [![ci](https://github.com/Buzzr-app/dfs-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/Buzzr-app/dfs-engine/actions/workflows/ci.yml)
 
-Pure-functional **DFS prop grading**, payout math, stat normalization, and policy-aware settlement for DFS pick'em apps. PrizePicks and Underdog ship as stable built-ins, and v4 gives you strict settlement inputs, structured validation, and custom book policies without forking. Drop-in TypeScript, zero runtime dependencies, ESM + CJS + `.d.ts` shipped.
+Pure-functional **DFS prop grading**, payout math, stat normalization, and policy-aware settlement for DFS pick'em apps. PrizePicks is an experimental, partially verified compatibility profile; Underdog is experimental and unverified. These independent profiles are not official operator rules engines. The package also supports strict settlement inputs, structured validation, and custom book policies without forking. Drop-in TypeScript, zero runtime dependencies, ESM + CJS + `.d.ts` shipped.
 
 **Sports covered:** NBA, WNBA, NCAAM/W, NFL, MLB, NHL, EPL, MLS, La Liga, NWSL, UEFA Champions League. ~70 props.
 
@@ -17,10 +17,10 @@ If you're building a DFS-adjacent tool — a bet tracker, parlay analyzer, EV ca
 
 - **Did this leg hit?** Given a player's actual stat and a slip line, decide won / lost / push.
 - **What does the slip pay out?** Given the play type (Power / Flex / Standard), the pick count, the hits, and any boost, compute the multiplier and the withdrawable-vs-bonus split.
-- **What happens when a player doesn't play?** Demote a six-pick to a five-pick (PrizePicks) or scratch and rescale (Underdog).
+- **What happens when a player doesn't play?** Apply a selected compatibility or custom policy, preserve the decision in the audit trail, and surface uncertainty instead of inventing an operator ruling.
 - **What stat goes into a `Pts + Rebs + Asts` leg?** Or `Pass + Rush + Rec Yds`? Or `Hitter FS`?
 
-There's no good open-source TypeScript package for any of this. Everyone reinvents it from scratch, usually wrong. This is the version extracted from [Buzzr](https://buzzr.app), where it's been settling real money lines in production. Pure functions, strict runtime validation, and a release suite covering 300+ settlement tests.
+There's no good open-source TypeScript package for any of this. Everyone reinvents it from scratch, usually wrong. This package was extracted from [Buzzr](https://buzzr.app) and is maintained as an independent, testable engine. Pure functions, strict runtime validation, and a release suite covering 300+ settlement tests keep code behavior auditable without claiming that an operator will issue the same ruling.
 
 ## Quickstart
 
@@ -137,6 +137,22 @@ Optional SDK packages:
 - `@buzzr/dfs-provider-espn` wraps your ESPN-shaped loader as a stat provider.
 - `@buzzr/dfs-testkit` ships fixture builders and mock providers for settlement tests.
 
+## Operator compatibility contract
+
+The operator-named built-ins are versioned compatibility profiles, not affiliated or endorsed implementations:
+
+- **PrizePicks:** `status: "experimental"` with `verification.status: "partial"`. Standard Player Pick payout references were reviewed on 2026-07-16 from [PrizePicks Payouts](https://www.prizepicks.com/help-center/payouts) and [PrizePicks Potential Outcomes](https://www.prizepicks.com/help-center/potential-outcomes). Settlement behavior and variable lineup-specific payouts are not fully verified.
+- **Underdog:** `status: "experimental"` with `verification.status: "unverified"`. The [Underdog Sports Legal Center](https://legal.underdogsports.com/) is recorded as the rules entrypoint; current payout and settlement values in the compatibility snapshot have not been verified.
+
+The displayed lineup terms are authoritative. Record `placedAt` so the engine can select an effective-dated payout table, inspect `policyStatus`, `policyVerification`, `payoutTable`, `confidence`, `sourceRefs`, and `explanationCodes` on every result, and obtain explicit operator rulings for DNPs, reboots, ties, rescues, voids, and corrections.
+
+```ts
+const policies = createDfsEngine().getBookPolicies();
+// Immutable snapshots with status, verification, sources, and play types.
+```
+
+Draft fixtures are source metadata for future work. They are not registered by `createDfsEngine()` and cannot settle entries unless a caller deliberately supplies a complete custom implementation.
+
 ## Examples
 
 ### 1. Look up the payout for a pick count + hit count
@@ -144,15 +160,15 @@ Optional SDK packages:
 ```ts
 import { lookupStandardMultiplier } from '@buzzr/dfs-engine';
 
-// PrizePicks 5-pick Power, all five hit → 20×.
+// PrizePicks compatibility table effective 2026-07-02: 5-pick Power, 5/5 → 20×.
 lookupStandardMultiplier({ app: 'prizepicks', playType: 'power', pickCount: 5, hits: 5 });
 // → 20
 
-// PrizePicks 6-pick Flex, only 5 of 6 hit → 1.75×.
+// PrizePicks compatibility table effective 2026-07-02: 6-pick Flex, 5/6 → 2×.
 lookupStandardMultiplier({ app: 'prizepicks', playType: 'flex', pickCount: 6, hits: 5 });
-// → 1.75
+// → 2
 
-// Underdog 8-pick Standard, all hit → 100×.
+// Unverified Underdog compatibility snapshot: 8-pick Standard, 8/8 → 100×.
 lookupStandardMultiplier({ app: 'underdog', playType: 'underdog_standard', pickCount: 8, hits: 8 });
 // → 100
 ```
@@ -162,9 +178,8 @@ lookupStandardMultiplier({ app: 'underdog', playType: 'underdog_standard', pickC
 ```ts
 import { recalcMultiplierAfterDnp } from '@buzzr/dfs-engine';
 
-// One leg on a 6-pick Power scratched. Demote to a 5-pick (all surviving
-// must hit), scaling the slip's original multiplier proportionally so
-// any boost flows through.
+// Under the selected compatibility profile, remove one leg from a 6-pick
+// Power entry and scale the slip's displayed multiplier proportionally.
 const { newMultiplier } = recalcMultiplierAfterDnp({
   app: 'prizepicks',
   playType: 'power',
@@ -227,7 +242,8 @@ const result = gradeDfsBetFromGraded({
   baseMultiplier: 10,
   profitBoostPct: null,
 });
-// 4-of-5 Underdog Flex → standard 2×; scaled by displayed/base ratio.
+// Unverified Underdog compatibility snapshot: 4-of-5 Flex → 2×,
+// scaled by displayed/base ratio.
 // → { status: 'won', effectiveMultiplier: 2.3, totalPayout: 23,
 //     withdrawablePayout: 20, bonusPayout: 3 }
 ```
@@ -284,7 +300,7 @@ if (!grade.ok) {
 
 | Module | Highlights |
 |---|---|
-| `payouts` | `lookupStandardMultiplier`, `recalcMultiplierAfterDnp`, `lookupBaseMultiplier` — full PrizePicks (Power/Flex) and Underdog (Standard/Flex) payout schedules |
+| `payouts` | `lookupStandardMultiplier`, `recalcMultiplierAfterDnp`, `lookupBaseMultiplier` — reference compatibility schedules; PrizePicks includes reviewed standard rates effective 2026-07-02, while Underdog remains unverified |
 | `grading` | `gradeLegFromActual` (+`Explained`), `gradeDfsBetFromGraded`, `applyLegDnp`, `computeBoostSplit`, `detectMidGameDnp`, `reconcileMidGameDnpEntries`, `findGameLogCandidates`, `shouldRegradeLeg`, `extractStatForProp` (+`Explained`) |
 | `prop-normalizer` | `normalizeDfsPropType`, `asDfsPropTypeKey`, `DFS_PROP_TYPE_KEYS` |
 | `stat-adapters` | `getStatAdapter`, `extractStatForPropViaRegistry`, **`registerLeague`** / **`unregisterLeague`** / **`getRegisteredLeagues`**, plus per-sport tables: `BASKETBALL_ADAPTERS`, `NFL_ADAPTERS`, `MLB_ADAPTERS`, `NHL_ADAPTERS` |
@@ -347,14 +363,15 @@ v4 settlement inputs are canonical: use `actual` on `DfsLegInput`, `status` for 
 
 ## Status & caveats
 
-- **Payout tables current as of 2026-05.** PrizePicks and Underdog adjust their schedules periodically; if a recalc looks wrong, check whether the published schedule changed.
-- **Slip-displayed multiplier always wins.** Tables are only the demotion ratio baseline — Demon/Goblin/boost markups aren't enumerated.
+- **Compatibility status is part of the result.** PrizePicks is experimental and partially verified; Underdog is experimental and unverified. Neither profile certifies a current operator ruling.
+- **PrizePicks standard references were reviewed 2026-07-16.** The current standard table is effective 2026-07-02, and older effective-dated tables remain for historical entries. Recheck the linked first-party sources before relying on a later entry.
+- **Displayed slip terms are authoritative.** Tables are compatibility inputs and demotion-ratio baselines; variable, promotional, state-specific, and entry-specific terms may differ.
 - **Gamelog parsing is your problem.** This package grades stats; it doesn't fetch them. Adapt ESPN, your own scraper, or a paid data feed to `PlayerGameLogEntryShape` upstream.
 - **Sport coverage:** NBA / WNBA / NCAAM (basketball), NFL, MLB (batters + pitchers), NHL (skaters + goalies). Adding a sport means a new `AdapterTable` plus extending `DfsPropTypeKey`.
 
 ## Origin
 
-Extracted from [Buzzr](https://buzzr.app), where it settles user bets placed on PrizePicks and Underdog. The Buzzr team has been iterating on this math against real slips and real stat-correction edge cases for two years. The npm package is the same code, just decoupled from the app.
+Extracted from [Buzzr](https://buzzr.app) and maintained in this public monorepo. The mobile app currently vendors the 5.0.0 engine tarball; later public-repository changes require a deliberate app upgrade. Operator-named policy outputs remain compatibility estimates subject to the displayed entry terms and current operator ruling.
 
 ## License
 

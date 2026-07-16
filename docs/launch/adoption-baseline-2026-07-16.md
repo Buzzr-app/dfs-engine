@@ -6,6 +6,8 @@ This is the pre-release baseline for the public toolkit work that follows v5.0.0
 
 Source: npm downloads API. Window: the seven complete UTC days from 2026-07-09 through 2026-07-15.
 
+Measured family baseline: 191 package downloads from 2026-07-09 through 2026-07-15. This is package activity, not a unique-user count.
+
 | Package                            | Downloads |
 | ---------------------------------- | --------: |
 | `@buzzr/dfs-engine`                |        38 |
