@@ -54,6 +54,25 @@ describe('v5 validateBookPolicyDefinition', () => {
     expect(codes(result)).toContain('policy.invalid_status');
   });
 
+  test('validates optional policy verification metadata', () => {
+    expect(
+      codes(
+        validateBookPolicyDefinition({
+          ...validPolicy(),
+          verification: { status: 'trusted', reviewedAt: '2026-07-16' },
+        }),
+      ),
+    ).toContain('policy.invalid_verification_status');
+    expect(
+      codes(
+        validateBookPolicyDefinition({
+          ...validPolicy(),
+          verification: { status: 'partial', reviewedAt: 'not-a-date' },
+        }),
+      ),
+    ).toContain('policy.invalid_verification_reviewed_at');
+  });
+
   test('rejects empty play type lists', () => {
     const result = validateBookPolicyDefinition({
       ...validPolicy(),
