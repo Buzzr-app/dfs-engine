@@ -103,6 +103,22 @@ describe('grade_dfs_entry', () => {
     expect((settlement.payout as Record<string, unknown>).total).toBe(30);
   });
 
+  it('honors authoritative pre-graded leg statuses without stat values', async () => {
+    const input = buildEntry();
+    for (const leg of input.legs as Array<Record<string, unknown>>) {
+      delete leg.actual;
+      leg.status = 'won';
+    }
+
+    const settlement = parseResult(await gradeDfsEntryTool.handler(input));
+    expect(settlement.status).toBe('won');
+    expect(settlement.multiplier).toBe(3);
+    expect(settlement.legs).toEqual([
+      expect.objectContaining({ status: 'won', actual: null }),
+      expect.objectContaining({ status: 'won', actual: null }),
+    ]);
+  });
+
   it('rejects schema-invalid input without touching the engine', async () => {
     const result = await gradeDfsEntryTool.handler({ bookId: 'prizepicks' });
 
@@ -192,6 +208,16 @@ describe('grade_dfs_entries', () => {
     expect(parseResult(result).error as Record<string, unknown>).toMatchObject({
       code: 'invalid_input',
     });
+  });
+
+  it('caps the advertised batch size at 25 entries so valid output remains deliverable', () => {
+    const input = {
+      entries: Array.from({ length: 26 }, (_, index) =>
+        buildEntry({ entryId: `entry-${index}` }),
+      ),
+    };
+
+    expect(gradeDfsEntriesTool.inputSchema.safeParse(input).success).toBe(false);
   });
 
   it('serializes failures without exposing thrown names, messages, or stacks', () => {

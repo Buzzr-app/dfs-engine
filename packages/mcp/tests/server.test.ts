@@ -75,4 +75,28 @@ describe('createBuzzrMcpServer', () => {
       await server.close();
     }
   });
+
+  it('bounds transport-level validation errors before the SDK can amplify them', async () => {
+    const server = createBuzzrMcpServer();
+    const client = new Client({ name: 'buzzr-mcp-adversarial-test', version: '0.0.0' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+    try {
+      const result = await client.callTool({
+        name: 'summarize_bet_history',
+        arguments: { bets: Array.from({ length: 5_000 }, () => ({})) },
+      });
+      const content = result.content as Array<{ type: string; text: string }>;
+
+      expect(result.isError).toBe(true);
+      expect(Buffer.byteLength(JSON.stringify(result), 'utf8')).toBeLessThan(65_536);
+      expect(JSON.parse(content[0].text)).toMatchObject({
+        error: { code: 'invalid_input' },
+      });
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
 });
