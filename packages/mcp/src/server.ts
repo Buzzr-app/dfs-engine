@@ -35,7 +35,7 @@ function transportInputSchema(tool: BuzzrToolDefinition) {
 }
 
 /**
- * Registers one @buzzr tool through the SDK's native registry. The transport
+ * Registers one Buzzr tool through the SDK's native registry. The transport
  * schema accepts an argument object while advertising the full discovery
  * schema; the handler then owns bounded validation and error serialization.
  */

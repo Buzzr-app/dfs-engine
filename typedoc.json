@@ -24,6 +24,20 @@
   "name": "Buzzr Sports Engine API",
   "readme": "docs/api-reference.md",
   "categorizeByGroup": true,
+  "highlightLanguages": [
+    "bash",
+    "console",
+    "css",
+    "html",
+    "javascript",
+    "json",
+    "jsonc",
+    "json5",
+    "yaml",
+    "toml",
+    "tsx",
+    "typescript"
+  ],
   "navigation": {
     "includeCategories": true,
     "includeGroups": true
