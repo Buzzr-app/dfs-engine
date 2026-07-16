@@ -33,6 +33,10 @@ jobs:
       - run: npm run build
       - run: npm run test:mcp:packed
       - run: npm run docs
+      - run: npm run check:docs
+      - run: npm run check:links
+      - if: matrix.node == 22
+        run: npm run check:links:external
       - run: npm run smoke:exports
       - run: npm run size:check
       - run: npm run pack:smoke

@@ -28,7 +28,9 @@
     "check:mcp-registry": "node scripts/check-mcp-registry-metadata.mjs",
     "check:api-docs": "node scripts/check-api-docs.mjs",
     "check:docs": "node scripts/check-public-docs.mjs",
-    "verify": "npm run typecheck && npm run lint && npm run format:check && npm test && npm run test:coverage && npm run build && npm run test:mcp:packed && npm run docs && npm run check:docs && npm run smoke:exports && npm run size:check && npm run pack:smoke && npm run check:workflows && npm run check:mcp-registry && npm run audit:high",
+    "check:links": "node scripts/check-doc-links.mjs",
+    "check:links:external": "node scripts/check-doc-links.mjs --external",
+    "verify": "npm run typecheck && npm run lint && npm run format:check && npm test && npm run test:coverage && npm run build && npm run test:mcp:packed && npm run docs && npm run check:docs && npm run check:links && npm run smoke:exports && npm run size:check && npm run pack:smoke && npm run check:workflows && npm run check:mcp-registry && npm run audit:high",
     "pack:smoke": "npm pack --workspaces --dry-run",
     "test:mcp:packed": "npm run build --workspace @buzzr/bets-core --workspace @buzzr/dfs-engine --workspace @buzzr/entertainment-engine --workspace @buzzr/mcp && node scripts/test-mcp-packed.mjs",
     "proof:mcp:published": "node scripts/prove-mcp-published.mjs"
