@@ -11,26 +11,29 @@ export type ExpectedLegOutcome = {
   legId: string;
   status: DfsLegOutcome;
   actual: number | null;
-  pendingReason: string | null;
-  providerSource: string;
+  /** Added in v5.1; omitted by legacy consumer-authored fixtures. */
+  pendingReason?: string | null;
+  /** Added in v5.1; omitted by legacy consumer-authored fixtures. */
+  providerSource?: string;
 };
 
 export type ExpectedSettlement = {
   status: 'won' | 'lost' | 'pushed' | 'pending' | 'void';
-  multiplier: number;
-  effectiveMultiplier: number;
-  payout: { total: number; withdrawable: number; bonus: number };
-  pendingReasons: string[];
-  policyVersion: string | null;
-  policyStatus: DfsPolicyStatus | null;
-  policyVerificationStatus: DfsPolicyVerificationStatus | null;
-  payoutTable: { version: string | null; effectiveFrom: string } | null;
-  confidence: DfsSettlementConfidence;
-  explanationCodes: string[];
-  validation: { errorCodes: string[]; warningCodes: string[] };
-  sourceLabels: string[];
-  providerSources: string[];
-  auditCodes: string[];
+  /** Additive v5.1 settlement assertions; optional for legacy consumer-authored fixtures. */
+  multiplier?: number;
+  effectiveMultiplier?: number;
+  payout?: { total: number; withdrawable: number; bonus: number };
+  pendingReasons?: string[];
+  policyVersion?: string | null;
+  policyStatus?: DfsPolicyStatus | null;
+  policyVerificationStatus?: DfsPolicyVerificationStatus | null;
+  payoutTable?: { version: string | null; effectiveFrom: string } | null;
+  confidence?: DfsSettlementConfidence;
+  explanationCodes?: string[];
+  validation?: { errorCodes: string[]; warningCodes: string[] };
+  sourceLabels?: string[];
+  providerSources?: string[];
+  auditCodes?: string[];
   legs: ExpectedLegOutcome[];
 };
 
@@ -79,6 +82,11 @@ function leg(
   };
 }
 
+type CompleteExpectedLegOutcome = ExpectedLegOutcome & {
+  pendingReason: string | null;
+  providerSource: string;
+};
+
 type ExpectedBuilderInput = {
   status: ExpectedSettlement['status'];
   multiplier: number;
@@ -87,13 +95,18 @@ type ExpectedBuilderInput = {
   confidence?: DfsSettlementConfidence;
   explanationCodes: string[];
   validation?: ExpectedSettlement['validation'];
-  legs: ExpectedLegOutcome[];
+  legs: CompleteExpectedLegOutcome[];
+};
+
+type CompleteExpectedSettlement = Required<Omit<ExpectedSettlement, 'status' | 'legs'>> & {
+  status: ExpectedSettlement['status'];
+  legs: CompleteExpectedLegOutcome[];
 };
 
 function expectedSettlement(
   profile: 'prizepicks' | 'underdog',
   input: ExpectedBuilderInput,
-): ExpectedSettlement {
+): CompleteExpectedSettlement {
   const prizePicks = profile === 'prizepicks';
   return {
     status: input.status,
