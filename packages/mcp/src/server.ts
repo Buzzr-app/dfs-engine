@@ -2,6 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import { buzzTools } from './tools/buzz';
 import { dfsTools } from './tools/dfs';
+import { historyTools } from './tools/history';
 import { oddsTools } from './tools/odds';
 import type { BuzzrToolDefinition, ToolResult } from './tools/shared';
 
@@ -9,7 +10,12 @@ export const SERVER_NAME = 'buzzr';
 export const SERVER_VERSION = '5.0.0';
 
 /** Every tool this server ships, in catalog order. */
-export const allTools: readonly BuzzrToolDefinition[] = [...dfsTools, ...oddsTools, ...buzzTools];
+export const allTools: readonly BuzzrToolDefinition[] = [
+  ...dfsTools,
+  ...oddsTools,
+  ...historyTools,
+  ...buzzTools,
+];
 
 /** Registers one @buzzr tool definition on an McpServer instance. */
 export function registerBuzzrTool(server: McpServer, tool: BuzzrToolDefinition): void {

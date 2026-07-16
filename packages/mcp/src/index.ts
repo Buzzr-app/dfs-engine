@@ -15,11 +15,19 @@ export {
 
 export {
   dfsTools,
+  gradeDfsEntriesTool,
   gradeDfsEntryTool,
   listBookPoliciesTool,
   validateDfsEntryTool,
 } from './tools/dfs';
-export { fairLineTool, kellyStakeTool, oddsTools, parlayValueTool } from './tools/odds';
+export { historyTools, summarizeBetHistoryTool } from './tools/history';
+export {
+  closingLineValueTool,
+  fairLineTool,
+  kellyStakeTool,
+  oddsTools,
+  parlayValueTool,
+} from './tools/odds';
 export {
   buzzTools,
   createPredictGameBuzzTool,

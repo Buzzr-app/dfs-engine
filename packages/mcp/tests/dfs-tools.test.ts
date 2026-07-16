@@ -70,7 +70,7 @@ describe('grade_dfs_entry', () => {
       playTypeId: 'power',
       stake: 10,
       displayedMultiplier: 3,
-      baseMultiplier: null,
+      baseMultiplier: 3,
       profitBoostPct: null,
       validation: { ok: true, errors: [], warnings: [] },
     });
@@ -145,7 +145,7 @@ describe('grade_dfs_entry', () => {
     );
 
     expect(result.status).toBe('pending');
-    expect(result.pendingReasons).toContain('missing_policy');
+    expect(result.pendingReasons).toContain('validation_failed');
     expect(result.explanationCodes).toContain('validation.unknown_book_or_play_type');
   });
 });
