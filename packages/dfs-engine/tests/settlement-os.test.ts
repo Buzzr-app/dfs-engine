@@ -266,6 +266,18 @@ describe('v2 Settlement OS engine', () => {
     );
 
     expect(result.payout).toEqual({ total: 10.06, withdrawable: 6.71, bonus: 3.35 });
+
+    const halfCent = await engine.settleEntry(
+      entry({
+        entryId: 'half-cent',
+        bookId: 'rounding-book',
+        playTypeId: 'main',
+        stake: 1,
+        displayedMultiplier: 1.005,
+      }),
+      { actualsByLegId: { 'leg-1': 30, 'leg-2': 10 } },
+    );
+    expect(halfCent.payout).toEqual({ total: 1.01, withdrawable: 0.67, bonus: 0.34 });
   });
 
   test('prices boosted Underdog flex payouts against the surviving hit count', async () => {
