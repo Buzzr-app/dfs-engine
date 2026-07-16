@@ -168,7 +168,7 @@ try {
     );
     assert.equal(fairLine.selectedSide, 'proof');
     assert.equal(fairLine.fairProbability, 0.5);
-    assert.equal(fairLine.marketOverround > 0, true);
+    assert.equal(fairLine.overround > 0, true);
   } finally {
     await withDeadline(client.close(), 'Smithery MCPB shutdown');
   }
