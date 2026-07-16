@@ -61,9 +61,10 @@ Release proof must bind an npm artifact to the reviewed exact version, SHA-512 i
 
 The Smithery MCPB repackages that exact npm artifact without adding secrets or
 a network transport. Publication discovers the full tool schemas from the real
-server, waits for a successful registry release, downloads the registry copy,
-compares its SHA-256 digest with the uploaded bundle, and replays the real-client
-proof against the downloaded bytes.
+server and waits for a successful registry release. For the 5.1.0 Smithery
+release, the registry copy was then downloaded, its SHA-256 digest was compared
+with the uploaded bundle, and the real-client proof was replayed against the
+downloaded bytes.
 
 Run `npm run audit:high` and `npm run verify` before release. An audit result is one signal, not proof that dependencies or the registry are uncompromised.
 

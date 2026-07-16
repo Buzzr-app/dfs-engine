@@ -243,6 +243,15 @@ requirePattern('agents', /\b11 tools\b/i, 'state the current MCP tool count');
 
 for (const key of ['root', 'llms', 'mcp']) {
   requirePattern(key, /local stdio MCPB/i, 'describe the Smithery transport accurately');
+  requirePattern(key, /not a hosted HTTP service/i, 'reject a hosted Smithery transport claim');
+}
+
+for (const key of ['root', 'mcp']) {
+  requireText(
+    key,
+    'npx -y smithery@1.2.0 mcp add sarveshsea/buzzr-sports-engine --client codex',
+    'provide the verified Smithery Codex install command',
+  );
 }
 
 const toolNames = [
