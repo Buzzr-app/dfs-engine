@@ -218,7 +218,7 @@ describe('grade_dfs_entries', () => {
     expect(gradeDfsEntriesTool.inputSchema.safeParse(input).success).toBe(false);
   });
 
-  it('delivers the maximum valid 25-entry, 300-leg batch under the result cap', async () => {
+  it('delivers the maximum valid 25-entry Underdog batch under the result cap', async () => {
     const baseLeg = (buildEntry().legs as Array<Record<string, unknown>>)[0];
     const entries = Array.from({ length: 25 }, (_, entryIndex) =>
       buildEntry({
@@ -226,7 +226,7 @@ describe('grade_dfs_entries', () => {
         bookId: 'underdog',
         playTypeId: 'underdog_standard',
         displayedMultiplier: 100,
-        legs: Array.from({ length: 12 }, (_, legIndex) => ({
+        legs: Array.from({ length: 8 }, (_, legIndex) => ({
           ...baseLeg,
           legId: `leg-${entryIndex}-${legIndex}`,
           playerName: `Bounded player ${entryIndex}-${legIndex}`,
@@ -240,7 +240,7 @@ describe('grade_dfs_entries', () => {
     expect(result.isError).toBeUndefined();
     expect(Buffer.byteLength(JSON.stringify(result), 'utf8')).toBeLessThan(1_048_576);
     expect(parseResult(result)).toMatchObject({
-      summary: { total: 25, settled: 0, pending: 25, failed: 0 },
+      summary: { total: 25, settled: 25, pending: 0, failed: 0 },
     });
   });
 

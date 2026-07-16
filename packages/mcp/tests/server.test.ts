@@ -1,11 +1,20 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 
-import { allTools, createBuzzrMcpServer, SERVER_NAME, SERVER_VERSION } from '../src/index';
+import {
+  allTools,
+  createBuzzrMcpServer,
+  fairLineTool,
+  registerBuzzrTool,
+  SERVER_NAME,
+  SERVER_VERSION,
+} from '../src/index';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const packageManifest = JSON.parse(readFileSync(resolve(here, '../package.json'), 'utf8')) as {
@@ -117,6 +126,52 @@ describe('createBuzzrMcpServer', () => {
       expect(JSON.parse(content[0].text)).toMatchObject({
         error: { code: 'invalid_input' },
       });
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
+
+  it('coexists with SDK-native tools added to the created server', async () => {
+    const server = createBuzzrMcpServer();
+    server.registerTool(
+      'host_native_tool',
+      { inputSchema: z.object({ value: z.string() }) },
+      ({ value }) => ({ content: [{ type: 'text', text: value }] }),
+    );
+    const client = new Client({ name: 'buzzr-mcp-embed-test', version: '0.0.0' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+    try {
+      const listed = await client.listTools();
+      expect(listed.tools.map((tool) => tool.name)).toContain('host_native_tool');
+      const result = await client.callTool({
+        name: 'host_native_tool',
+        arguments: { value: 'native-ok' },
+      });
+      expect(result.content).toEqual([{ type: 'text', text: 'native-ok' }]);
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
+
+  it('adds Buzzr tools without hiding SDK-native tools registered first', async () => {
+    const server = new McpServer({ name: 'embedded-host', version: '1.0.0' });
+    server.registerTool('host_first', { inputSchema: z.object({}) }, () => ({
+      content: [{ type: 'text', text: 'host-first-ok' }],
+    }));
+    registerBuzzrTool(server, fairLineTool);
+
+    const client = new Client({ name: 'buzzr-mcp-register-test', version: '0.0.0' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+    try {
+      expect((await client.listTools()).tools.map((tool) => tool.name).sort()).toEqual([
+        'fair_line',
+        'host_first',
+      ]);
     } finally {
       await client.close();
       await server.close();

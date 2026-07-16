@@ -171,4 +171,21 @@ describe('rank_games', () => {
     expect(result.isError).toBe(true);
     expect((parseResult(result).error as Record<string, unknown>).code).toBe('invalid_input');
   });
+
+  it('rejects oversized affinity maps before validating every value', () => {
+    const parsed = rankGamesTool.inputSchema.safeParse({
+      games: [nbaGame],
+      profile: {
+        teamAffinity: Object.fromEntries(
+          Array.from({ length: 1_000 }, (_, index) => [`team-${index}`, 'invalid']),
+        ),
+      },
+    });
+
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      expect(parsed.error.issues).toHaveLength(1);
+      expect(parsed.error.issues[0].message).toContain('100 entries');
+    }
+  });
 });
