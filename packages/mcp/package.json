@@ -29,7 +29,8 @@
     "test": "vitest run",
     "lint": "eslint src tests",
     "format": "prettier --write src tests",
-    "format:check": "prettier --check src tests"
+    "format:check": "prettier --check src tests",
+    "prepack": "npm run build"
   },
   "keywords": [
     "mcp",

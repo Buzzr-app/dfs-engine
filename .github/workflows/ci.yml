@@ -25,9 +25,25 @@ jobs:
       - run: npm test
       - run: npm run test:coverage
       - run: npm run build
+      - run: npm run test:mcp:packed
       - run: npm run docs
       - run: npm run smoke:exports
       - run: npm run size:check
       - run: npm run pack:smoke
       - run: npm run bench
       - run: npm run audit:high
+
+  mcp-packed-platforms:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:mcp:packed

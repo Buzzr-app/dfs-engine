@@ -1,0 +1,30 @@
+name: prove published MCP
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_version:
+        description: Published @buzzr/mcp version expected on npm latest
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  prove:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run proof:mcp:published
+        env:
+          EXPECTED_MCP_VERSION: ${{ inputs.expected_version }}

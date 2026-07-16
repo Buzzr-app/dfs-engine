@@ -26,7 +26,8 @@
     "audit:high": "npm audit --audit-level=high",
     "verify": "npm run typecheck && npm run lint && npm run format:check && npm test && npm run test:coverage && npm run build && npm run test:mcp:packed && npm run docs && npm run smoke:exports && npm run size:check && npm run pack:smoke",
     "pack:smoke": "npm pack --workspaces --dry-run",
-    "test:mcp:packed": "npm run build --workspace @buzzr/bets-core --workspace @buzzr/dfs-engine --workspace @buzzr/entertainment-engine --workspace @buzzr/mcp && node scripts/test-mcp-packed.mjs"
+    "test:mcp:packed": "npm run build --workspace @buzzr/bets-core --workspace @buzzr/dfs-engine --workspace @buzzr/entertainment-engine --workspace @buzzr/mcp && node scripts/test-mcp-packed.mjs",
+    "proof:mcp:published": "node scripts/prove-mcp-published.mjs"
   },
   "devDependencies": {
     "@changesets/cli": "^2.31.0",

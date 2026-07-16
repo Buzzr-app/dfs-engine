@@ -44,7 +44,7 @@ function captureOutput(capture, chunk, label) {
   capture.value = next;
 }
 
-async function withDeadline(promise, label, timeoutMs = 10_000) {
+async function withDeadline(promise, label, timeoutMs = 30_000) {
   let timeout;
   try {
     return await Promise.race([
@@ -75,7 +75,8 @@ async function packWorkspace(workspace, destination, cache) {
     ['pack', '--workspace', workspace, '--json', '--pack-destination', destination],
     { cwd: root, env: commandEnvironment(cache), maxBuffer: 10 * 1024 * 1024 },
   );
-  const results = JSON.parse(stdout);
+  const jsonStart = stdout.lastIndexOf('\n[');
+  const results = JSON.parse(jsonStart === -1 ? stdout : stdout.slice(jsonStart + 1));
   assert.equal(results.length, 1, `Expected one packed artifact for ${workspace}`);
   return results[0];
 }
