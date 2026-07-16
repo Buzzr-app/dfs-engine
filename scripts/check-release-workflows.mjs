@@ -141,6 +141,11 @@ assert.match(
   'the unprivileged job must prepack all authorized npm artifacts',
 );
 assert.match(
+  buildJob,
+  /gitHead:\s+process\.env\.EXPECTED_COMMIT/,
+  'prepacked manifests must embed the exact reviewed gitHead before leaving the unprivileged job',
+);
+assert.match(
   publishJob,
   /^    needs:\s+\[authorize-release, build-release-artifacts\]$/m,
   'the npm OIDC job must consume only authorized, prebuilt artifacts',
@@ -158,12 +163,39 @@ assert.match(
 );
 assert.doesNotMatch(
   publishJob,
-  /actions\/checkout|npm (?:ci|install|exec changeset|pack)|npm run (?:build|verify)/,
-  'the npm OIDC job must not checkout, install, build, verify, pack, or run Changesets',
+  /npm (?:ci|install|exec changeset|pack)|npm run (?:build|verify)/,
+  'the npm OIDC job must not install, build, verify, pack, or run Changesets',
 );
 const privilegedMainCheck = publishJob.indexOf('name: Revalidate current main');
+const privilegedCheckout = publishJob.indexOf('uses: actions/checkout@');
+const privilegedCommitCheck = publishJob.indexOf(
+  'name: Bind npm publication to the reviewed checkout',
+);
+const privilegedSetup = publishJob.indexOf('uses: actions/setup-node@');
 const privilegedDownload = publishJob.indexOf('uses: actions/download-artifact@');
 assert.ok(privilegedMainCheck >= 0, 'the npm OIDC job must revalidate current main');
+assert.doesNotMatch(
+  publishJob.slice(0, privilegedMainCheck),
+  /^\s+(uses|run):/m,
+  'current-main revalidation must be the npm OIDC job first step',
+);
+assert.ok(
+  privilegedMainCheck < privilegedCheckout &&
+    privilegedCheckout < privilegedCommitCheck &&
+    privilegedCommitCheck < privilegedSetup &&
+    privilegedSetup < privilegedDownload,
+  'the npm OIDC job must revalidate main, checkout exact code, bind HEAD, then download artifacts',
+);
+assert.match(
+  publishJob.slice(privilegedCheckout, privilegedCommitCheck),
+  /ref:\s+\$\{\{ needs\.authorize-release\.outputs\.reviewed-commit \}\}[\s\S]*fetch-depth:\s+1[\s\S]*persist-credentials:\s+false/,
+  'the npm OIDC checkout must be shallow, exact, and must not persist GitHub credentials',
+);
+assert.match(
+  publishJob.slice(privilegedCommitCheck, privilegedSetup),
+  /test "\$\(git rev-parse HEAD\)" = "\$EXPECTED_COMMIT"/,
+  'the npm OIDC job must immediately bind checkout HEAD to the reviewed commit',
+);
 assert.match(
   publishJob.slice(privilegedMainCheck, privilegedDownload),
   /test "\$REMOTE_MAIN" = "\$EXPECTED_COMMIT"/,
@@ -198,13 +230,63 @@ assert.match(
 );
 assert.match(
   publishJob,
+  /assert\.equal\([\s\S]*tarballPackage\.gitHead,[\s\S]*process\.env\.EXPECTED_COMMIT/,
+  'the npm OIDC job must prove each tarball manifest is bound to the reviewed gitHead',
+);
+assert.match(
+  publishJob,
   /npm publish "\$tarball" --ignore-scripts --provenance/,
   'the npm OIDC job must publish each literal reviewed tarball with lifecycle scripts disabled',
 );
+assert.match(
+  publishJob,
+  /NPM_CONFIG_REGISTRY:\s+https:\/\/registry\.npmjs\.org\//,
+  'trusted publication must use the canonical npm registry',
+);
+for (const config of ['NPM_CONFIG_USERCONFIG', 'NPM_CONFIG_GLOBALCONFIG']) {
+  assert.match(
+    publishJob,
+    new RegExp(`: > "\\$${config}"`),
+    `trusted publication must isolate ambient ${config}`,
+  );
+}
 assert.doesNotMatch(
   release,
   /changeset publish/,
   'the release workflow must never let Changesets repack inside the OIDC job',
+);
+assert.equal(
+  [...release.matchAll(/^    environment:\s+npm$/gm)].length,
+  1,
+  'exactly one release job may use the npm trusted-publishing environment',
+);
+assert.equal(
+  [...release.matchAll(/^      id-token:\s+write$/gm)].length,
+  2,
+  'only the npm and MCP Registry publication jobs may mint OIDC tokens',
+);
+assert.equal(
+  [
+    ...release.matchAll(
+      /uses:\s+actions\/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02/g,
+    ),
+  ].length,
+  1,
+  'release must upload the prepacked npm bundle exactly once',
+);
+assert.equal(
+  [
+    ...release.matchAll(
+      /uses:\s+actions\/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093/g,
+    ),
+  ].length,
+  1,
+  'only the npm OIDC job may download the prepacked npm bundle',
+);
+assert.equal(
+  [...release.matchAll(/npm publish "\$tarball" --ignore-scripts --provenance/g)].length,
+  1,
+  'the release workflow must contain one controlled literal-tarball publish loop',
 );
 assert.match(
   proofJob,
@@ -231,6 +313,32 @@ assert.match(
 );
 assert.match(release, /gh release create/, 'release must create the reviewed GitHub release');
 assert.match(release, /gh release view/, 'GitHub release creation must be safe to rerun');
+assert.match(
+  release,
+  /--method POST \\\n\s+"repos\/\$GITHUB_REPOSITORY\/git\/refs"/,
+  'release must atomically create the exact tag through the Git refs API',
+);
+assert.match(
+  release,
+  /\[\[ "\$tag_response" == \*"HTTP 422"\* \]\]/,
+  'release reruns may tolerate only an existing-ref response from tag creation',
+);
+assert.equal(
+  [...release.matchAll(/gh api "repos\/\$GITHUB_REPOSITORY\/commits\/\$tag" --jq '\.sha'/g)].length,
+  2,
+  'release must peel and verify the tag commit before and after release creation',
+);
+assert.match(release, /--verify-tag/, 'release creation must require the precreated exact tag');
+assert.doesNotMatch(
+  release,
+  /--target|--generate-notes/,
+  'release creation must not retarget a tag or append nondeterministic generated notes',
+);
+assert.match(
+  release,
+  /assert\.equal\(process\.env\.EXISTING_BODY, process\.env\.EXPECTED_NOTES\)/,
+  'an existing release body must exactly equal the deterministic reviewed notes',
+);
 assert.doesNotMatch(release, /NPM_TOKEN|NODE_AUTH_TOKEN|secrets\./, 'release must not use tokens');
 for (const variable of ['EXPECTED_MCP_VERSION', 'EXPECTED_MCP_INTEGRITY', 'EXPECTED_GIT_HEAD']) {
   assert.match(
@@ -265,10 +373,16 @@ assert.match(docsDeploy, /^      id-token:\s+write$/m, 'only docs deploy may min
 const rootPackage = JSON.parse(await readFile('package.json', 'utf8'));
 const postPublishProof = await readFile('scripts/prove-published-release.mjs', 'utf8');
 const mcpRegistryProof = await readFile('scripts/prove-mcp-registry-record.mjs', 'utf8');
+const releasePacker = await readFile('scripts/pack-release-artifacts.mjs', 'utf8');
 const releaseManifest = JSON.parse(await readFile('release-manifest.json', 'utf8'));
 const publishedPackages = releaseManifest.packages.filter((entry) => entry.publish);
 assert.equal(releaseManifest.packages.length, 10, 'release manifest must cover all ten packages');
 assert.equal(publishedPackages.length, 5, 'release manifest must authorize exactly five publishes');
+assert.match(
+  releasePacker,
+  /['"]--ignore-scripts['"]/,
+  'release prepacking must not rerun package lifecycle scripts after verified builds',
+);
 assert.match(
   release,
   /node scripts\/pack-release-artifacts\.mjs/,
@@ -337,8 +451,8 @@ assert.match(
 );
 assert.match(
   registryJob,
-  /^    needs:\s+publish-npm$/m,
-  'MCP Registry publication must wait for the complete npm proof',
+  /^    needs:\s+\[authorize-release, prove-published-npm\]$/m,
+  'MCP Registry publication must wait for authorization and complete npm proof',
 );
 assert.match(
   registryJob,
@@ -372,8 +486,8 @@ assert.match(
 );
 assert.match(
   release,
-  /^  github-release:\n    needs:\s+\[publish-npm, publish-mcp-registry\]$/m,
-  'GitHub release creation must wait for both npm and MCP Registry proof',
+  /^  github-release:\n    needs:\s+\[authorize-release, build-release-artifacts, prove-published-npm, publish-mcp-registry\]$/m,
+  'GitHub release creation must wait for exact artifacts and both live registry proofs',
 );
 assert.match(rootPackage.scripts.verify, /npm run check:workflows/, 'verify must check workflows');
 assert.match(

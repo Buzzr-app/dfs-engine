@@ -39,6 +39,7 @@ async function pack(entry) {
     'pack',
     '--workspace',
     entry.name,
+    '--ignore-scripts',
     '--json',
     '--pack-destination',
     resolve(destination),

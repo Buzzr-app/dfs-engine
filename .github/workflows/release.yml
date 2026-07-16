@@ -32,6 +32,7 @@ jobs:
       contents: read
     outputs:
       reviewed-commit: ${{ steps.authorize.outputs.commit }}
+      manifest-sha512: ${{ steps.authorize.outputs.manifest-sha512 }}
     steps:
       - name: Authorize exact current main commit
         id: authorize
@@ -50,31 +51,26 @@ jobs:
           REMOTE_MAIN="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
           test "$GITHUB_SHA_AT_DISPATCH" = "$EXPECTED_COMMIT"
           test "$REMOTE_MAIN" = "$EXPECTED_COMMIT"
+          gh api \
+            --header 'Accept: application/vnd.github.raw+json' \
+            "repos/$GITHUB_REPOSITORY/contents/release-manifest.json?ref=$EXPECTED_COMMIT" \
+            > "$RUNNER_TEMP/release-manifest.json"
+          manifest_sha512="$(sha512sum "$RUNNER_TEMP/release-manifest.json" | cut -d' ' -f1)"
           echo "commit=$EXPECTED_COMMIT" >> "$GITHUB_OUTPUT"
+          echo "manifest-sha512=$manifest_sha512" >> "$GITHUB_OUTPUT"
 
-  publish-npm:
+  build-release-artifacts:
     needs: authorize-release
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    environment: npm
     permissions:
       contents: read
-      id-token: write
     outputs:
       artifacts: ${{ steps.pack.outputs.artifacts }}
       integrities: ${{ steps.pack.outputs.integrities }}
       mcp-integrity: ${{ steps.pack.outputs.mcp-integrity }}
-      reviewed-commit: ${{ needs.authorize-release.outputs.reviewed-commit }}
+      artifact-manifest-sha512: ${{ steps.pack.outputs.artifact-manifest-sha512 }}
     steps:
-      - name: Revalidate current main before checkout
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          EXPECTED_COMMIT: ${{ needs.authorize-release.outputs.reviewed-commit }}
-        run: |
-          set -euo pipefail
-          REMOTE_MAIN="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
-          test "$REMOTE_MAIN" = "$EXPECTED_COMMIT"
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           ref: ${{ needs.authorize-release.outputs.reviewed-commit }}
@@ -89,9 +85,11 @@ jobs:
         env:
           EXPECTED_COMMIT: ${{ needs.authorize-release.outputs.reviewed-commit }}
           EXPECTED_RELEASE_VERSION: ${{ inputs.expected_version }}
+          EXPECTED_RELEASE_MANIFEST_SHA512: ${{ needs.authorize-release.outputs.manifest-sha512 }}
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EXPECTED_COMMIT"
+          test "$(sha512sum release-manifest.json | cut -d' ' -f1)" = "$EXPECTED_RELEASE_MANIFEST_SHA512"
           node scripts/check-release-version.mjs
       - name: Install reviewed npm CLI and dependencies
         run: |
@@ -108,29 +106,265 @@ jobs:
       - name: Pack and hash all five authorized artifacts
         id: pack
         shell: bash
+        env:
+          EXPECTED_COMMIT: ${{ needs.authorize-release.outputs.reviewed-commit }}
+          EXPECTED_RELEASE_MANIFEST_SHA512: ${{ needs.authorize-release.outputs.manifest-sha512 }}
         run: |
           set -euo pipefail
-          artifacts_file="$RUNNER_TEMP/release-artifacts.json"
-          artifacts="$(node scripts/pack-release-artifacts.mjs \
-            --destination "$RUNNER_TEMP/release-packs" \
+          bundle="$RUNNER_TEMP/release-packs"
+          release_source="$RUNNER_TEMP/release-source"
+          artifacts_file="$bundle/release-artifacts.json"
+          mkdir -p "$release_source"
+          git archive HEAD | tar --extract --directory "$release_source"
+          RELEASE_SOURCE="$release_source" EXPECTED_COMMIT="$EXPECTED_COMMIT" node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { cp, readFile, writeFile } from 'node:fs/promises';
+          import { join, resolve } from 'node:path';
+
+          assert.match(process.env.EXPECTED_COMMIT, /^[0-9a-f]{40}$/);
+          const source = resolve(process.env.RELEASE_SOURCE);
+          const release = JSON.parse(await readFile('release-manifest.json', 'utf8'));
+          const packages = release.packages.filter(({ publish }) => publish);
+          assert.equal(packages.length, 5);
+          for (const entry of packages) {
+            const packageDirectory = join(source, entry.path);
+            const stagedPackagePath = join(packageDirectory, 'package.json');
+            const packageJson = JSON.parse(await readFile(stagedPackagePath, 'utf8'));
+            assert.equal(packageJson.name, entry.name);
+            assert.equal(packageJson.version, entry.version);
+            await writeFile(
+              stagedPackagePath,
+              `${JSON.stringify({ ...packageJson, gitHead: process.env.EXPECTED_COMMIT }, null, 2)}\n`,
+            );
+            await cp(join(entry.path, 'dist'), join(packageDirectory, 'dist'), {
+              recursive: true,
+              force: true,
+            });
+          }
+          NODE
+          artifacts="$(cd "$release_source" && node scripts/pack-release-artifacts.mjs \
+            --destination "$bundle" \
             --output "$artifacts_file")"
+          cp release-manifest.json "$bundle/release-manifest.json"
+          test "$(sha512sum "$bundle/release-manifest.json" | cut -d' ' -f1)" = "$EXPECTED_RELEASE_MANIFEST_SHA512"
+          artifact_manifest_sha512="$(sha512sum "$artifacts_file" | cut -d' ' -f1)"
           integrities="$(node -e 'const a=require(process.argv[1]);process.stdout.write(JSON.stringify(Object.fromEntries(a.map(({name,integrity})=>[name,integrity]))))' "$artifacts_file")"
           mcp_integrity="$(node -e 'const a=require(process.argv[1]);process.stdout.write(a.find(({name})=>name==="@buzzr/mcp").integrity)' "$artifacts_file")"
           echo "artifacts=$artifacts" >> "$GITHUB_OUTPUT"
           echo "integrities=$integrities" >> "$GITHUB_OUTPUT"
           echo "mcp-integrity=$mcp_integrity" >> "$GITHUB_OUTPUT"
+          echo "artifact-manifest-sha512=$artifact_manifest_sha512" >> "$GITHUB_OUTPUT"
           node -e 'const a=require(process.argv[1]);for(const x of a)console.log(`- ${x.name}@${x.version}: ${x.integrity}`)' "$artifacts_file" >> "$GITHUB_STEP_SUMMARY"
-      - name: Publish changed packages through npm trusted publishing
+      - name: Transfer the exact prepacked release bundle
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: npm-release-${{ needs.authorize-release.outputs.reviewed-commit }}
+          path: ${{ runner.temp }}/release-packs
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+          include-hidden-files: false
+
+  publish-npm:
+    needs: [authorize-release, build-release-artifacts]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Revalidate current main before privileged publication
+        shell: bash
         env:
-          NPM_CONFIG_PROVENANCE: 'true'
-        run: npm exec changeset publish
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_COMMIT: ${{ needs.authorize-release.outputs.reviewed-commit }}
+        run: |
+          set -euo pipefail
+          REMOTE_MAIN="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
+          test "$REMOTE_MAIN" = "$EXPECTED_COMMIT"
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ needs.authorize-release.outputs.reviewed-commit }}
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Bind npm publication to the reviewed checkout
+        shell: bash
+        env:
+          EXPECTED_COMMIT: ${{ needs.authorize-release.outputs.reviewed-commit }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_COMMIT"
+      - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Download the reviewed release bundle
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: npm-release-${{ needs.authorize-release.outputs.reviewed-commit }}
+          path: ${{ runner.temp }}/release-packs
+      - name: Revalidate and publish only the five literal tarballs
+        shell: bash
+        env:
+          EXPECTED_COMMIT: ${{ needs.authorize-release.outputs.reviewed-commit }}
+          EXPECTED_RELEASE_VERSION: ${{ inputs.expected_version }}
+          EXPECTED_RELEASE_MANIFEST_SHA512: ${{ needs.authorize-release.outputs.manifest-sha512 }}
+          EXPECTED_ARTIFACT_MANIFEST_SHA512: ${{ needs.build-release-artifacts.outputs.artifact-manifest-sha512 }}
+          RELEASE_BUNDLE: ${{ runner.temp }}/release-packs
+          PUBLISH_ORDER_FILE: ${{ runner.temp }}/publish-order.tsv
+          NPM_CONFIG_REGISTRY: https://registry.npmjs.org/
+          NPM_CONFIG_USERCONFIG: ${{ runner.temp }}/empty-user.npmrc
+          NPM_CONFIG_GLOBALCONFIG: ${{ runner.temp }}/empty-global.npmrc
+        run: |
+          set -euo pipefail
+          : > "$NPM_CONFIG_USERCONFIG"
+          : > "$NPM_CONFIG_GLOBALCONFIG"
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { execFileSync } from 'node:child_process';
+          import { createHash } from 'node:crypto';
+          import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
+          import { basename, join, resolve } from 'node:path';
+
+          const bundle = resolve(process.env.RELEASE_BUNDLE);
+          const releaseManifestPath = join(bundle, 'release-manifest.json');
+          const artifactManifestPath = join(bundle, 'release-artifacts.json');
+          const sha512 = async (path, encoding) =>
+            createHash('sha512').update(await readFile(path)).digest(encoding);
+
+          assert.equal(
+            await sha512(releaseManifestPath, 'hex'),
+            process.env.EXPECTED_RELEASE_MANIFEST_SHA512,
+            'release manifest changed after authorization',
+          );
+          assert.equal(
+            await sha512(artifactManifestPath, 'hex'),
+            process.env.EXPECTED_ARTIFACT_MANIFEST_SHA512,
+            'artifact manifest changed in transfer',
+          );
+
+          const release = JSON.parse(await readFile(releaseManifestPath, 'utf8'));
+          const artifacts = JSON.parse(await readFile(artifactManifestPath, 'utf8'));
+          const packages = release.packages.filter(({ publish }) => publish);
+          assert.equal(release.releaseVersion, process.env.EXPECTED_RELEASE_VERSION);
+          assert.equal(artifacts.length, 5, 'exactly five npm artifacts are authorized');
+          assert.equal(packages.length, 5, 'exactly five manifest packages are authorized');
+
+          const publishOrder = [
+            '@buzzr/dfs-engine',
+            '@buzzr/dfs-engine-test-vectors',
+            '@buzzr/dfs-cli',
+            '@buzzr/dfs-testkit',
+            '@buzzr/mcp',
+          ];
+          assert.deepEqual(
+            packages.map(({ name }) => name).sort(),
+            [...publishOrder].sort(),
+            'release manifest package allowlist changed',
+          );
+          assert.deepEqual(
+            artifacts.map(({ name }) => name).sort(),
+            [...publishOrder].sort(),
+            'artifact package allowlist changed',
+          );
+
+          const artifactsByName = new Map(artifacts.map((artifact) => [artifact.name, artifact]));
+          assert.equal(artifactsByName.size, 5, 'artifact package names must be unique');
+          const expectedFiles = ['release-artifacts.json', 'release-manifest.json'];
+          const lines = [];
+          for (const name of publishOrder) {
+            const artifact = artifactsByName.get(name);
+            const entry = packages.find((candidate) => candidate.name === name);
+            assert(artifact && entry, `${name} must exist in both manifests`);
+            assert.equal(artifact.version, entry.version, `${name} version changed while packing`);
+            assert.equal(artifact.filename, basename(artifact.filename), `${name} filename is unsafe`);
+            assert.match(artifact.filename, /^buzzr-[a-z0-9-]+-\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?\.tgz$/);
+            assert.match(artifact.integrity, /^sha512-[A-Za-z0-9+/]+={0,2}$/);
+            const tarball = join(bundle, artifact.filename);
+            const tarballStat = await stat(tarball);
+            assert.equal(tarballStat.isFile(), true, `${name} tarball must be a regular file`);
+            assert.equal(tarballStat.size, artifact.size, `${name} tarball size changed in transfer`);
+            const tarballPackage = JSON.parse(
+              execFileSync(
+                'tar',
+                ['--extract', '--gzip', '--to-stdout', '--file', tarball, 'package/package.json'],
+                { encoding: 'utf8', maxBuffer: 1024 * 1024 },
+              ),
+            );
+            assert.equal(tarballPackage.name, artifact.name, `${name} tarball name changed`);
+            assert.equal(tarballPackage.version, artifact.version, `${name} tarball version changed`);
+            assert.equal(
+              tarballPackage.gitHead,
+              process.env.EXPECTED_COMMIT,
+              `${name} tarball is not bound to the reviewed commit`,
+            );
+            assert.equal(
+              `sha512-${await sha512(tarball, 'base64')}`,
+              artifact.integrity,
+              `${name} tarball integrity changed in transfer`,
+            );
+            expectedFiles.push(artifact.filename);
+            lines.push([artifact.name, artifact.version, artifact.integrity, artifact.filename].join('\t'));
+          }
+          const entries = await readdir(bundle, { withFileTypes: true });
+          assert(entries.every((entry) => entry.isFile()), 'release bundle may contain only files');
+          const actualFiles = entries.map(({ name }) => name).sort();
+          expectedFiles.sort();
+          assert.deepEqual(actualFiles, expectedFiles, 'release bundle has extra or missing files');
+          await writeFile(process.env.PUBLISH_ORDER_FILE, `${lines.join('\n')}\n`, { mode: 0o600 });
+          NODE
+
+          npm_version="$(npm --version)"
+          node -e 'const [major,minor,patch]=process.argv[1].split(".").map(Number);if(major<11||(major===11&&(minor<5||(minor===5&&patch<1))))process.exit(1)' "$npm_version"
+          while IFS=$'\t' read -r package_name version integrity filename; do
+            tarball="$RELEASE_BUNDLE/$filename"
+            if live_integrity="$(npm view "$package_name@$version" dist.integrity --json 2>/dev/null)"; then
+              live_integrity="${live_integrity#\"}"
+              live_integrity="${live_integrity%\"}"
+              test "$live_integrity" = "$integrity"
+              continue
+            fi
+            npm publish "$tarball" --ignore-scripts --provenance
+          done < "$PUBLISH_ORDER_FILE"
+
+  prove-published-npm:
+    needs: [authorize-release, build-release-artifacts, publish-npm]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Revalidate current main before proof
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_COMMIT: ${{ needs.authorize-release.outputs.reviewed-commit }}
+        run: |
+          set -euo pipefail
+          REMOTE_MAIN="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
+          test "$REMOTE_MAIN" = "$EXPECTED_COMMIT"
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ needs.authorize-release.outputs.reviewed-commit }}
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Install the reviewed proof dependencies
+        run: |
+          npm install --global npm@12.0.1
+          npm --version
+          npm ci --ignore-scripts
       - name: Prove all exact live npm artifacts
         shell: bash
         env:
           EXPECTED_RELEASE_COMMIT: ${{ needs.authorize-release.outputs.reviewed-commit }}
-          EXPECTED_RELEASE_INTEGRITIES: ${{ steps.pack.outputs.integrities }}
+          EXPECTED_RELEASE_INTEGRITIES: ${{ needs.build-release-artifacts.outputs.integrities }}
           EXPECTED_MCP_VERSION: ${{ inputs.expected_version }}
-          EXPECTED_MCP_INTEGRITY: ${{ steps.pack.outputs.mcp-integrity }}
+          EXPECTED_MCP_INTEGRITY: ${{ needs.build-release-artifacts.outputs.mcp-integrity }}
           EXPECTED_GIT_HEAD: ${{ needs.authorize-release.outputs.reviewed-commit }}
         run: |
           set -euo pipefail
@@ -148,7 +382,7 @@ jobs:
           npm run proof:mcp:published
 
   publish-mcp-registry:
-    needs: publish-npm
+    needs: [authorize-release, prove-published-npm]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -159,14 +393,14 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          EXPECTED_COMMIT: ${{ needs.publish-npm.outputs.reviewed-commit }}
+          EXPECTED_COMMIT: ${{ needs.authorize-release.outputs.reviewed-commit }}
         run: |
           set -euo pipefail
           REMOTE_MAIN="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
           test "$REMOTE_MAIN" = "$EXPECTED_COMMIT"
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          ref: ${{ needs.publish-npm.outputs.reviewed-commit }}
+          ref: ${{ needs.authorize-release.outputs.reviewed-commit }}
           fetch-depth: 1
           persist-credentials: false
       - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
@@ -229,7 +463,7 @@ jobs:
           test "$proof_succeeded" = true
 
   github-release:
-    needs: [publish-npm, publish-mcp-registry]
+    needs: [authorize-release, build-release-artifacts, prove-published-npm, publish-mcp-registry]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -240,8 +474,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_VERSION: ${{ inputs.expected_version }}
-          RELEASE_COMMIT: ${{ needs.publish-npm.outputs.reviewed-commit }}
-          RELEASE_ARTIFACTS: ${{ needs.publish-npm.outputs.artifacts }}
+          RELEASE_COMMIT: ${{ needs.authorize-release.outputs.reviewed-commit }}
+          RELEASE_ARTIFACTS: ${{ needs.build-release-artifacts.outputs.artifacts }}
         run: |
           set -euo pipefail
           tag="v$RELEASE_VERSION"
@@ -267,23 +501,48 @@ jobs:
             process.stdout.write(`${lines.join("\n")}\n`);
           ' > "$notes_file"
 
-          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" --silent 2>/dev/null; then
-            tag_commit="$(gh api "repos/$GITHUB_REPOSITORY/commits/$tag" --jq '.sha')"
-            test "$tag_commit" = "$RELEASE_COMMIT"
+          tag_response=''
+          if tag_response="$(gh api \
+            --method POST \
+            "repos/$GITHUB_REPOSITORY/git/refs" \
+            --field "ref=refs/tags/$tag" \
+            --field "sha=$RELEASE_COMMIT" 2>&1)"; then
+            CREATED_TAG_RESPONSE="$tag_response" EXPECTED_TAG="refs/tags/$tag" EXPECTED_SHA="$RELEASE_COMMIT" \
+              node --input-type=module -e '
+                import assert from "node:assert/strict";
+                const created = JSON.parse(process.env.CREATED_TAG_RESPONSE);
+                assert.equal(created.ref, process.env.EXPECTED_TAG);
+                assert.equal(created.object?.type, "commit");
+                assert.equal(created.object?.sha, process.env.EXPECTED_SHA);
+              '
+          else
+            [[ "$tag_response" == *"HTTP 422"* ]]
           fi
+          tag_commit="$(gh api "repos/$GITHUB_REPOSITORY/commits/$tag" --jq '.sha')"
+          test "$tag_commit" = "$RELEASE_COMMIT"
 
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             existing_body="$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json body --jq '.body')"
             EXPECTED_NOTES="$(cat "$notes_file")" EXISTING_BODY="$existing_body" node --input-type=module -e '
               import assert from "node:assert/strict";
-              assert(process.env.EXISTING_BODY.includes(process.env.EXPECTED_NOTES.trim()));
+              assert.equal(process.env.EXISTING_BODY, process.env.EXPECTED_NOTES);
             '
-            exit 0
+          else
+            gh release create "$tag" \
+              --repo "$GITHUB_REPOSITORY" \
+              --verify-tag \
+              --title "$tag" \
+              --notes-file "$notes_file"
           fi
 
-          gh release create "$tag" \
-            --repo "$GITHUB_REPOSITORY" \
-            --target "$RELEASE_COMMIT" \
-            --title "$tag" \
-            --generate-notes \
-            --notes-file "$notes_file"
+          release_tag="$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json tagName --jq '.tagName')"
+          release_title="$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json name --jq '.name')"
+          released_body="$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json body --jq '.body')"
+          test "$release_tag" = "$tag"
+          test "$release_title" = "$tag"
+          EXPECTED_NOTES="$(cat "$notes_file")" RELEASED_BODY="$released_body" node --input-type=module -e '
+            import assert from "node:assert/strict";
+            assert.equal(process.env.RELEASED_BODY, process.env.EXPECTED_NOTES);
+          '
+          tag_commit_after_release="$(gh api "repos/$GITHUB_REPOSITORY/commits/$tag" --jq '.sha')"
+          test "$tag_commit_after_release" = "$RELEASE_COMMIT"
