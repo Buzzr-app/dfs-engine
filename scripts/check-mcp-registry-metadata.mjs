@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
+import Ajv from 'ajv';
+import addFormats from 'ajv-formats';
+
 const [rootManifest, mcpManifest, server] = await Promise.all(
   ['package.json', 'packages/mcp/package.json', 'server.json'].map(async (path) =>
     JSON.parse(await readFile(path, 'utf8')),
@@ -10,6 +13,22 @@ const [rootManifest, mcpManifest, server] = await Promise.all(
 const schema = 'https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json';
 const registryName = 'io.github.Buzzr-app/dfs-engine';
 const repositoryUrl = 'https://github.com/Buzzr-app/dfs-engine';
+
+const schemaResponse = await fetch(schema, { signal: AbortSignal.timeout(15_000) });
+assert.equal(
+  schemaResponse.ok,
+  true,
+  `Could not fetch MCP Registry schema: ${schemaResponse.status}`,
+);
+const registrySchema = await schemaResponse.json();
+const ajv = new Ajv({ allErrors: true, strict: false });
+addFormats(ajv);
+const validate = ajv.compile(registrySchema);
+assert.equal(
+  validate(server),
+  true,
+  `server.json does not match the MCP Registry schema: ${ajv.errorsText(validate.errors)}`,
+);
 
 assert.equal(server.$schema, schema);
 assert.equal(mcpManifest.mcpName, registryName);

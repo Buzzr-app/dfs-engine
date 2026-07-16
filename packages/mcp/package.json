@@ -1,6 +1,7 @@
 {
   "name": "@buzzr/mcp",
   "version": "5.0.0",
+  "mcpName": "io.github.Buzzr-app/dfs-engine",
   "description": "MCP server exposing the @buzzr sports engines to AI agents — DFS settlement, odds math, and entertainment predictions as tools.",
   "license": "MIT",
   "author": "Sarvesh Chidambaram",

@@ -26,7 +26,7 @@
     "audit:high": "npm audit --audit-level=high",
     "check:workflows": "node scripts/check-release-workflows.mjs",
     "check:mcp-registry": "node scripts/check-mcp-registry-metadata.mjs",
-    "verify": "npm run typecheck && npm run lint && npm run format:check && npm test && npm run test:coverage && npm run build && npm run test:mcp:packed && npm run docs && npm run smoke:exports && npm run size:check && npm run pack:smoke && npm run check:workflows && npm run audit:high",
+    "verify": "npm run typecheck && npm run lint && npm run format:check && npm test && npm run test:coverage && npm run build && npm run test:mcp:packed && npm run docs && npm run smoke:exports && npm run size:check && npm run pack:smoke && npm run check:workflows && npm run check:mcp-registry && npm run audit:high",
     "pack:smoke": "npm pack --workspaces --dry-run",
     "test:mcp:packed": "npm run build --workspace @buzzr/bets-core --workspace @buzzr/dfs-engine --workspace @buzzr/entertainment-engine --workspace @buzzr/mcp && node scripts/test-mcp-packed.mjs",
     "proof:mcp:published": "node scripts/prove-mcp-published.mjs"
@@ -35,6 +35,8 @@
     "@changesets/cli": "^2.31.0",
     "@types/node": "^22.19.19",
     "@vitest/coverage-v8": "^4.1.7",
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1",
     "eslint": "^10.4.0",
     "prettier": "^3.8.3",
     "tsup": "^8.5.1",
