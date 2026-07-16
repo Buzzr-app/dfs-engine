@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import {
@@ -236,4 +237,30 @@ test('fails closed when an upstream response is not successful', async () => {
     }),
     /429.*rate limited/,
   );
+});
+
+test('documents repeatable windows and keeps the network capture out of verify', async () => {
+  const [baseline, checklist, manifest] = await Promise.all([
+    readFile(new URL('../../docs/launch/adoption-baseline-2026-07-16.md', import.meta.url), 'utf8'),
+    readFile(new URL('../../docs/launch/launch-checklist.md', import.meta.url), 'utf8'),
+    readFile(new URL('../../package.json', import.meta.url), 'utf8').then(JSON.parse),
+  ]);
+
+  assert.match(baseline, /release day \(day 0\)/i);
+  assert.match(baseline, /D\+1 through D\+7/);
+  assert.match(baseline, /D\+1 through D\+30/);
+  assert.match(baseline, /privacy-preserving MCP adoption proxy/i);
+  assert.match(baseline, /GitHub Pages has no first-party analytics configured/i);
+  assert.match(baseline, /referrer.*attribution/i);
+  assert.doesNotMatch(checklist, /Docs site uniques\s*\|\s*1/i);
+  assert.match(checklist, /GitHub repo page views \(trailing 14 days\)/i);
+  assert.equal(
+    manifest.scripts['capture:adoption'],
+    'node scripts/capture-adoption-metrics.mjs',
+  );
+  assert.equal(
+    manifest.scripts['test:adoption-capture'],
+    'node --test scripts/tests/capture-adoption-metrics.test.mjs',
+  );
+  assert.doesNotMatch(manifest.scripts.verify, /capture:adoption/);
 });
