@@ -23,7 +23,9 @@ describe('release guardrails', () => {
       'smoke:exports': 'node scripts/smoke-exports.mjs',
       'size:check': 'node scripts/check-package-size.mjs',
       'audit:high': 'npm audit --audit-level=high',
+      'test:mcp:packed': expect.stringContaining('scripts/test-mcp-packed.mjs'),
     });
+    expect(rootPackage.scripts?.verify).toContain('test:mcp:packed');
   });
 
   test('keeps runtime dependencies intentionally tiny', () => {
