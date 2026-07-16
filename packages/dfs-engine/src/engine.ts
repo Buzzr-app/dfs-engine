@@ -659,6 +659,12 @@ const PRIZEPICKS_CURRENT_SOURCES: readonly DfsBookSourceRef[] = [
     retrievedAt: '2026-07-16',
     note: 'First-party standard Player Pick payout reference.',
   },
+  {
+    label: 'PrizePicks DNPs, Reboots, and Ties',
+    url: 'https://www.prizepicks.com/help-center/dnps-reboots-and-ties',
+    retrievedAt: '2026-07-16',
+    note: 'Updated June 4, 2026; a DNP on a 2-pick Power lineup causes a refund.',
+  },
 ];
 
 const UNDERDOG_LEGAL_SOURCES: readonly DfsBookSourceRef[] = [

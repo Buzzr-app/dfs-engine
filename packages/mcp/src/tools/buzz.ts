@@ -6,6 +6,7 @@ import {
   boundedArray,
   boundedIdentifier,
   boundedLabel,
+  boundedRecord,
   finiteNumber,
   isoTimestamp,
   nonNegativeFiniteNumber,
@@ -176,25 +177,18 @@ const profileSchema = z
   .object({
     favoriteTeams: boundedArray(boundedLabel, 50).optional(),
     favoriteLeagues: boundedArray(boundedIdentifier, 50).optional(),
-    teamAffinity: z
-      .record(boundedLabel, finiteNumber.min(-1).max(1))
-      .refine((value) => Object.keys(value).length <= 100, {
-        message: 'teamAffinity cannot contain more than 100 entries.',
-      })
+    teamAffinity: boundedRecord(boundedLabel, finiteNumber.min(-1).max(1), 100, 'teamAffinity')
       .optional()
       .describe('Per-team affinity in [-1, 1], keyed by team name.'),
-    leagueAffinity: z
-      .record(boundedIdentifier, finiteNumber.min(-1).max(1))
-      .refine((value) => Object.keys(value).length <= 100, {
-        message: 'leagueAffinity cannot contain more than 100 entries.',
-      })
+    leagueAffinity: boundedRecord(
+      boundedIdentifier,
+      finiteNumber.min(-1).max(1),
+      100,
+      'leagueAffinity',
+    )
       .optional()
       .describe('Per-league affinity in [-1, 1], keyed by league code.'),
-    socialSignal: z
-      .record(boundedIdentifier, finiteNumber.min(-1).max(1))
-      .refine((value) => Object.keys(value).length <= 100, {
-        message: 'socialSignal cannot contain more than 100 entries.',
-      })
+    socialSignal: boundedRecord(boundedIdentifier, finiteNumber.min(-1).max(1), 100, 'socialSignal')
       .optional()
       .describe('Fire-ratio in [-1, 1], keyed by game id.'),
   })

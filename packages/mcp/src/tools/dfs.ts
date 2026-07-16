@@ -16,6 +16,7 @@ import {
   boundedIdentifier,
   boundedArray,
   boundedLabel,
+  boundedRecord,
   finiteNumber,
   isoDateOrTimestamp,
   isoTimestamp,
@@ -94,11 +95,12 @@ function requireUniqueLegIds(
   }
 }
 
-const actualsByLegIdSchema = z
-  .record(boundedIdentifier, finiteNumber.nullable())
-  .refine((actuals) => Object.keys(actuals).length <= 12, {
-    message: 'actualsByLegId cannot contain more than 12 values.',
-  });
+const actualsByLegIdSchema = boundedRecord(
+  boundedIdentifier,
+  finiteNumber.nullable(),
+  12,
+  'actualsByLegId',
+);
 
 const gradeDfsEntrySchema = z
   .object({

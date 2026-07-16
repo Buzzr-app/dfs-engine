@@ -295,7 +295,21 @@ async function exerciseRealClient(consumerDirectory, cache, expectedVersion) {
     assert.equal(invalid.isError, true);
     assert.equal(invalid.content.length, 1);
     assert.equal(invalid.content[0].type, 'text');
-    assert.match(invalid.content[0].text, /^MCP error -32602: Input validation error:/);
+    assert.equal(parseToolResult(invalid).error.code, 'invalid_input');
+
+    const adversarialValidation = await withDeadline(
+      client.callTool({
+        name: 'summarize_bet_history',
+        arguments: { bets: Array.from({ length: 5_000 }, () => ({})) },
+      }),
+      'Packed MCP adversarial validation call',
+    );
+    assert.equal(adversarialValidation.isError, true);
+    assert.equal(parseToolResult(adversarialValidation).error.code, 'invalid_input');
+    assert.ok(
+      Buffer.byteLength(JSON.stringify(adversarialValidation), 'utf8') < 65_536,
+      'Packed MCP validation error must stay below 64 KiB',
+    );
 
     const concurrent = await withDeadline(
       Promise.all(

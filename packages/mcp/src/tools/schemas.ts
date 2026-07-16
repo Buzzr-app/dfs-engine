@@ -40,3 +40,18 @@ export function boundedArray<Schema extends z.ZodType>(
     .max(maximum)
     .pipe(z.array(itemSchema).min(minimum).max(maximum));
 }
+
+/** Checks record cardinality before validating keys and values. */
+export function boundedRecord<KeySchema extends z.ZodType<string>, ValueSchema extends z.ZodType>(
+  keySchema: KeySchema,
+  valueSchema: ValueSchema,
+  maximum: number,
+  label: string,
+) {
+  return z
+    .record(z.string(), z.unknown())
+    .refine((value) => Object.keys(value).length <= maximum, {
+      message: `${label} cannot contain more than ${maximum} entries.`,
+    })
+    .pipe(z.record(keySchema, valueSchema));
+}
