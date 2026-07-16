@@ -17,10 +17,11 @@ in the underlying engines — this package is a thin, schema-validated tool surf
 
 ## Install
 
-Run it directly with npx (Node 22+):
+Run it directly with npx (Node 22+). Pin the version you reviewed instead of
+silently accepting a future `latest` release:
 
 ```sh
-npx -y @buzzr/mcp
+npx -y @buzzr/mcp@<published-version>
 ```
 
 The server speaks MCP over stdio: JSON-RPC on stdin/stdout, logs on stderr.
@@ -29,14 +30,15 @@ odds, box scores, operator accounts, or private user data.
 
 ### Claude Desktop
 
-Add to `claude_desktop_config.json` (Settings → Developer → Edit Config):
+Add this to `claude_desktop_config.json` from **Settings → Developer → Edit
+Config**, then fully quit and reopen Claude Desktop:
 
 ```json
 {
   "mcpServers": {
     "buzzr": {
       "command": "npx",
-      "args": ["-y", "@buzzr/mcp"]
+      "args": ["-y", "@buzzr/mcp@<published-version>"]
     }
   }
 }
@@ -45,28 +47,125 @@ Add to `claude_desktop_config.json` (Settings → Developer → Edit Config):
 ### Claude Code
 
 ```sh
-claude mcp add buzzr -- npx -y @buzzr/mcp
+claude mcp add --transport stdio buzzr -- npx -y @buzzr/mcp@<published-version>
 ```
 
-or in `.mcp.json`:
+For a version-controlled project configuration, add this to `.mcp.json`, trust
+the project when prompted, and start a new Claude Code session:
 
 ```json
 {
   "mcpServers": {
     "buzzr": {
       "command": "npx",
-      "args": ["-y", "@buzzr/mcp"]
+      "args": ["-y", "@buzzr/mcp@<published-version>"]
     }
   }
 }
 ```
+
+Confirm it with `claude mcp get buzzr`; inside Claude Code, `/mcp` shows the
+connection and discovered tool count.
+
+### Cursor
+
+Add this to the repository's `.cursor/mcp.json` (or the equivalent user-level
+MCP configuration), then fully restart Cursor:
+
+```json
+{
+  "mcpServers": {
+    "buzzr": {
+      "command": "npx",
+      "args": ["-y", "@buzzr/mcp@<published-version>"]
+    }
+  }
+}
+```
+
+Open **Cursor Settings → MCP** to confirm `buzzr` connected and exposed 11
+tools. See [Cursor's MCP documentation](https://cursor.com/docs/context/mcp) if
+your installed Cursor version presents a different settings location.
+
+### Codex
+
+The Codex CLI, IDE extension, and app share `config.toml`. The one-command user
+setup is:
+
+```sh
+codex mcp add buzzr -- npx -y @buzzr/mcp@<published-version>
+```
+
+Or add the equivalent block to `~/.codex/config.toml` for all projects, or to a
+trusted repository's `.codex/config.toml` for that project only:
+
+```toml
+[mcp_servers.buzzr]
+command = "npx"
+args = ["-y", "@buzzr/mcp@<published-version>"]
+```
+
+Run `codex mcp get buzzr`, then start a new Codex task after changing the
+configuration.
+
+### Generic stdio MCP client
+
+Use this process configuration in any client that accepts a command plus args:
+
+```json
+{
+  "name": "buzzr",
+  "transport": "stdio",
+  "command": "npx",
+  "args": ["-y", "@buzzr/mcp@<published-version>"],
+  "env": {}
+}
+```
+
+Treat stdout as JSON-RPC only, read diagnostics from stderr, and close the child
+process's stdin during shutdown. The client must perform the MCP lifecycle below;
+starting `npx` in a terminal and seeing it remain open is normal for a stdio
+server waiting for a client.
+
+## Initialization and capability discovery
+
+The client sends `initialize` first. Verify the `serverInfo.name` field is
+`"buzzr"`, the `serverInfo.version` field is the installed package version, and
+the response has a `capabilities.tools` object. Send
+`notifications/initialized`, then call `tools/list`. The server returns the 11
+tools in the catalog below with their input schemas. It does not advertise data
+fetching, resources, or prompts.
+
+[`examples/mcp-calls.json`](examples/mcp-calls.json) is a machine-readable JSON-RPC
+transcript with the initialization expectation, exact tool discovery order, and
+a safe `list_book_policies` → `validate_dfs_entry` → `grade_dfs_entry` workflow.
+The repository replays that workflow through a real MCP client in CI.
+
+## Startup troubleshooting
+
+1. Confirm Node.js 22+ and npm are visible to the same desktop process or shell:
+   `node --version`, `npm --version`, and `npx --version`.
+2. Confirm the pinned release exists with
+   `npm view @buzzr/mcp@<published-version> version`, then run
+   `npm cache verify`. If npm reports cache corruption, repair npm's cache before
+   retrying; `npm cache clean --force` is a last resort because it removes the
+   whole local cache.
+3. GUI apps may inherit a smaller `PATH` than an interactive shell. On macOS or
+   Linux, run `command -v npx`; on Windows, run `where.exe npx`. If the client
+   cannot find `npx`, use that absolute path as `command` (normally `npx.cmd` on
+   Windows) or launch the client from an environment where Node is on `PATH`.
+4. Keep logs off stdout. A healthy manual start writes a `listening on stdio`
+   diagnostic to stderr and waits for JSON-RPC input.
+5. After any config, Node, PATH, or package-version change, fully quit and restart
+   Claude Desktop, Claude Code, Cursor, or Codex. Opening only another chat tab
+   may leave the old MCP child process and cached tool catalog in place.
 
 ## Tool catalog
 
 | Tool                    | Engine                      | What it does                                                                                                                               |
 | ----------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | `grade_dfs_entry`       | @buzzr/dfs-engine           | Settle one 1–12-leg entry and return the full result plus explanation.                                                                      |
-| `grade_dfs_entries`     | @buzzr/dfs-engine           | Settle 1–25 entries, up to 300 total legs, with bounded concurrency and isolated failures.                                                   |
+| `grade_dfs_entries`     | @buzzr/dfs-engine           | Settle 1–50 entries, up to 600 total legs, with bounded concurrency and isolated failures.                                                   |
 | `validate_dfs_entry`    | @buzzr/dfs-engine           | Return structured engine validation issues for a candidate entry without settling it.                                                       |
 | `list_book_policies`    | @buzzr/dfs-engine           | List authoritative executable profile snapshots and metadata-only drafts, including status, verification, sources, and complete play types. |
 | `fair_line`             | @buzzr/bets-core            | Remove vig from both sides of one two-way market.                                                                                           |
@@ -190,8 +289,14 @@ The repository includes a
 11-tool routing guide, limits, response-reading order, and operator-safety rules:
 
 ```sh
-npx skills add https://github.com/Buzzr-app/dfs-engine --skill buzzr-sports-engine
+npx skills@1.5.17 add https://github.com/Buzzr-app/dfs-engine --skill buzzr-sports-engine --agent codex --yes --copy
 ```
+
+Repository contributors can prove the same one-command install without using a
+published branch: `npx skills@1.5.17 add . --skill buzzr-sports-engine --agent
+codex --yes --copy`. `npm run check:skill` runs the official pinned
+`quick_validate.py`, performs that local install in an isolated temporary
+project, and verifies every installed skill file byte-for-byte.
 
 ## Compatibility
 

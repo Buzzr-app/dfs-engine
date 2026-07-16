@@ -32,6 +32,9 @@ jobs:
       - run: npm run test:coverage
       - run: npm run build
       - run: npm run test:mcp:packed
+      - run: npm run check:mcp:client-skill
+      - run: npm run check:mcp:examples
+      - run: npm run check:skill
       - run: npm run docs
       - run: npm run check:docs
       - run: npm run check:links

@@ -44,7 +44,7 @@ Call `list_book_policies` before grading. Use only a policy/play type reported a
 
 Supply the slip's own `bookId`, `playTypeId`, `displayedMultiplier`, stake, placed timestamp, and leg details. Supply observed stats as `actual` or `actualsByLegId`; the MCP server does not fetch box scores. Mark DNP, void, or other operator rulings explicitly when known.
 
-Run `validate_dfs_entry` before grading untrusted or generated JSON. For one entry, call `grade_dfs_entry`. For 2–25 entries, call `grade_dfs_entries` and inspect both `results` and `failures`.
+Run `validate_dfs_entry` before grading untrusted or generated JSON. For one entry, call `grade_dfs_entry`. For 2–50 entries, call `grade_dfs_entries` and inspect both `results` and `failures`. A batch may contain at most 600 total legs.
 
 In the answer, surface:
 

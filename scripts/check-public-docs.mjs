@@ -78,8 +78,8 @@ const staleClaims = [
   [/Golden vectors are conformance law/i, 'regression vectors as conformance law'],
   [/all packages currently release in lockstep/i, 'an unverified lockstep-release rule'],
   [/JSON-RPC `-32602`/i, 'SDK-amplified tool argument errors'],
-  [/1[–-]50 entries/i, 'the retired 50-entry MCP batch limit'],
-  [/600 total legs/i, 'the retired 600-leg MCP batch limit'],
+  [/1[–-]25 entries/i, 'the retired 25-entry MCP batch limit'],
+  [/300 total legs/i, 'the retired 300-leg MCP aggregate limit'],
   [/grades identically to Buzzr/i, 'production-conformance vectors'],
   [/canonical reference fixtures/i, 'canonical operator fixtures'],
 ];
@@ -165,8 +165,8 @@ requirePattern(
   /(?:invalid tool arguments[\s\S]{0,180}`invalid_input`[\s\S]{0,180}(?:transport|MCP client)|(?:transport|MCP client)[\s\S]{0,180}`invalid_input`)/i,
   'document bounded transport validation failures',
 );
-requirePattern('mcp', /1[–-]25 entries/i, 'state the current batch entry bound');
-requirePattern('mcp', /300 total legs/i, 'state the current aggregate leg bound');
+requirePattern('mcp', /1[–-]50 entries/i, 'state the current batch entry bound');
+requirePattern('mcp', /600 total legs/i, 'state the current aggregate leg bound');
 
 const mobileSnapshot =
   'The Buzzr mobile app’s `release/ios-2.0.0` branch vendors `@buzzr/bets-core`, `@buzzr/dfs-engine`, and `@buzzr/entertainment-engine` as local 5.0.0 tarballs and imports all three.';
@@ -214,9 +214,10 @@ requirePattern(
   /engine regression fixtures/i,
   'describe the package as engine regression fixtures',
 );
-requirePattern('skill', /2[–-]25 entries/i, 'state the current batch entry bound');
-requirePattern('skillTools', /1[–-]25 entries/i, 'state the current batch entry bound');
-requirePattern('skillTools', /300 total legs/i, 'state the current aggregate leg bound');
+requirePattern('skill', /2[–-]50 entries/i, 'state the current batch entry bound');
+requirePattern('skill', /600 total legs/i, 'state the current aggregate leg bound');
+requirePattern('skillTools', /1[–-]50 entries/i, 'state the current batch entry bound');
+requirePattern('skillTools', /600 total legs/i, 'state the current aggregate leg bound');
 
 requireText('baseline', '2026-07-09 through 2026-07-15', 'preserve the measured baseline window');
 requirePattern(

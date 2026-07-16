@@ -5,7 +5,7 @@ The local `@buzzr/mcp` server exposes 11 tools. It performs deterministic comput
 | Tool | Use | Principal limits |
 | --- | --- | --- |
 | `grade_dfs_entry` | Settle one DFS pick-em entry | 1–12 unique legs |
-| `grade_dfs_entries` | Settle a batch with isolated failures | 1–25 entries, 12 legs each, 300 total legs, concurrency 1–8 |
+| `grade_dfs_entries` | Settle a batch with isolated failures | 1–50 entries, 12 legs each, 600 total legs, concurrency 1–8 |
 | `validate_dfs_entry` | Validate a candidate engine entry without settlement | 64 KiB JSON, 1,000 top-level fields |
 | `list_book_policies` | Inspect executable compatibility profiles and non-executable drafts | No input |
 | `fair_line` | Remove vig from a two-way market | Both American prices required |

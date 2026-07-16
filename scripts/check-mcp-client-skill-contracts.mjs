@@ -62,7 +62,11 @@ for (const troubleshootingTerm of [
   /Linux/i,
   /restart[^\n]*(?:client|Claude|Cursor|Codex)/i,
 ]) {
-  requirePattern(readme, troubleshootingTerm, 'README must cover Node, npx cache, PATH, platform, and restart troubleshooting');
+  requirePattern(
+    readme,
+    troubleshootingTerm,
+    'README must cover Node, npx cache, PATH, platform, and restart troubleshooting',
+  );
 }
 
 const toolNames = [
@@ -82,13 +86,18 @@ for (const toolName of toolNames) {
   requirePattern(readme, new RegExp(`\\\`${toolName}\\\``), `README must list ${toolName}`);
 }
 
-for (const [path, text] of [
-  ['skills/buzzr-sports-engine/SKILL.md', skill],
-  ['skills/buzzr-sports-engine/references/mcp-tools.md', toolReference],
-]) {
-  requirePattern(text, /1[–-]50 entries/i, `${path} must state the 50-entry batch limit`);
-  requirePattern(text, /600 total legs/i, `${path} must state the 600-leg aggregate limit`);
-}
+requirePattern(skill, /2[–-]50 entries/i, 'SKILL.md must state the 50-entry batch limit');
+requirePattern(skill, /600 total legs/i, 'SKILL.md must state the 600-leg aggregate limit');
+requirePattern(
+  toolReference,
+  /1[–-]50 entries/i,
+  'The MCP tool reference must state the 50-entry batch limit',
+);
+requirePattern(
+  toolReference,
+  /600 total legs/i,
+  'The MCP tool reference must state the 600-leg aggregate limit',
+);
 
 assert.equal(
   packageManifest.devDependencies?.skills,
@@ -110,7 +119,10 @@ for (const requiredCheck of [
   'npm run check:mcp:examples',
   'npm run check:skill',
 ]) {
-  assert.ok(packageManifest.scripts?.verify?.includes(requiredCheck), `verify must run ${requiredCheck}`);
+  assert.ok(
+    packageManifest.scripts?.verify?.includes(requiredCheck),
+    `verify must run ${requiredCheck}`,
+  );
 }
 
 for (const path of [
