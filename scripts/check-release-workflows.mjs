@@ -59,23 +59,30 @@ const release = workflows.find(({ path }) => path.endsWith('/release.yml'))?.bod
 for (const input of ['expected_version', 'expected_commit', 'confirm_publish']) {
   assert.match(release, new RegExp(`^      ${input}:$`, 'm'), `release must require ${input}`);
 }
-assert.match(release, /^      id-token:\s+write$/m, 'npm publish job must mint an OIDC token');
-assert.match(release, /^    environment:\s+npm$/m, 'npm publish job must use the npm environment');
-assert.match(
-  release,
-  /^  publish-npm:\n    needs:\s+authorize-release$/m,
-  'the OIDC publish job must depend on unprivileged release authorization',
-);
 const authorizeJobStart = release.indexOf('  authorize-release:');
+const buildJobStart = release.indexOf('  build-release-artifacts:');
 const publishJobStart = release.indexOf('  publish-npm:');
+const proofJobStart = release.indexOf('  prove-published-npm:');
 const registryJobStart = release.indexOf('  publish-mcp-registry:');
 const githubReleaseJobStart = release.indexOf('  github-release:');
 assert.notEqual(authorizeJobStart, -1, 'release must define the authorization job');
+assert.notEqual(buildJobStart, -1, 'release must define the unprivileged build job');
 assert.notEqual(publishJobStart, -1, 'release must define the npm publish job');
+assert.notEqual(proofJobStart, -1, 'release must define the unprivileged npm proof job');
 assert.notEqual(registryJobStart, -1, 'release must define the MCP Registry publish job');
 assert.notEqual(githubReleaseJobStart, -1, 'release must define the GitHub release job');
-const authorizeJob = release.slice(authorizeJobStart, publishJobStart);
-const publishJob = release.slice(publishJobStart, registryJobStart);
+assert.ok(
+  authorizeJobStart < buildJobStart &&
+    buildJobStart < publishJobStart &&
+    publishJobStart < proofJobStart &&
+    proofJobStart < registryJobStart &&
+    registryJobStart < githubReleaseJobStart,
+  'release jobs must keep authorization, build, publish, proof, registry, and release separated',
+);
+const authorizeJob = release.slice(authorizeJobStart, buildJobStart);
+const buildJob = release.slice(buildJobStart, publishJobStart);
+const publishJob = release.slice(publishJobStart, proofJobStart);
+const proofJob = release.slice(proofJobStart, registryJobStart);
 const registryJob = release.slice(registryJobStart, githubReleaseJobStart);
 assert.match(
   authorizeJob,
@@ -102,23 +109,114 @@ assert.match(
   /test "\$GITHUB_SHA_AT_DISPATCH" = "\$EXPECTED_COMMIT"/,
   'release authorization must bind the input to the reviewed dispatch SHA',
 );
-const privilegedMainCheck = publishJob.indexOf('name: Revalidate current main before checkout');
-const privilegedCheckout = publishJob.indexOf('uses: actions/checkout@');
-assert.ok(
-  privilegedMainCheck >= 0 && privilegedMainCheck < privilegedCheckout,
-  'the OIDC job must revalidate current main before checking out repository code',
-);
-assert.doesNotMatch(
-  publishJob.slice(0, privilegedMainCheck),
-  /^\s+(uses|run):/m,
-  'the current-main revalidation must be the OIDC job first step',
+assert.match(
+  authorizeJob,
+  /release-manifest\.json\?ref=\$EXPECTED_COMMIT/,
+  'authorization must hash the release manifest from the exact reviewed commit',
 );
 assert.match(
-  publishJob.slice(privilegedMainCheck, privilegedCheckout),
+  authorizeJob,
+  /manifest-sha512=/,
+  'authorization must export the reviewed release manifest SHA-512',
+);
+assert.match(
+  buildJob,
+  /^    needs:\s+authorize-release$/m,
+  'the unprivileged build must depend on exact release authorization',
+);
+assert.match(
+  buildJob,
+  /^    permissions:\n      contents:\s+read$/m,
+  'the build job must use explicit contents-read-only permissions',
+);
+assert.doesNotMatch(buildJob, /^      id-token:\s+write$/m, 'the build job must not mint OIDC');
+assert.match(
+  buildJob,
+  /uses:\s+actions\/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02/,
+  'the build must transfer prepacked artifacts with pinned upload-artifact v4.6.2',
+);
+assert.match(
+  buildJob,
+  /node scripts\/pack-release-artifacts\.mjs/,
+  'the unprivileged job must prepack all authorized npm artifacts',
+);
+assert.match(
+  publishJob,
+  /^    needs:\s+\[authorize-release, build-release-artifacts\]$/m,
+  'the npm OIDC job must consume only authorized, prebuilt artifacts',
+);
+assert.match(publishJob, /^    environment:\s+npm$/m, 'the npm OIDC job must use npm environment');
+assert.match(
+  publishJob,
+  /^    permissions:\n      contents:\s+read\n      id-token:\s+write$/m,
+  'the npm publish job must receive only contents-read and OIDC permissions',
+);
+assert.match(
+  publishJob,
+  /uses:\s+actions\/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093/,
+  'the npm publish job must consume prepacked artifacts with pinned download-artifact v4.3.0',
+);
+assert.doesNotMatch(
+  publishJob,
+  /actions\/checkout|npm (?:ci|install|exec changeset|pack)|npm run (?:build|verify)/,
+  'the npm OIDC job must not checkout, install, build, verify, pack, or run Changesets',
+);
+const privilegedMainCheck = publishJob.indexOf('name: Revalidate current main');
+const privilegedDownload = publishJob.indexOf('uses: actions/download-artifact@');
+assert.ok(privilegedMainCheck >= 0, 'the npm OIDC job must revalidate current main');
+assert.match(
+  publishJob.slice(privilegedMainCheck, privilegedDownload),
   /test "\$REMOTE_MAIN" = "\$EXPECTED_COMMIT"/,
   'the OIDC job must stop if main moved after authorization',
 );
-assert.match(publishJob, /^    environment:\s+npm$/m, 'the OIDC job must use the npm environment');
+for (const variable of [
+  'EXPECTED_COMMIT',
+  'EXPECTED_RELEASE_VERSION',
+  'EXPECTED_RELEASE_MANIFEST_SHA512',
+  'EXPECTED_ARTIFACT_MANIFEST_SHA512',
+]) {
+  assert.match(
+    publishJob,
+    new RegExp(`^          ${variable}:`, 'm'),
+    `the npm OIDC job must revalidate ${variable}`,
+  );
+}
+assert.match(
+  publishJob,
+  /assert\.equal\(artifacts\.length, 5/,
+  'the npm OIDC job must require exactly five prepacked tarballs',
+);
+assert.match(
+  publishJob,
+  /assert\.deepEqual\(actualFiles, expectedFiles/,
+  'the npm OIDC job must reject extra and missing transferred files',
+);
+assert.match(
+  publishJob,
+  /createHash\(['"]sha512['"]\)/,
+  'the npm OIDC job must recompute SHA-512 for transferred manifests and tarballs',
+);
+assert.match(
+  publishJob,
+  /npm publish "\$tarball" --ignore-scripts --provenance/,
+  'the npm OIDC job must publish each literal reviewed tarball with lifecycle scripts disabled',
+);
+assert.doesNotMatch(
+  release,
+  /changeset publish/,
+  'the release workflow must never let Changesets repack inside the OIDC job',
+);
+assert.match(
+  proofJob,
+  /^    needs:\s+\[authorize-release, build-release-artifacts, publish-npm\]$/m,
+  'unprivileged live npm proof must wait for the exact publish',
+);
+assert.match(
+  proofJob,
+  /^    permissions:\n      contents:\s+read$/m,
+  'the npm proof job must use explicit contents-read-only permissions',
+);
+assert.doesNotMatch(proofJob, /^      id-token:\s+write$/m, 'npm proof must not mint OIDC');
 assert.match(release, /node-version:\s+24/, 'release must use Node 24');
 assert.match(release, /npm@12\.0\.1/, 'release must pin the reviewed npm CLI');
 assert.match(
@@ -126,10 +224,8 @@ assert.match(
   /package-manager-cache:\s+false/,
   'release builds must disable package-manager caching',
 );
-assert.match(release, /npm exec changeset publish/, 'release must publish through Changesets');
-assert.match(release, /NPM_CONFIG_PROVENANCE:\s+['"]true['"]/, 'release must request provenance');
 assert.match(
-  release,
+  proofJob,
   /npm run proof:mcp:published/,
   'release must prove the exact live MCP artifact',
 );
