@@ -52,7 +52,7 @@
     "buzzr"
   ],
   "dependencies": {
-    "@buzzr/dfs-engine": "^5.0.0"
+    "@buzzr/dfs-engine": "5.0.0"
   },
   "engines": {
     "node": ">=22"
