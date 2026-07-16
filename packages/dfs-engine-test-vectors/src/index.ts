@@ -124,7 +124,11 @@ function expectedSettlement(
     explanationCodes: input.explanationCodes,
     validation: input.validation ?? { errorCodes: [], warningCodes: [] },
     sourceLabels: prizePicks
-      ? ['PrizePicks Payouts', 'PrizePicks Potential Outcomes']
+      ? [
+          'PrizePicks Payouts',
+          'PrizePicks Potential Outcomes',
+          'PrizePicks DNPs, Reboots, and Ties',
+        ]
       : ['Underdog Sports Legal Center'],
     providerSources: input.legs.map((item) => item.providerSource),
     auditCodes: ['settlement.started', 'settlement.policy_selected', `settlement.${input.status}`],
@@ -215,6 +219,54 @@ export const TEST_VECTORS: readonly TestVector[] = [
           legId: 'leg-2',
           status: 'lost',
           actual: 4,
+          pendingReason: null,
+          providerSource: 'stat-provider',
+        },
+      ],
+    }),
+  },
+  {
+    name: 'prizepicks_power_2leg_one_win_one_tie',
+    description:
+      'Current PrizePicks two-pick Power policy pays 1.5x when one projection wins and one ties.',
+    entry: {
+      entryId: 'tv-power-2leg-win-tie',
+      bookId: 'prizepicks',
+      playTypeId: 'power',
+      stake: 10,
+      displayedMultiplier: 3,
+      placedAt: PLACED_AT,
+      legs: [leg(1, { line: 20.5 }), leg(2, { propType: 'Rebounds', line: 7 })],
+    },
+    gameLogsByLegId: {
+      'leg-1': [nbaRow({ points: '28' })],
+      'leg-2': [nbaRow({ rebounds: '7' })],
+    },
+    expected: expectedSettlement('prizepicks', {
+      status: 'won',
+      multiplier: 1.5,
+      payout: { total: 15, withdrawable: 15, bonus: 0 },
+      explanationCodes: [
+        'policy.status.experimental',
+        'policy.verification.partial',
+        'leg.push_removed',
+        'push_leg_removed',
+        'settlement.fixed_table_payout',
+        'payout_table_lookup',
+        'settlement.repriced_after_removed_legs',
+      ],
+      legs: [
+        {
+          legId: 'leg-1',
+          status: 'won',
+          actual: 28,
+          pendingReason: null,
+          providerSource: 'stat-provider',
+        },
+        {
+          legId: 'leg-2',
+          status: 'push',
+          actual: 7,
           pendingReason: null,
           providerSource: 'stat-provider',
         },

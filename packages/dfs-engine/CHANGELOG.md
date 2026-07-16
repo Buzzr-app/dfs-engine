@@ -21,6 +21,12 @@
 - Corrected DNP/tie demotion scaling, date-aware provider-row selection,
   all-push/all-DNP status handling, immutable batch cache annotations, and
   half-cent payout rounding.
+- Corrected the current two-pick PrizePicks Power outcome with one win and one
+  tied projection to the sourced 1.5x standard payout; one loss plus one tie
+  remains a loss, while a DNP below the two-pick minimum remains a refund.
+- Reject malformed verification notes and runtime date metadata without
+  coercion, while preserving the legacy definition API's shallow nested
+  mutability for minor-version compatibility.
 
 ### Documentation
 

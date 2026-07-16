@@ -71,6 +71,22 @@ describe('v5 validateBookPolicyDefinition', () => {
         }),
       ),
     ).toContain('policy.invalid_verification_reviewed_at');
+    expect(
+      codes(
+        validateBookPolicyDefinition({
+          ...validPolicy(),
+          verification: { status: 'partial', notes: 'not-an-array' },
+        }),
+      ),
+    ).toContain('policy.invalid_verification_notes');
+    expect(
+      codes(
+        validateBookPolicyDefinition({
+          ...validPolicy(),
+          verification: { status: 'partial', notes: ['reviewed', '  ', 42] },
+        }),
+      ),
+    ).toContain('policy.invalid_verification_note');
   });
 
   test('rejects empty play type lists', () => {

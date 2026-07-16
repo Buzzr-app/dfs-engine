@@ -66,6 +66,33 @@ const customPolicy = defineBookPolicy({
 });
 
 describe('Book Policy Registry 3.0', () => {
+  test('rejects malformed runtime verification metadata instead of coercing it', () => {
+    expect(() =>
+      defineBookPolicy({
+        ...customPolicy,
+        verification: { status: 'partial', notes: 'bad' } as never,
+      }),
+    ).toThrow('verification.notes must be an array');
+    expect(() =>
+      defineBookPolicy({
+        ...customPolicy,
+        verification: { status: 'partial', notes: ['reviewed', ''] },
+      }),
+    ).toThrow('verification.notes.1 must be a non-empty string');
+    expect(() =>
+      defineBookPolicy({
+        ...customPolicy,
+        verification: { status: 'partial', reviewedAt: 17 } as never,
+      }),
+    ).toThrow('verification.reviewedAt must be a string');
+    expect(() =>
+      defineBookPolicy({
+        ...customPolicy,
+        sources: [{ label: 'Fixture rules', retrievedAt: 17 } as never],
+      }),
+    ).toThrow('sources.0.retrievedAt must be a string');
+  });
+
   test('settles a non-PrizePicks custom book with bookId/playTypeId and policy metadata', async () => {
     const engine = createDfsEngine({
       bookPolicies: [customPolicy],

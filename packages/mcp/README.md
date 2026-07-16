@@ -164,7 +164,7 @@ The repository replays that workflow through a real MCP client in CI.
 
 | Tool                    | Engine                      | What it does                                                                                                                               |
 | ----------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `grade_dfs_entry`       | @buzzr/dfs-engine           | Settle one 1–12-leg entry and return the full result plus explanation.                                                                      |
+| `grade_dfs_entry`       | @buzzr/dfs-engine           | Settle one transport-bounded 1–12-leg entry; executable built-in policies currently allow at most 6 PrizePicks or 8 Underdog legs.           |
 | `grade_dfs_entries`     | @buzzr/dfs-engine           | Settle 1–50 entries, up to 600 total legs, with bounded concurrency and isolated failures.                                                   |
 | `validate_dfs_entry`    | @buzzr/dfs-engine           | Return structured engine validation issues for a candidate entry without settling it.                                                       |
 | `list_book_policies`    | @buzzr/dfs-engine           | List authoritative executable profile snapshots and metadata-only drafts, including status, verification, sources, and complete play types. |

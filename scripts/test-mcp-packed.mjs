@@ -445,7 +445,9 @@ async function exerciseOversizedInput(consumerDirectory, cache, cliPath) {
     });
   });
 
-  child.stdin.end(Buffer.concat([Buffer.alloc(2 * 1_024 * 1_024 + 1, 0x78), Buffer.from('\n')]));
+  // Keep the client side of stdin open after the oversized frame. The server
+  // must reject and exit on its own instead of waiting forever for client EOF.
+  child.stdin.write(Buffer.concat([Buffer.alloc(2 * 1_024 * 1_024 + 1, 0x78), Buffer.from('\n')]));
 
   const exit = await closed;
   assert.deepEqual(exit, { code: 1, signal: null });

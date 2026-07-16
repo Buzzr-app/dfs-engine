@@ -75,4 +75,30 @@ describe('authoritative leg status regressions', () => {
       legs: [{ status: 'won' }, { status: 'lost' }],
     });
   });
+
+  test('settles the current two-pick PrizePicks Power tie outcomes', async () => {
+    const engine = createDfsEngine();
+
+    const wonWithTie = await engine.settleEntry(entry(), {
+      legStatusesByLegId: { 'leg-1': 'won', 'leg-2': 'push' },
+    });
+    expect(wonWithTie).toMatchObject({
+      status: 'won',
+      multiplier: 1.5,
+      effectiveMultiplier: 1.5,
+      payout: { total: 15, withdrawable: 15, bonus: 0 },
+      legs: [{ status: 'won' }, { status: 'push' }],
+      payoutTable: { version: '2026-07-02-player-picks' },
+    });
+
+    const lostWithTie = await engine.settleEntry(entry(), {
+      legStatusesByLegId: { 'leg-1': 'lost', 'leg-2': 'push' },
+    });
+    expect(lostWithTie).toMatchObject({
+      status: 'lost',
+      multiplier: 0,
+      payout: { total: 0, withdrawable: 0, bonus: 0 },
+      legs: [{ status: 'lost' }, { status: 'push' }],
+    });
+  });
 });

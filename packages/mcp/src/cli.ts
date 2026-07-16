@@ -12,9 +12,14 @@ async function main(): Promise<void> {
   process.stdin.pipe(boundedInput);
   boundedInput.once('error', () => {
     process.stdin.unpipe(boundedInput);
-    process.stderr.write(INPUT_REJECTED_MESSAGE);
+    process.stdin.pause();
     process.exitCode = 1;
-    void server.close().catch(() => undefined);
+    void server
+      .close()
+      .catch(() => undefined)
+      .then(() => {
+        process.stderr.write(INPUT_REJECTED_MESSAGE, () => process.exit(1));
+      });
   });
 
   const transport = new StdioServerTransport(boundedInput);

@@ -97,6 +97,7 @@ describe('@buzzr/dfs-engine-test-vectors', () => {
       new Set([
         'prizepicks_power_2leg_all_win',
         'prizepicks_power_2leg_one_loss',
+        'prizepicks_power_2leg_one_win_one_tie',
         'underdog_standard_2leg_under_hits',
         'prizepicks_power_all_push_refund',
         'prizepicks_power_dnp_reprices_survivors',

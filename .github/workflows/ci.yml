@@ -40,7 +40,9 @@ jobs:
       - run: npm run docs
       - run: npm run check:docs
       - run: npm run check:links
-      - if: matrix.node == 22
+      # External URLs are checked only after reviewed code reaches main. PR
+      # Markdown must not turn the shared CI runner into an arbitrary URL probe.
+      - if: matrix.node == 22 && github.event_name == 'push'
         run: npm run check:links:external
       - run: npm run smoke:exports
       - run: npm run size:check

@@ -129,6 +129,14 @@ describe('engine release branch guardrails', () => {
         entries: [],
       }),
     ).toThrow('entries are required');
+    expect(() =>
+      definePayoutTable({
+        bookId: 'guard-book',
+        playTypeId: 'main',
+        effectiveFrom: '2026-05-01',
+        entries: [{ pickCount: 1, hits: 1, pushes: -1, multiplier: 1.5 }],
+      }),
+    ).toThrow('pushes must be a non-negative integer');
     expect(() => defineLeagueAdapter({ league: '' })).toThrow('league is required');
     expect(() =>
       defineStatProvider({

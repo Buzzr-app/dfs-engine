@@ -215,6 +215,8 @@ export type DfsPayoutTableEntry = {
   picks?: number;
   pickCount?: number;
   hits: number;
+  /** Optional discriminator for payout rows that apply only after tied legs. */
+  pushes?: number;
   multiplier: number;
 };
 
@@ -614,6 +616,7 @@ const PRIZEPICKS_FLEX_2026_05: readonly DfsPayoutTableEntry[] = [
 ];
 
 const PRIZEPICKS_POWER_2026_07_02: readonly DfsPayoutTableEntry[] = [
+  { picks: 1, hits: 1, pushes: 1, multiplier: 1.5 },
   { picks: 2, hits: 2, multiplier: 3 },
   { picks: 3, hits: 3, multiplier: 6 },
   { picks: 4, hits: 4, multiplier: 10 },
@@ -729,6 +732,7 @@ const DEFAULT_PAYOUT_TABLES: readonly DfsPayoutTableDefinition[] = [
     sourceNotes: [
       'PrizePicks Payouts (updated July 2, 2026): https://www.prizepicks.com/help-center/payouts',
       'Standard Player Pick rates: https://www.prizepicks.com/help-center/potential-outcomes',
+      'A 2-pick Power lineup with one correct pick and one tie pays the current standard 1.5x rate.',
       'The submitted lineup details remain authoritative because PrizePicks states payouts may vary.',
     ],
     sources: PRIZEPICKS_CURRENT_SOURCES,
@@ -1025,8 +1029,25 @@ export function defineBookPolicy(policy: DfsBookPolicy): DfsBookPolicy {
   ) {
     throw new DfsDefinitionError('defineBookPolicy: verification.status is invalid');
   }
-  if (policy.verification?.reviewedAt && !isValidDate(policy.verification.reviewedAt)) {
-    throw new DfsDefinitionError('defineBookPolicy: verification.reviewedAt must be parseable');
+  if (policy.verification?.reviewedAt != null) {
+    if (typeof policy.verification.reviewedAt !== 'string') {
+      throw new DfsDefinitionError('defineBookPolicy: verification.reviewedAt must be a string');
+    }
+    if (!isValidDate(policy.verification.reviewedAt)) {
+      throw new DfsDefinitionError('defineBookPolicy: verification.reviewedAt must be parseable');
+    }
+  }
+  if (policy.verification?.notes != null) {
+    if (!Array.isArray(policy.verification.notes)) {
+      throw new DfsDefinitionError('defineBookPolicy: verification.notes must be an array');
+    }
+    for (const [index, note] of policy.verification.notes.entries()) {
+      if (typeof note !== 'string' || !note.trim()) {
+        throw new DfsDefinitionError(
+          `defineBookPolicy: verification.notes.${index} must be a non-empty string`,
+        );
+      }
+    }
   }
   if (!policy.playTypes.length) {
     throw new DfsDefinitionError('defineBookPolicy: at least one play type is required');
@@ -1059,10 +1080,17 @@ export function defineBookPolicy(policy: DfsBookPolicy): DfsBookPolicy {
     if (!source.label || !source.label.trim()) {
       throw new DfsDefinitionError(`defineBookPolicy: sources.${index}.label is required`);
     }
-    if (source.retrievedAt && !isValidDate(source.retrievedAt)) {
-      throw new DfsDefinitionError(
-        `defineBookPolicy: sources.${index}.retrievedAt must be parseable`,
-      );
+    if (source.retrievedAt != null) {
+      if (typeof source.retrievedAt !== 'string') {
+        throw new DfsDefinitionError(
+          `defineBookPolicy: sources.${index}.retrievedAt must be a string`,
+        );
+      }
+      if (!isValidDate(source.retrievedAt)) {
+        throw new DfsDefinitionError(
+          `defineBookPolicy: sources.${index}.retrievedAt must be parseable`,
+        );
+      }
     }
   }
   return Object.freeze({
@@ -1075,15 +1103,10 @@ export function defineBookPolicy(policy: DfsBookPolicy): DfsBookPolicy {
             : undefined,
         })
       : undefined,
-    sources: Object.freeze(policy.sources.map((source) => Object.freeze({ ...source }))),
-    playTypes: Object.freeze(
-      policy.playTypes.map((playType) =>
-        Object.freeze({
-          ...playType,
-          pickCount: Object.freeze({ ...playType.pickCount }),
-        }),
-      ),
-    ),
+    // Preserve the v5 public definition API's shallow-freeze behavior. Deeply
+    // immutable copies are available through getBookPolicies() snapshots.
+    sources: Object.freeze([...policy.sources]),
+    playTypes: Object.freeze(policy.playTypes.map((playType) => Object.freeze({ ...playType }))),
   });
 }
 
@@ -1123,12 +1146,17 @@ export function definePayoutTable(table: DfsPayoutTableDefinition): DfsPayoutTab
         'definePayoutTable: hits must be an integer between 0 and pickCount',
       );
     }
+    if (entry.pushes != null && (!Number.isInteger(entry.pushes) || entry.pushes < 0)) {
+      throw new DfsDefinitionError(
+        'definePayoutTable: pushes must be a non-negative integer when provided',
+      );
+    }
     if (!Number.isFinite(entry.multiplier) || entry.multiplier <= 0) {
       throw new DfsDefinitionError(
         'definePayoutTable: multiplier must be a finite positive number',
       );
     }
-    const key = `${picks}:${entry.hits}`;
+    const key = `${picks}:${entry.hits}:pushes=${entry.pushes ?? 'any'}`;
     if (rows.has(key)) {
       throw new DfsDefinitionError(`definePayoutTable: duplicate payout row ${key}`);
     }
@@ -1332,14 +1360,19 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngineWithPoli
     picks: number,
     hits: number,
     asOf: string,
+    outcomes: { pushes?: number } = {},
   ): number | null {
     const table = findPayoutTable(bookId, playTypeId, asOf);
     if (!table) {
       return null;
     }
     return (
-      table.entries.find((entry) => tableEntryPicks(entry) === picks && entry.hits === hits)
-        ?.multiplier ?? null
+      table.entries.find(
+        (entry) =>
+          tableEntryPicks(entry) === picks &&
+          entry.hits === hits &&
+          (entry.pushes == null || entry.pushes === (outcomes.pushes ?? 0)),
+      )?.multiplier ?? null
     );
   }
 
@@ -2350,6 +2383,7 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngineWithPoli
         input.pickCount,
         input.hits,
         asOf,
+        { pushes: input.pushes },
       );
       if (tableMultiplier == null) {
         multiplier = 0;
@@ -2669,12 +2703,11 @@ function assertPayoutLookupInvariants(input: DfsPayoutLookupInput): void {
     }
   }
   const losses = input.losses ?? 0;
-  const pushes = input.pushes ?? 0;
   if (input.hits > input.pickCount) {
     throw new DfsEngineInvariantError('hits cannot exceed pickCount');
   }
-  if (input.hits + losses + pushes > input.pickCount) {
-    throw new DfsEngineInvariantError('hits, losses, and pushes cannot exceed pickCount');
+  if (input.hits + losses > input.pickCount) {
+    throw new DfsEngineInvariantError('hits and losses cannot exceed pickCount');
   }
 }
 

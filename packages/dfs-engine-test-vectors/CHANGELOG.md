@@ -4,7 +4,7 @@
 
 ### Minor Changes
 
-- 5be07fa: Expand the public regression set from three happy paths to eleven version-matched fixtures covering policy evidence, payout tables, DNPs, pushes, missing and unsupported stats, ambiguous provider rows, warnings, provenance, and audit codes.
+- 5be07fa: Expand the public regression set from three happy paths to twelve version-matched fixtures covering policy evidence, payout tables, DNPs, pushes, missing and unsupported stats, ambiguous provider rows, warnings, provenance, and audit codes.
 
 ### Patch Changes
 
@@ -13,10 +13,11 @@
 
 ### Details
 
-- Expanded the public regression set from three happy paths to eleven fixtures,
+- Expanded the public regression set from three happy paths to twelve fixtures,
   including all-push, explicit-DNP repricing, missing-vs-unsupported stats,
   duplicate-player warnings, wrong-date and ambiguous provider rows, and the
-  PrizePicks standard three-pick table effective 2026-07-02.
+  PrizePicks standard three-pick table and sourced one-win/one-tie two-pick
+  Power payout effective 2026-07-02.
 - Pinned full top-level settlement behavior: payout, effective policy/table,
   verification, confidence, validation, sources, provenance, explanations, audit
   codes, pending reasons, and per-leg provider detail.

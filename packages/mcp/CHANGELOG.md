@@ -25,6 +25,8 @@
 - Kept draft policy fixtures metadata-only and non-executable.
 - Unified real-client and direct-handler tool validation behind bounded
   `invalid_input` results so SDK validation cannot amplify adversarial errors.
+- Oversized stdio frames now close the server and terminate with an error even
+  when a misbehaving client keeps its stdin pipe open.
 
 ### Documentation
 

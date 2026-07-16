@@ -123,6 +123,29 @@ function validateVerification(policy: Record<string, unknown>, errors: DfsValida
       ),
     );
   }
+  if (policy.verification.notes != null) {
+    if (!Array.isArray(policy.verification.notes)) {
+      errors.push(
+        issue(
+          'policy.invalid_verification_notes',
+          'verification.notes must be an array when provided.',
+          'verification.notes',
+        ),
+      );
+    } else {
+      policy.verification.notes.forEach((note, index) => {
+        if (typeof note !== 'string' || !note.trim()) {
+          errors.push(
+            issue(
+              'policy.invalid_verification_note',
+              `verification.notes.${index} must be a non-empty string.`,
+              `verification.notes.${index}`,
+            ),
+          );
+        }
+      });
+    }
+  }
 }
 
 function validatePlayTypes(policy: Record<string, unknown>, errors: DfsValidationIssue[]): void {
