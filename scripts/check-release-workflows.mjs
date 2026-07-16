@@ -45,6 +45,16 @@ for (const command of [
 ]) {
   assert.ok(ci.includes(`run: ${command}`), `CI must run ${command}`);
 }
+assert.match(
+  ci,
+  /- if: matrix\.node == 24\n\s+run: npm install --global npm@12\.0\.1/,
+  'Node 24 CI must use the exact npm CLI pinned by the release workflow',
+);
+assert.match(
+  ci,
+  /- run: npm run test:packages:packed/,
+  'Every supported Node CI job must exercise the complete packed-package suite',
+);
 
 const proof = workflows.find(({ path }) => path.endsWith('/prove-mcp-published.yml'))?.body ?? '';
 for (const input of ['expected_version', 'expected_integrity', 'expected_git_head']) {

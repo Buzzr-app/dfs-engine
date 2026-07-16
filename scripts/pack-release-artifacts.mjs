@@ -5,6 +5,8 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { promisify } from 'node:util';
 
+import { parseNpmPackArtifacts } from './lib/npm-pack-output.mjs';
+
 const execFileAsync = promisify(execFile);
 const argumentsByName = new Map();
 for (let index = 2; index < process.argv.length; index += 2) {
@@ -47,9 +49,7 @@ async function pack(entry) {
   const { stdout } = await execFileAsync(command.command, command.args, {
     maxBuffer: 20 * 1_024 * 1_024,
   });
-  const jsonStart = stdout.lastIndexOf('\n[');
-  const packed = JSON.parse(jsonStart === -1 ? stdout : stdout.slice(jsonStart + 1));
-  assert.equal(packed.length, 1, `expected one artifact for ${entry.name}`);
+  const packed = parseNpmPackArtifacts(stdout, entry.name);
   const artifact = packed[0];
   assert.equal(artifact.name, entry.name, `packed the wrong workspace for ${entry.name}`);
   assert.equal(artifact.version, entry.version, `${entry.name} packed at the wrong version`);

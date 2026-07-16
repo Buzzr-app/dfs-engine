@@ -24,6 +24,8 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
           cache: npm
+      - if: matrix.node == 24
+        run: npm install --global npm@12.0.1
       - run: npm ci
       - run: npm run typecheck
       - run: npm run lint
@@ -32,8 +34,7 @@ jobs:
       - run: npm run test:coverage
       - run: npm run build
       - run: npm run test:mcp:packed
-      - if: matrix.node == 22
-        run: npm run test:packages:packed
+      - run: npm run test:packages:packed
       - run: npm run check:mcp:client-skill
       - run: npm run check:mcp:examples
       - run: npm run check:skill

@@ -12,6 +12,8 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { JSONRPCMessageSchema, LATEST_PROTOCOL_VERSION } from '@modelcontextprotocol/sdk/types.js';
 
+import { parseNpmPackArtifacts } from './lib/npm-pack-output.mjs';
+
 const execFileAsync = promisify(execFile);
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const workspaces = [
@@ -91,9 +93,7 @@ async function packWorkspace(workspace, destination, cache) {
     ['pack', '--workspace', workspace, '--json', '--pack-destination', destination],
     { cwd: root, env: commandEnvironment(cache), maxBuffer: 10 * 1024 * 1024 },
   );
-  const jsonStart = stdout.lastIndexOf('\n[');
-  const results = JSON.parse(jsonStart === -1 ? stdout : stdout.slice(jsonStart + 1));
-  assert.equal(results.length, 1, `Expected one packed artifact for ${workspace}`);
+  const results = parseNpmPackArtifacts(stdout, workspace);
   return results[0];
 }
 
