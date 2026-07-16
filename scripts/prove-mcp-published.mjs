@@ -8,6 +8,8 @@ import { promisify } from 'node:util';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 
+import { parseNpmViewValue } from './lib/npm-view-output.mjs';
+
 const execFileAsync = promisify(execFile);
 const expectedVersion = process.env.EXPECTED_MCP_VERSION?.trim();
 const expectedIntegrity = process.env.EXPECTED_MCP_INTEGRITY?.trim();
@@ -119,7 +121,7 @@ try {
     ['view', '@buzzr/mcp', 'dist-tags.latest', '--json'],
     { cwd: temporaryRoot, env: environment },
   );
-  const latest = JSON.parse(latestOutput);
+  const latest = parseNpmViewValue(latestOutput, 'dist-tags.latest');
   assert.equal(
     latest,
     expectedVersion,
@@ -132,7 +134,7 @@ try {
       env: environment,
     });
     assert(stdout.trim(), `Published package has no ${field} metadata`);
-    return JSON.parse(stdout);
+    return parseNpmViewValue(stdout, field);
   };
   const [integrity, gitHead, tarball, provenance] = await Promise.all([
     viewField('dist.integrity'),

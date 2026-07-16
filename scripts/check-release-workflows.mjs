@@ -245,6 +245,11 @@ assert.match(
   /test "\$live_integrity" = "\$integrity"[\s\S]*E404/,
   'preflight must reject every integrity mismatch and distinguish only an absent version',
 );
+assert.equal(
+  [...publishJob.matchAll(/Array\.isArray\(parsed\)/g)].length,
+  2,
+  'both npm integrity reads must normalize npm 12 exact-version arrays',
+);
 assert.match(
   publishJob.slice(privilegedConditionalMainGate, privilegedPublishLoop),
   /if \[\[ "\$existing_exact_count" -eq 0 \]\]; then[\s\S]*test "\$REMOTE_MAIN" = "\$EXPECTED_COMMIT"[\s\S]*fi/,
@@ -358,6 +363,23 @@ assert.match(
   'the npm proof job must use explicit contents-read-only permissions',
 );
 assert.doesNotMatch(proofJob, /^      id-token:\s+write$/m, 'npm proof must not mint OIDC');
+assert.match(
+  proofJob,
+  /ref:\s+\$\{\{ github\.sha \}\}/,
+  'partial-release recovery must use the protected dispatch commit for repaired proof tooling',
+);
+assert.match(
+  proofJob,
+  /contents\/release-manifest\.json\?ref=\$EXPECTED_RELEASE_COMMIT/,
+  'partial-release recovery must reload the release manifest from the reviewed artifact commit',
+);
+for (const variable of ['EXPECTED_RELEASE_MANIFEST_PATH', 'EXPECTED_RELEASE_MANIFEST_SHA512']) {
+  assert.match(
+    proofJob,
+    new RegExp(`^          ${variable}:`, 'm'),
+    `the npm proof job must bind ${variable}`,
+  );
+}
 assert.match(release, /node-version:\s+24/, 'release must use Node 24');
 assert.match(release, /npm@12\.0\.1/, 'release must pin the reviewed npm CLI');
 assert.match(
