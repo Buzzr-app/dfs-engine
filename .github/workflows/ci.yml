@@ -32,6 +32,8 @@ jobs:
       - run: npm run test:coverage
       - run: npm run build
       - run: npm run test:mcp:packed
+      - if: matrix.node == 22
+        run: npm run test:packages:packed
       - run: npm run check:mcp:client-skill
       - run: npm run check:mcp:examples
       - run: npm run check:skill

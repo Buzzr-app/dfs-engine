@@ -33,9 +33,10 @@
     "check:mcp:client-skill": "node scripts/check-mcp-client-skill-contracts.mjs",
     "check:mcp:examples": "node scripts/validate-mcp-examples.mjs",
     "check:skill": "node scripts/validate-buzzr-skill.mjs",
-    "verify": "npm run typecheck && npm run lint && npm run format:check && npm test && npm run test:coverage && npm run build && npm run test:mcp:packed && npm run check:mcp:client-skill && npm run check:mcp:examples && npm run check:skill && npm run docs && npm run check:docs && npm run check:links && npm run smoke:exports && npm run size:check && npm run pack:smoke && npm run check:workflows && npm run check:mcp-registry && npm run audit:high",
+    "verify": "npm run typecheck && npm run lint && npm run format:check && npm test && npm run test:coverage && npm run build && npm run test:mcp:packed && npm run test:packages:packed && npm run check:mcp:client-skill && npm run check:mcp:examples && npm run check:skill && npm run docs && npm run check:docs && npm run check:links && npm run smoke:exports && npm run size:check && npm run pack:smoke && npm run check:workflows && npm run check:mcp-registry && npm run audit:high",
     "pack:smoke": "npm pack --workspaces --dry-run",
     "test:mcp:packed": "npm run build --workspace @buzzr/bets-core --workspace @buzzr/dfs-engine --workspace @buzzr/entertainment-engine --workspace @buzzr/mcp && node scripts/test-mcp-packed.mjs",
+    "test:packages:packed": "node scripts/test-release-artifacts.mjs",
     "proof:mcp:published": "node scripts/prove-mcp-published.mjs"
   },
   "devDependencies": {
