@@ -6,8 +6,13 @@ import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('../', import.meta.url));
 
 const files = {
+  agents: 'AGENTS.md',
   root: 'README.md',
   llms: 'llms.txt',
+  architecture: 'docs/architecture.md',
+  security: 'docs/security-and-privacy.md',
+  versioning: 'docs/versioning-and-support.md',
+  apiIndex: 'docs/api-reference.md',
   engine: 'packages/dfs-engine/README.md',
   mcp: 'packages/mcp/README.md',
   cli: 'packages/dfs-cli/README.md',
@@ -64,6 +69,10 @@ const staleClaims = [
     'official-sounding conformance vectors',
   ],
   [/published conformance vectors/i, 'official-sounding conformance vectors'],
+  [/Everything is pure functions: no I\/O/i, 'pure-function behavior for boundary packages'],
+  [/No package may add a runtime dependency outside/i, 'a zero-dependency rule for every package'],
+  [/Golden vectors are conformance law/i, 'regression vectors as conformance law'],
+  [/all packages currently release in lockstep/i, 'an unverified lockstep-release rule'],
 ];
 
 for (const [pattern, label] of staleClaims) {
@@ -84,6 +93,7 @@ function requirePattern(key, pattern, reason) {
 for (const key of ['root', 'llms', 'mcp']) {
   requirePattern(key, /\b11 tools\b/i, 'state the current MCP tool count');
 }
+requirePattern('agents', /\b11 tools\b/i, 'state the current MCP tool count');
 
 const toolNames = [
   'grade_dfs_entry',
@@ -212,6 +222,86 @@ for (const key of ['engineChangelog', 'mcpChangelog', 'cliChangelog', 'vectorsCh
     'record the unreleased documentation contract without guessing a version',
   );
 }
+
+for (const key of ['root', 'agents']) {
+  requireText(key, 'docs/architecture.md', 'link the architecture and data-flow reference');
+  requireText(key, 'docs/security-and-privacy.md', 'link the threat-model and privacy reference');
+  requireText(key, 'docs/versioning-and-support.md', 'link the versioning and support policy');
+  requireText(key, 'docs/api-reference.md', 'link the all-package API index');
+}
+
+requirePattern(
+  'agents',
+  /core engines[^\n]*zero external runtime dependencies/i,
+  'scope the zero-dependency invariant to core engines',
+);
+requirePattern('agents', /MCP[^\n]*(?:SDK|Zod)/i, 'record the MCP runtime dependency exception');
+requirePattern('agents', /engine regression fixtures/i, 'treat vectors as regression fixtures');
+requirePattern(
+  'agents',
+  /not official operator conformance/i,
+  'reject operator-conformance overclaims',
+);
+requireText('agents', 'node scripts/check-public-docs.mjs', 'include the executable docs gate');
+
+requirePattern(
+  'architecture',
+  /^# Architecture and data flow$/m,
+  'define the architecture reference',
+);
+requirePattern('architecture', /core engines/i, 'describe the pure core layer');
+requirePattern('architecture', /boundary (?:packages|layer)/i, 'describe I/O boundaries');
+requirePattern('architecture', /MCP/i, 'describe MCP placement');
+requirePattern('architecture', /StatProvider/i, 'describe provider injection');
+
+requirePattern(
+  'security',
+  /^# Security, privacy, and threat model$/m,
+  'define the threat-model reference',
+);
+for (const term of [
+  'trust boundaries',
+  'untrusted input',
+  'private user data',
+  'stdout',
+  'stderr',
+]) {
+  requirePattern('security', new RegExp(term, 'i'), `cover ${term}`);
+}
+requirePattern('security', /does not fetch live odds/i, 'state the MCP network/data non-goal');
+requireText('security', 'SECURITY.md', 'link the vulnerability-reporting policy');
+
+requirePattern(
+  'versioning',
+  /^# Versioning, compatibility, and support$/m,
+  'define the release policy',
+);
+requirePattern('versioning', /independent package/i, 'document smallest-scope package releases');
+requirePattern('versioning', /Node(?:\.js)? (?:>=|≥) 22/i, 'state the supported Node floor');
+requirePattern('versioning', /changesets/i, 'document release planning');
+requirePattern('versioning', /migration/i, 'document migration expectations');
+requirePattern('versioning', /release\/ios-2\.0\.0/i, 'separate the mobile app snapshot');
+
+const packageNames = [
+  '@buzzr/dfs-engine',
+  '@buzzr/bets-core',
+  '@buzzr/entertainment-engine',
+  '@buzzr/mcp',
+  '@buzzr/dfs-cli',
+  '@buzzr/dfs-react',
+  '@buzzr/dfs-testkit',
+  '@buzzr/dfs-provider-espn',
+  '@buzzr/dfs-provider-sportradar',
+  '@buzzr/dfs-engine-test-vectors',
+];
+for (const packageName of packageNames) {
+  requireText('apiIndex', packageName, `index ${packageName}`);
+}
+requirePattern(
+  'apiIndex',
+  /TypeDoc[^\n]*currently[^\n]*@buzzr\/dfs-engine only/i,
+  'scope the generated API reference honestly',
+);
 
 for (const [key, content] of Object.entries(docs)) {
   for (const match of content.matchAll(/\[[^\]]+\]\(([^)]+)\)/g)) {
