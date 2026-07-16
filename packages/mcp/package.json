@@ -53,9 +53,9 @@
     "url": "https://github.com/Buzzr-app/dfs-engine/issues"
   },
   "dependencies": {
-    "@buzzr/bets-core": "^5.0.0",
-    "@buzzr/dfs-engine": "^5.0.0",
-    "@buzzr/entertainment-engine": "^5.0.0",
+    "@buzzr/bets-core": "5.0.0",
+    "@buzzr/dfs-engine": "5.0.0",
+    "@buzzr/entertainment-engine": "5.0.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "zod": "^4.4.3"
   },

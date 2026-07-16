@@ -1,5 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
+import packageManifest from '../package.json' with { type: 'json' };
+
 import { buzzTools } from './tools/buzz';
 import { dfsTools } from './tools/dfs';
 import { historyTools } from './tools/history';
@@ -7,7 +9,7 @@ import { oddsTools } from './tools/odds';
 import type { BuzzrToolDefinition, ToolResult } from './tools/shared';
 
 export const SERVER_NAME = 'buzzr';
-export const SERVER_VERSION = '5.0.0';
+export const SERVER_VERSION = packageManifest.version;
 
 /** Every tool this server ships, in catalog order. */
 export const allTools: readonly BuzzrToolDefinition[] = [

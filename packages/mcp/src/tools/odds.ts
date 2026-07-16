@@ -9,17 +9,9 @@ import {
 } from '@buzzr/bets-core';
 import { z } from 'zod';
 
-import { positiveFiniteNumber } from './schemas';
+import { americanOdds, positiveFiniteNumber } from './schemas';
 import { defineTool, jsonResult } from './shared';
 import type { BuzzrToolDefinition } from './shared';
-
-const americanOdds = z
-  .number()
-  .finite()
-  .min(-1_000_000)
-  .max(1_000_000)
-  .refine((value) => value !== 0, { message: 'American odds cannot be 0.' })
-  .describe('American odds, e.g. -110 or +145.');
 
 const fairLineSchema = z.object({
   selected: americanOdds.describe('American odds offered for the side you are evaluating.'),
@@ -46,7 +38,7 @@ export const closingLineValueTool = defineTool({
   inputSchema: closingLineValueSchema,
   run: (args) =>
     jsonResult({
-      contractVersion: 1,
+      contractVersion: '1',
       ...calculateClosingLineValue(args),
     }),
 });

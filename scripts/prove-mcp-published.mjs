@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { delimiter, join, resolve } from 'node:path';
+import { delimiter, dirname, join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -17,23 +17,26 @@ assert.match(
   'EXPECTED_MCP_VERSION must be an exact semantic version',
 );
 const packageSpec = `@buzzr/mcp@${expectedVersion}`;
+const npmExecPath = process.env.npm_execpath;
+assert(npmExecPath, 'Run the published proof through npm so npm_execpath is available');
+const npxCliPath = resolve(dirname(npmExecPath), 'npx-cli.js');
 
 const coreToolNames = [
   'grade_dfs_entry',
+  'grade_dfs_entries',
   'validate_dfs_entry',
   'list_book_policies',
   'fair_line',
+  'closing_line_value',
   'parlay_value',
   'kelly_stake',
+  'summarize_bet_history',
   'predict_game_buzz',
   'rank_games',
 ];
 
 function execNpm(args, options) {
-  if (process.env.npm_execpath) {
-    return execFileAsync(process.execPath, [process.env.npm_execpath, ...args], options);
-  }
-  return execFileAsync(process.platform === 'win32' ? 'npm.cmd' : 'npm', args, options);
+  return execFileAsync(process.execPath, [npmExecPath, ...args], options);
 }
 
 function parseToolResult(result) {
@@ -115,8 +118,8 @@ try {
   assert.match(integrity, /^sha512-[A-Za-z0-9+/=]+$/, 'Published package has no sha512 integrity');
 
   const transport = new StdioClientTransport({
-    command: process.platform === 'win32' ? 'npx.cmd' : 'npx',
-    args: ['-y', packageSpec],
+    command: process.execPath,
+    args: [npxCliPath, '-y', packageSpec],
     cwd: temporaryRoot,
     env: environment,
     stderr: 'pipe',
@@ -184,6 +187,49 @@ try {
     assert.equal(dfs.status, 'won');
     assert.equal(dfs.payout.total, 30);
 
+    const dfsBatch = parseToolResult(
+      await withDeadline(
+        client.callTool({
+          name: 'grade_dfs_entries',
+          arguments: {
+            entries: [
+              {
+                entryId: 'published-batch-proof',
+                bookId: 'prizepicks',
+                playTypeId: 'power',
+                stake: 10,
+                displayedMultiplier: 3,
+                legs: [
+                  {
+                    legId: 'leg-1',
+                    playerName: 'Player One',
+                    league: 'NBA',
+                    propType: 'points',
+                    line: 25.5,
+                    direction: 'over',
+                    actual: 31,
+                  },
+                  {
+                    legId: 'leg-2',
+                    playerName: 'Player Two',
+                    league: 'NBA',
+                    propType: 'points',
+                    line: 27.5,
+                    direction: 'over',
+                    actual: 33,
+                  },
+                ],
+              },
+            ],
+            concurrency: 1,
+          },
+        }),
+        'Published MCP DFS batch call',
+      ),
+    );
+    assert.equal(dfsBatch.contractVersion, '1');
+    assert.equal(dfsBatch.summary.settled, 1);
+
     const odds = parseToolResult(
       await withDeadline(
         client.callTool({
@@ -194,6 +240,49 @@ try {
       ),
     );
     assert.equal(odds.fairProbability, 0.5);
+
+    const closingLine = parseToolResult(
+      await withDeadline(
+        client.callTool({
+          name: 'closing_line_value',
+          arguments: { placedAmericanOdds: 110, closingAmericanOdds: -105 },
+        }),
+        'Published MCP closing line call',
+      ),
+    );
+    assert.deepEqual(closingLine, {
+      contractVersion: '1',
+      clvPercent: 3.6,
+      beatClosingLine: true,
+    });
+
+    const betHistory = parseToolResult(
+      await withDeadline(
+        client.callTool({
+          name: 'summarize_bet_history',
+          arguments: {
+            bets: [
+              {
+                id: 'published-bet',
+                userId: 'published-user',
+                sportsbookSlug: 'draftkings',
+                kind: 'straight',
+                status: 'won',
+                stake: 10,
+                payout: 25,
+                placedAt: '2026-07-15T17:00:00.000Z',
+                settledAt: '2026-07-15T18:00:00.000Z',
+              },
+            ],
+            period: 'day',
+          },
+        }),
+        'Published MCP bet history call',
+      ),
+    );
+    assert.equal(betHistory.contractVersion, '1');
+    assert.equal(betHistory.period, 'day');
+    assert.equal(betHistory.overall.totalBets, 1);
 
     const entertainment = parseToolResult(
       await withDeadline(

@@ -1,5 +1,12 @@
 import type { z } from 'zod';
 
+const MAX_IN_FLIGHT_CALLS = 32;
+const MAX_VALIDATION_ISSUES = 8;
+const MAX_VALIDATION_MESSAGE_LENGTH = 200;
+const MAX_VALIDATION_PATH_SEGMENTS = 8;
+const MAX_VALIDATION_PATH_STRING_LENGTH = 64;
+const MAX_TOOL_RESULT_BYTES = 1_048_576;
+
 /** Text content block returned to MCP clients. */
 export type ToolTextContent = {
   type: 'text';
@@ -23,8 +30,12 @@ export type BuzzrToolDefinition = {
 
 /** Wraps a value as pretty-printed JSON text content. */
 export function jsonResult(value: unknown): ToolResult {
+  const text = JSON.stringify(value, null, 2);
+  if (Buffer.byteLength(text, 'utf8') > MAX_TOOL_RESULT_BYTES) {
+    return errorResult('result_too_large', 'Tool result exceeded the maximum response size.');
+  }
   return {
-    content: [{ type: 'text', text: JSON.stringify(value, null, 2) }],
+    content: [{ type: 'text', text }],
   };
 }
 
@@ -40,6 +51,20 @@ export function errorResult(code: string, message: string, details?: unknown): T
   };
 }
 
+function normalizeValidationIssues(issues: readonly z.core.$ZodIssue[]) {
+  return issues.slice(0, MAX_VALIDATION_ISSUES).map((issue) => ({
+    code: String(issue.code).slice(0, 64),
+    path: issue.path
+      .slice(0, MAX_VALIDATION_PATH_SEGMENTS)
+      .map((segment) =>
+        typeof segment === 'number'
+          ? segment
+          : String(segment).slice(0, MAX_VALIDATION_PATH_STRING_LENGTH),
+      ),
+    message: issue.message.slice(0, MAX_VALIDATION_MESSAGE_LENGTH),
+  }));
+}
+
 /**
  * Builds a tool definition whose handler validates raw arguments against the
  * zod schema before running, and converts thrown errors into MCP error
@@ -52,27 +77,33 @@ export function defineTool<Schema extends z.ZodType>(definition: {
   inputSchema: Schema;
   run: (input: z.output<Schema>) => Promise<ToolResult> | ToolResult;
 }): BuzzrToolDefinition {
+  let inFlightCalls = 0;
+
   return {
     name: definition.name,
     title: definition.title,
     description: definition.description,
     inputSchema: definition.inputSchema,
     handler: async (args: unknown): Promise<ToolResult> => {
-      const parsed = definition.inputSchema.safeParse(args ?? {});
-      if (!parsed.success) {
-        return errorResult(
-          'invalid_input',
-          `${definition.name}: input failed schema validation.`,
-          parsed.error.issues,
-        );
+      if (inFlightCalls >= MAX_IN_FLIGHT_CALLS) {
+        return errorResult('server_busy', 'The server is handling too many requests. Retry later.');
       }
+
+      inFlightCalls += 1;
       try {
+        const parsed = definition.inputSchema.safeParse(args ?? {});
+        if (!parsed.success) {
+          return errorResult(
+            'invalid_input',
+            `${definition.name}: input failed schema validation.`,
+            normalizeValidationIssues(parsed.error.issues),
+          );
+        }
         return await definition.run(parsed.data as z.output<Schema>);
-      } catch (error) {
-        return errorResult(
-          'tool_execution_failed',
-          error instanceof Error ? error.message : String(error),
-        );
+      } catch {
+        return errorResult('tool_execution_failed', 'Tool execution failed.');
+      } finally {
+        inFlightCalls -= 1;
       }
     },
   };

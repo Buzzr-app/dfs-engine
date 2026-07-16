@@ -4,6 +4,15 @@ export const MAX_IDENTIFIER_LENGTH = 128;
 export const MAX_LABEL_LENGTH = 200;
 export const MAX_FINITE_MAGNITUDE = 1_000_000_000;
 
+export const americanOdds = z
+  .number()
+  .finite()
+  .min(-100_000)
+  .max(100_000)
+  .refine((value) => value <= -100 || value >= 100, {
+    message: 'American odds must be at most -100 or at least +100.',
+  });
+
 export const boundedIdentifier = z.string().min(1).max(MAX_IDENTIFIER_LENGTH);
 export const boundedLabel = z.string().min(1).max(MAX_LABEL_LENGTH);
 export const finiteNumber = z

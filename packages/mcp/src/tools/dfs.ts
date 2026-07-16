@@ -214,8 +214,8 @@ export function serializeBatchFailure(failure: DfsBatchEntryFailure) {
     entryId: failure.entryId,
     index: failure.index,
     error: {
-      name: (failure.error.name || 'Error').slice(0, 100),
-      message: failure.error.message.slice(0, 1_000),
+      code: 'entry_settlement_failed',
+      message: 'Entry settlement failed.',
     },
   };
 }
@@ -234,7 +234,7 @@ export const gradeDfsEntriesTool = defineTool({
       concurrency: args.concurrency ?? 1,
     });
     return jsonResult({
-      contractVersion: 1,
+      contractVersion: '1',
       results: batch.results.map((result) => ({
         ...result,
         explanation: engine.explainSettlement(result),

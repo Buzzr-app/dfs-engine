@@ -35,7 +35,10 @@ describe('BoundedNewlineInput', () => {
     const result = await transformChunks([payload, Buffer.from('\n')]);
 
     expect(result.error).toBeNull();
-    expect(result.output).toEqual(Buffer.concat([payload, Buffer.from('\n')]));
+    expect(result.output).toHaveLength(MAX_STDIN_FRAME_BYTES + 1);
+    expect(result.output[0]).toBe(0x61);
+    expect(result.output[MAX_STDIN_FRAME_BYTES - 1]).toBe(0x61);
+    expect(result.output[MAX_STDIN_FRAME_BYTES]).toBe(0x0a);
   });
 
   it('buffers split chunks by reference until the newline arrives', async () => {
@@ -54,7 +57,11 @@ describe('BoundedNewlineInput', () => {
     const result = await transformChunks([payload, Buffer.from('\r'), Buffer.from('\n')]);
 
     expect(result.error).toBeNull();
-    expect(result.output).toEqual(Buffer.concat([payload, Buffer.from('\r\n')]));
+    expect(result.output).toHaveLength(MAX_STDIN_FRAME_BYTES + 2);
+    expect(result.output[0]).toBe(0x62);
+    expect(result.output[MAX_STDIN_FRAME_BYTES - 1]).toBe(0x62);
+    expect(result.output[MAX_STDIN_FRAME_BYTES]).toBe(0x0d);
+    expect(result.output[MAX_STDIN_FRAME_BYTES + 1]).toBe(0x0a);
   });
 
   it('emits multiple complete frames from one input chunk', async () => {

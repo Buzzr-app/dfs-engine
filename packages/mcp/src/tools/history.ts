@@ -7,6 +7,7 @@ import {
 import { z } from 'zod';
 
 import {
+  americanOdds,
   boundedIdentifier,
   boundedLabel,
   finiteNumber,
@@ -43,7 +44,7 @@ const betSchema = z.object({
   gameId: boundedIdentifier.nullish(),
   side: boundedLabel.nullish(),
   line: finiteNumber.nullish(),
-  americanOdds: finiteNumber.nullish(),
+  americanOdds: americanOdds.nullish(),
   placedAt: isoTimestamp,
   settledAt: isoTimestamp.nullish(),
   visibility: z.enum(['private', 'friends', 'public']).optional(),
@@ -80,8 +81,9 @@ export const summarizeBetHistoryTool = defineTool({
   run: (args) => {
     const period = args.period ?? 'month';
     return jsonResult({
-      contractVersion: 1,
-      rollup: calculateBetRollup(args.bets),
+      contractVersion: '1',
+      period,
+      overall: calculateBetRollup(args.bets),
       byPeriod: calculateRollupByPeriod(args.bets, period),
       drawdown: calculateDrawdown(args.bets),
       streaks: calculateStreaks(args.bets),
