@@ -48,6 +48,33 @@ function buildEntry(overrides: Record<string, unknown> = {}): Record<string, unk
   };
 }
 
+function paddedValue(prefix: string, length: number): string {
+  return `${prefix}${'x'.repeat(length)}`.slice(0, length);
+}
+
+function buildMaximumExecutableEntry(entryIndex: number): Record<string, unknown> {
+  return buildEntry({
+    entryId: paddedValue(`entry-${entryIndex}-`, 128),
+    bookId: 'underdog',
+    playTypeId: 'underdog_standard',
+    displayedMultiplier: 100,
+    legs: Array.from({ length: 8 }, (_, legIndex) => ({
+      legId: paddedValue(`leg-${entryIndex}-${legIndex}-`, 128),
+      playerId: paddedValue(`player-${entryIndex}-${legIndex}-`, 128),
+      playerName: paddedValue(`Player ${entryIndex}-${legIndex} `, 200),
+      team: paddedValue(`Team ${entryIndex}-${legIndex} `, 200),
+      opponent: paddedValue(`Opponent ${entryIndex}-${legIndex} `, 200),
+      gameId: paddedValue(`game-${entryIndex}-${legIndex}-`, 128),
+      gameDate: '2026-07-16',
+      league: paddedValue(`league-${entryIndex}-${legIndex}-`, 128),
+      propType: paddedValue(`prop-${entryIndex}-${legIndex}-`, 128),
+      line: 25.5,
+      direction: 'over',
+      actual: 31,
+    })),
+  });
+}
+
 describe('grade_dfs_entry', () => {
   it('settles a winning PrizePicks power entry with the fixed-table payout', async () => {
     const result = await gradeDfsEntryTool.handler(buildEntry());
@@ -191,9 +218,9 @@ describe('grade_dfs_entries', () => {
 
   it.each([
     [
-      'more than 25 entries',
+      'more than 50 entries',
       {
-        entries: Array.from({ length: 26 }, (_, index) =>
+        entries: Array.from({ length: 51 }, (_, index) =>
           buildEntry({ entryId: `entry-${index}` }),
         ),
       },
@@ -210,27 +237,48 @@ describe('grade_dfs_entries', () => {
     });
   });
 
-  it('caps the advertised batch size at 25 entries so valid output remains deliverable', () => {
-    const input = {
-      entries: Array.from({ length: 26 }, (_, index) => buildEntry({ entryId: `entry-${index}` })),
+  it('preserves the advertised 50-entry and 600-leg batch boundary', () => {
+    const maximum = {
+      entries: Array.from({ length: 50 }, (_, entryIndex) =>
+        buildEntry({
+          entryId: `entry-${entryIndex}`,
+          legs: Array.from({ length: 12 }, (_, legIndex) => ({
+            ...(buildEntry().legs as Array<Record<string, unknown>>)[0],
+            legId: `leg-${entryIndex}-${legIndex}`,
+          })),
+        }),
+      ),
+    };
+    const overMaximum = {
+      entries: [...maximum.entries, buildEntry({ entryId: 'entry-50' })],
     };
 
-    expect(gradeDfsEntriesTool.inputSchema.safeParse(input).success).toBe(false);
+    expect(gradeDfsEntriesTool.inputSchema.safeParse(maximum).success).toBe(true);
+    expect(gradeDfsEntriesTool.inputSchema.safeParse(overMaximum).success).toBe(false);
   });
 
-  it('delivers the maximum valid 25-entry Underdog batch under the result cap', async () => {
+  it('delivers a fully populated maximum executable batch under the result cap', async () => {
+    const entries = Array.from({ length: 50 }, (_, entryIndex) =>
+      buildMaximumExecutableEntry(entryIndex),
+    );
+
+    const result = await gradeDfsEntriesTool.handler({ entries, concurrency: 8 });
+
+    expect(result.isError).toBeUndefined();
+    expect(Buffer.byteLength(result.content[0].text, 'utf8')).toBeLessThan(1_048_576);
+    expect(parseResult(result)).toMatchObject({
+      summary: { total: 50, settled: 50, pending: 0, failed: 0 },
+    });
+  });
+
+  it('delivers the 50-entry and 600-leg schema boundary without a size error', async () => {
     const baseLeg = (buildEntry().legs as Array<Record<string, unknown>>)[0];
-    const entries = Array.from({ length: 25 }, (_, entryIndex) =>
+    const entries = Array.from({ length: 50 }, (_, entryIndex) =>
       buildEntry({
-        entryId: `max-entry-${entryIndex}`,
-        bookId: 'underdog',
-        playTypeId: 'underdog_standard',
-        displayedMultiplier: 100,
-        legs: Array.from({ length: 8 }, (_, legIndex) => ({
+        entryId: `schema-entry-${entryIndex}`,
+        legs: Array.from({ length: 12 }, (_, legIndex) => ({
           ...baseLeg,
-          legId: `leg-${entryIndex}-${legIndex}`,
-          playerName: `Bounded player ${entryIndex}-${legIndex}`,
-          actual: 31,
+          legId: `schema-leg-${entryIndex}-${legIndex}`,
         })),
       }),
     );
@@ -238,9 +286,9 @@ describe('grade_dfs_entries', () => {
     const result = await gradeDfsEntriesTool.handler({ entries, concurrency: 8 });
 
     expect(result.isError).toBeUndefined();
-    expect(Buffer.byteLength(JSON.stringify(result), 'utf8')).toBeLessThan(1_048_576);
+    expect(Buffer.byteLength(result.content[0].text, 'utf8')).toBeLessThan(1_048_576);
     expect(parseResult(result)).toMatchObject({
-      summary: { total: 25, settled: 25, pending: 0, failed: 0 },
+      summary: { total: 50, settled: 0, pending: 50, failed: 0 },
     });
   });
 
