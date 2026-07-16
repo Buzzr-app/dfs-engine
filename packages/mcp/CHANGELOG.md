@@ -21,4 +21,3 @@
 
 - Labeled PrizePicks experimental/partial and Underdog
   experimental/unverified, with displayed entry terms authoritative.
-
