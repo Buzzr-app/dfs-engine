@@ -166,25 +166,17 @@ assert.doesNotMatch(
   /npm (?:ci|install|exec changeset|pack)|npm run (?:build|verify)/,
   'the npm OIDC job must not install, build, verify, pack, or run Changesets',
 );
-const privilegedMainCheck = publishJob.indexOf('name: Revalidate current main');
 const privilegedCheckout = publishJob.indexOf('uses: actions/checkout@');
 const privilegedCommitCheck = publishJob.indexOf(
   'name: Bind npm publication to the reviewed checkout',
 );
 const privilegedSetup = publishJob.indexOf('uses: actions/setup-node@');
 const privilegedDownload = publishJob.indexOf('uses: actions/download-artifact@');
-assert.ok(privilegedMainCheck >= 0, 'the npm OIDC job must revalidate current main');
-assert.doesNotMatch(
-  publishJob.slice(0, privilegedMainCheck),
-  /^\s+(uses|run):/m,
-  'current-main revalidation must be the npm OIDC job first step',
-);
 assert.ok(
-  privilegedMainCheck < privilegedCheckout &&
-    privilegedCheckout < privilegedCommitCheck &&
+  privilegedCheckout < privilegedCommitCheck &&
     privilegedCommitCheck < privilegedSetup &&
     privilegedSetup < privilegedDownload,
-  'the npm OIDC job must revalidate main, checkout exact code, bind HEAD, then download artifacts',
+  'the npm OIDC job must checkout exact code, bind HEAD, then download artifacts',
 );
 assert.match(
   publishJob.slice(privilegedCheckout, privilegedCommitCheck),
@@ -196,10 +188,28 @@ assert.match(
   /test "\$\(git rev-parse HEAD\)" = "\$EXPECTED_COMMIT"/,
   'the npm OIDC job must immediately bind checkout HEAD to the reviewed commit',
 );
+const privilegedArtifactValidation = publishJob.indexOf(
+  'assert.deepEqual(actualFiles, expectedFiles',
+);
+const privilegedMainCheck = publishJob.indexOf(
+  'REMOTE_MAIN="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main"',
+);
+const privilegedPublishLoop = publishJob.indexOf("while IFS=$'\\t' read -r package_name");
+assert.ok(
+  privilegedArtifactValidation >= 0 &&
+    privilegedArtifactValidation < privilegedMainCheck &&
+    privilegedMainCheck < privilegedPublishLoop,
+  'main must be revalidated after artifact validation and immediately before the first irreversible npm publish',
+);
 assert.match(
-  publishJob.slice(privilegedMainCheck, privilegedDownload),
+  publishJob.slice(privilegedMainCheck, privilegedPublishLoop),
   /test "\$REMOTE_MAIN" = "\$EXPECTED_COMMIT"/,
-  'the OIDC job must stop if main moved after authorization',
+  'the npm OIDC job must stop before publication if main moved after authorization',
+);
+assert.doesNotMatch(
+  publishJob.slice(privilegedMainCheck, privilegedPublishLoop),
+  /npm publish/,
+  'no npm publication may occur before the final mutable-main gate completes',
 );
 for (const variable of [
   'EXPECTED_COMMIT',
@@ -461,14 +471,26 @@ assert.match(
 );
 const registryMainCheck = registryJob.indexOf('name: Revalidate current main before checkout');
 const registryCheckout = registryJob.indexOf('uses: actions/checkout@');
-assert.ok(
-  registryMainCheck >= 0 && registryMainCheck < registryCheckout,
-  'the MCP OIDC job must revalidate current main before checking out repository code',
+assert.equal(
+  registryMainCheck,
+  -1,
+  'MCP publication must not recheck mutable main after npm publication',
+);
+assert.ok(registryCheckout >= 0, 'MCP publication must checkout the reviewed commit');
+assert.doesNotMatch(
+  proofJob,
+  /git\/ref\/heads\/main|REMOTE_MAIN/,
+  'live npm proof must continue against the authorized commit after npm publication',
 );
 assert.doesNotMatch(
-  registryJob.slice(0, registryMainCheck),
-  /^\s+(uses|run):/m,
-  'the current-main revalidation must be the MCP OIDC job first step',
+  registryJob,
+  /git\/ref\/heads\/main|REMOTE_MAIN/,
+  'MCP publication must continue against the authorized commit after npm publication',
+);
+assert.equal(
+  [...release.matchAll(/git\/ref\/heads\/main/g)].length,
+  2,
+  'mutable main may be checked only during authorization and immediately before npm publication',
 );
 const publisherDownload = registryJob.indexOf('curl --proto');
 const publisherChecksum = registryJob.indexOf('sha256sum --check --strict');
