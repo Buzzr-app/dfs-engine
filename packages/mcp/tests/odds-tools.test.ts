@@ -41,6 +41,17 @@ describe('fair_line', () => {
     expect(result.isError).toBe(true);
     expect((parseResult(result).error as Record<string, unknown>).code).toBe('invalid_input');
   });
+
+  it('rejects an oversized selected-side label', async () => {
+    const result = await fairLineTool.handler({
+      selected: -110,
+      opposite: -110,
+      selectedSide: 'L'.repeat(201),
+    });
+
+    expect(result.isError).toBe(true);
+    expect((parseResult(result).error as Record<string, unknown>).code).toBe('invalid_input');
+  });
 });
 
 describe('closing_line_value', () => {
@@ -107,6 +118,15 @@ describe('parlay_value', () => {
 
   it('rejects an empty legs array', async () => {
     const result = await parlayValueTool.handler({ legs: [] });
+
+    expect(result.isError).toBe(true);
+    expect((parseResult(result).error as Record<string, unknown>).code).toBe('invalid_input');
+  });
+
+  it('rejects more than 50 parlay legs', async () => {
+    const result = await parlayValueTool.handler({
+      legs: Array.from({ length: 51 }, () => ({ selected: -110, opposite: -110 })),
+    });
 
     expect(result.isError).toBe(true);
     expect((parseResult(result).error as Record<string, unknown>).code).toBe('invalid_input');

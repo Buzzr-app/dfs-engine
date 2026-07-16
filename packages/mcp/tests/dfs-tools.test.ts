@@ -226,6 +226,15 @@ describe('validate_dfs_entry', () => {
     expect(errors.length).toBeGreaterThan(0);
     expect(errors.every((issue) => typeof issue.code === 'string')).toBe(true);
   });
+
+  it('rejects candidate payloads larger than 64 KiB', async () => {
+    const result = await validateDfsEntryTool.handler({
+      entry: { entryId: 'entry-1', metadata: 'x'.repeat(70_000) },
+    });
+
+    expect(result.isError).toBe(true);
+    expect((parseResult(result).error as Record<string, unknown>).code).toBe('invalid_input');
+  });
 });
 
 describe('list_book_policies', () => {
