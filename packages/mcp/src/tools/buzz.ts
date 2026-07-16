@@ -3,6 +3,7 @@ import type { EntertainmentGameInput, PredictionContext } from '@buzzr/entertain
 import { z } from 'zod';
 
 import {
+  boundedArray,
   boundedIdentifier,
   boundedLabel,
   finiteNumber,
@@ -173,8 +174,8 @@ export function createPredictGameBuzzTool(
 
 const profileSchema = z
   .object({
-    favoriteTeams: z.array(boundedLabel).max(50).optional(),
-    favoriteLeagues: z.array(boundedIdentifier).max(50).optional(),
+    favoriteTeams: boundedArray(boundedLabel, 50).optional(),
+    favoriteLeagues: boundedArray(boundedIdentifier, 50).optional(),
     teamAffinity: z
       .record(boundedLabel, finiteNumber.min(-1).max(1))
       .refine((value) => Object.keys(value).length <= 100, {
@@ -200,20 +201,19 @@ const profileSchema = z
   .describe('The user taste profile used to personalize the ranking.');
 
 const rankGamesSchema = z.object({
-  games: z
-    .array(
-      gameFieldsSchema.extend({
-        id: boundedIdentifier.nullish().describe('Stable game id, used for social signals.'),
-        baseScore: z
-          .number()
-          .min(0)
-          .max(10)
-          .nullish()
-          .describe('Precomputed base entertainment score (1-10). Estimated when absent.'),
-      }),
-    )
-    .min(1)
-    .max(100),
+  games: boundedArray(
+    gameFieldsSchema.extend({
+      id: boundedIdentifier.nullish().describe('Stable game id, used for social signals.'),
+      baseScore: z
+        .number()
+        .min(0)
+        .max(10)
+        .nullish()
+        .describe('Precomputed base entertainment score (1-10). Estimated when absent.'),
+    }),
+    100,
+    1,
+  ),
   profile: profileSchema.default({}),
   limit: z.number().int().positive().max(100).optional().describe('Return only the top N games.'),
 });

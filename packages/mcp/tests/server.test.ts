@@ -61,6 +61,29 @@ describe('createBuzzrMcpServer', () => {
       expect(listed.tools.map((tool) => tool.name).sort()).toEqual([...EXPECTED_TOOL_NAMES].sort());
       const fairLine = listed.tools.find((tool) => tool.name === 'fair_line');
       expect(fairLine?.inputSchema).toMatchObject({ type: 'object' });
+      const batch = listed.tools.find((tool) => tool.name === 'grade_dfs_entries');
+      expect(batch?.inputSchema).toMatchObject({
+        type: 'object',
+        properties: {
+          entries: {
+            type: 'array',
+            minItems: 1,
+            maxItems: 25,
+            items: {
+              type: 'object',
+              properties: {
+                entryId: { type: 'string' },
+                legs: {
+                  type: 'array',
+                  minItems: 1,
+                  maxItems: 12,
+                  items: { type: 'object' },
+                },
+              },
+            },
+          },
+        },
+      });
 
       const callResult = await client.callTool({
         name: 'fair_line',

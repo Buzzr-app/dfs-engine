@@ -212,12 +212,36 @@ describe('grade_dfs_entries', () => {
 
   it('caps the advertised batch size at 25 entries so valid output remains deliverable', () => {
     const input = {
-      entries: Array.from({ length: 26 }, (_, index) =>
-        buildEntry({ entryId: `entry-${index}` }),
-      ),
+      entries: Array.from({ length: 26 }, (_, index) => buildEntry({ entryId: `entry-${index}` })),
     };
 
     expect(gradeDfsEntriesTool.inputSchema.safeParse(input).success).toBe(false);
+  });
+
+  it('delivers the maximum valid 25-entry, 300-leg batch under the result cap', async () => {
+    const baseLeg = (buildEntry().legs as Array<Record<string, unknown>>)[0];
+    const entries = Array.from({ length: 25 }, (_, entryIndex) =>
+      buildEntry({
+        entryId: `max-entry-${entryIndex}`,
+        bookId: 'underdog',
+        playTypeId: 'underdog_standard',
+        displayedMultiplier: 100,
+        legs: Array.from({ length: 12 }, (_, legIndex) => ({
+          ...baseLeg,
+          legId: `leg-${entryIndex}-${legIndex}`,
+          playerName: `Bounded player ${entryIndex}-${legIndex}`,
+          actual: 31,
+        })),
+      }),
+    );
+
+    const result = await gradeDfsEntriesTool.handler({ entries, concurrency: 8 });
+
+    expect(result.isError).toBeUndefined();
+    expect(Buffer.byteLength(JSON.stringify(result), 'utf8')).toBeLessThan(1_048_576);
+    expect(parseResult(result)).toMatchObject({
+      summary: { total: 25, settled: 0, pending: 25, failed: 0 },
+    });
   });
 
   it('serializes failures without exposing thrown names, messages, or stacks', () => {

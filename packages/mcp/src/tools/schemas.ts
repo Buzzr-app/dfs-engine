@@ -24,3 +24,19 @@ export const nonNegativeFiniteNumber = finiteNumber.min(0);
 export const positiveFiniteNumber = finiteNumber.positive();
 export const isoTimestamp = z.iso.datetime({ offset: true });
 export const isoDateOrTimestamp = z.union([z.iso.date(), isoTimestamp]);
+
+/**
+ * Checks the container size before validating its items. This keeps an
+ * oversized adversarial array from generating an unbounded Zod issue list.
+ */
+export function boundedArray<Schema extends z.ZodType>(
+  itemSchema: Schema,
+  maximum: number,
+  minimum = 0,
+) {
+  return z
+    .array(z.unknown())
+    .min(minimum)
+    .max(maximum)
+    .pipe(z.array(itemSchema).min(minimum).max(maximum));
+}

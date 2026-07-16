@@ -85,7 +85,11 @@ export type DfsTiePolicy =
     };
 
 export type DfsDnpPolicy =
-  | { type: 'remove_leg'; voidIfNoSurvivors?: boolean }
+  | {
+      type: 'remove_leg';
+      voidIfNoSurvivors?: boolean;
+      refundIfBelowMinimum?: boolean;
+    }
   | { type: 'loss' }
   | { type: 'manual'; reasonCode?: string }
   | {
@@ -541,6 +545,8 @@ export type DfsPayoutLookupInput = {
  * - `void_no_survivors` — every leg was removed (at least one DNP/void) and
  *   the entry voided with a stake refund.
  * - `refund_no_survivors` — every leg pushed and the stake was refunded.
+ * - `refund_below_minimum` — a DNP left too few active picks and the stake
+ *   was refunded by policy.
  * - `rescue_applied` — a leg arrived with a `rescued` status and was
  *   excluded from payout math.
  * - `payout_table_lookup` — the payout came from a fixed payout table.
@@ -554,6 +560,7 @@ export type DfsV5ExplanationCode =
   | 'push_leg_removed'
   | 'void_no_survivors'
   | 'refund_no_survivors'
+  | 'refund_below_minimum'
   | 'rescue_applied'
   | 'payout_table_lookup'
   | 'payout_displayed_multiplier'
@@ -772,7 +779,11 @@ const DEFAULT_BOOK_POLICIES: readonly DfsBookPolicy[] = [
       },
     ],
     tiePolicy: { type: 'push' },
-    dnpPolicy: { type: 'remove_leg', voidIfNoSurvivors: true },
+    dnpPolicy: {
+      type: 'remove_leg',
+      voidIfNoSurvivors: true,
+      refundIfBelowMinimum: true,
+    },
     pushPolicy: { type: 'remove_leg', refundIfNoSurvivors: true },
     payoutSplit: { type: 'all_withdrawable' },
     validation: {
@@ -1931,6 +1942,34 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
         continue;
       }
 
+      if (contextStatus === 'won' || contextStatus === 'lost' || contextStatus === 'push') {
+        const status =
+          contextStatus === 'push'
+            ? resolvePushOutcome(policy, leg, entry, context)
+            : contextStatus;
+        decisions.push({
+          legId: leg.legId,
+          status,
+          actual: context.actualsByLegId?.[leg.legId] ?? leg.actual ?? null,
+          line: leg.line,
+          direction: leg.direction,
+          playerName: leg.playerName,
+          propType: leg.propType,
+          provider: provenance('status', context.providerId, settledAt),
+          pendingReason: null,
+        });
+        if (status === 'push') {
+          adjustments.push({
+            type: 'push',
+            legId: leg.legId,
+            message: `${leg.playerName} pushed and was removed by policy.`,
+          });
+          explanationCodes.add('leg.push_removed');
+          explanationCodes.add('push_leg_removed');
+        }
+        continue;
+      }
+
       const stat = await extractLegStat(leg, context, entry, cache);
       if (!stat.ok) {
         decisions.push({
@@ -2021,16 +2060,36 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
     const removedStatuses = new Set<DfsLegOutcome>(['dnp', 'push', 'void', 'rescued', 'canceled']);
     const active = decisions.filter((decision) => !removedStatuses.has(decision.status));
     const removed = decisions.length - active.length;
-    if (active.length === 0) {
-      const allPushed = decisions.every((decision) => decision.status === 'push');
+    const dnpCount = decisions.filter((decision) => decision.status === 'dnp').length;
+    const refundBelowMinimum =
+      active.length > 0 &&
+      active.length < playType.pickCount.min &&
+      dnpCount > 0 &&
+      policy.dnpPolicy.type === 'remove_leg' &&
+      policy.dnpPolicy.refundIfBelowMinimum === true;
+    if (active.length === 0 || refundBelowMinimum) {
+      const allPushed =
+        !refundBelowMinimum && decisions.every((decision) => decision.status === 'push');
       adjustments.push({
         type: allPushed ? 'push' : 'void',
-        message: allPushed
-          ? 'All legs pushed, so the entry returns stake.'
-          : 'All legs were removed by policy, so the entry returns stake.',
+        message: refundBelowMinimum
+          ? `A DNP left fewer than ${playType.pickCount.min} active picks, so the entry returns stake.`
+          : allPushed
+            ? 'All legs pushed, so the entry returns stake.'
+            : 'All legs were removed by policy, so the entry returns stake.',
       });
-      explanationCodes.add('settlement.all_legs_removed_refund');
-      explanationCodes.add(allPushed ? 'refund_no_survivors' : 'void_no_survivors');
+      explanationCodes.add(
+        refundBelowMinimum
+          ? 'settlement.below_minimum_refund'
+          : 'settlement.all_legs_removed_refund',
+      );
+      explanationCodes.add(
+        refundBelowMinimum
+          ? 'refund_below_minimum'
+          : allPushed
+            ? 'refund_no_survivors'
+            : 'void_no_survivors',
+      );
       return {
         entryId: entry.entryId,
         bookId: entry.bookId,
@@ -2064,9 +2123,11 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
           {
             at: settledAt,
             code: allPushed ? 'settlement.pushed' : 'settlement.void',
-            message: allPushed
-              ? 'Entry pushed because every leg pushed.'
-              : 'Entry voided because no active legs remained.',
+            message: refundBelowMinimum
+              ? 'Entry voided because a DNP left fewer than the minimum active picks.'
+              : allPushed
+                ? 'Entry pushed because every leg pushed.'
+                : 'Entry voided because no active legs remained.',
           },
         ],
       };

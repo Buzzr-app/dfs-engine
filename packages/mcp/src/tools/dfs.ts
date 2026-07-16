@@ -14,6 +14,7 @@ import { z } from 'zod';
 
 import {
   boundedIdentifier,
+  boundedArray,
   boundedLabel,
   finiteNumber,
   isoDateOrTimestamp,
@@ -73,7 +74,7 @@ const entryFields = {
   baseMultiplier: positiveFiniteNumber.nullish(),
   profitBoostPct: nonNegativeFiniteNumber.nullish(),
   placedAt: isoTimestamp.nullish().describe('ISO timestamp the entry was placed.'),
-  legs: z.array(legSchema).min(1).max(12),
+  legs: boundedArray(legSchema, 12, 1),
 };
 
 function requireUniqueLegIds(
@@ -183,7 +184,7 @@ export const gradeDfsEntryTool = defineTool({
 
 const gradeDfsEntriesSchema = z
   .object({
-    entries: z.array(batchEntrySchema).min(1).max(50),
+    entries: boundedArray(batchEntrySchema, 25, 1),
     concurrency: z.number().int().min(1).max(8).optional(),
   })
   .superRefine((value, context) => {
@@ -200,11 +201,11 @@ const gradeDfsEntriesSchema = z
       }
       entryIds.add(entry.entryId);
     }
-    if (totalLegs > 600) {
+    if (totalLegs > 300) {
       context.addIssue({
         code: 'custom',
         path: ['entries'],
-        message: 'A batch cannot contain more than 600 total legs.',
+        message: 'A batch cannot contain more than 300 total legs.',
       });
     }
   });
@@ -224,7 +225,7 @@ export const gradeDfsEntriesTool = defineTool({
   name: 'grade_dfs_entries',
   title: 'Grade DFS entries',
   description:
-    'Settle up to 50 DFS entries with @buzzr/dfs-engine batch settlement. ' +
+    'Settle up to 25 DFS entries with @buzzr/dfs-engine batch settlement. ' +
     'Returns full explainable settlement results, isolated serializable failures, ' +
     'summary counts, and per-call stat-cache metrics.',
   inputSchema: gradeDfsEntriesSchema,

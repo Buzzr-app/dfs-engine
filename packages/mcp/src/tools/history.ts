@@ -8,6 +8,7 @@ import { z } from 'zod';
 
 import {
   americanOdds,
+  boundedArray,
   boundedIdentifier,
   boundedLabel,
   finiteNumber,
@@ -54,7 +55,7 @@ const betSchema = z.object({
 
 const summarizeBetHistorySchema = z
   .object({
-    bets: z.array(betSchema).max(500),
+    bets: boundedArray(betSchema, 500),
     period: z.enum(['day', 'week', 'month']).optional(),
   })
   .superRefine((value, context) => {
