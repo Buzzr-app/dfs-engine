@@ -203,6 +203,10 @@ For settlement correctness or security-sensitive issues, follow [SECURITY.md](SE
 - [Issues](https://github.com/Buzzr-app/dfs-engine/issues)
 - [AGENTS.md](AGENTS.md) — how AI coding agents should use this repo
 - [llms.txt](llms.txt) — machine-readable package index
+- [Architecture and data flow](docs/architecture.md) — package layers and execution paths
+- [Security, privacy, and threat model](docs/security-and-privacy.md) — trust boundaries and controls
+- [Versioning, compatibility, and support](docs/versioning-and-support.md) — SemVer, migrations, and app separation
+- [All-package API index](docs/api-reference.md) — supported roots for all ten packages
 - [Buzzr Sports Engine skill](skills/buzzr-sports-engine/SKILL.md) — Codex workflow and safety contract
 - [MCP configuration](packages/mcp/README.md) — install and client setup
 

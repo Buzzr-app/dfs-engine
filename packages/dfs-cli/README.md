@@ -109,7 +109,6 @@ const fromFiles = await runGradeFromFiles({
 | `dfs-grade` (bin)       | Grade an entry JSON against a gamelogs JSON, print settlement        |
 | `runGrade()`            | Grade an in-memory `DfsEntryInput` against a `legId → gamelog[]` map |
 | `runGradeFromFiles()`   | Same, reading both inputs from file paths                            |
-| `createDfsEngine` et al | Re-exported engine primitives for convenience                        |
 
 ## When to use this vs siblings
 

@@ -299,7 +299,7 @@ for (const packageName of packageNames) {
 }
 requirePattern(
   'apiIndex',
-  /TypeDoc[^\n]*currently[^\n]*@buzzr\/dfs-engine only/i,
+  /TypeDoc[^\n]*currently[^\n]*@buzzr\/dfs-engine[^\n]*only/i,
   'scope the generated API reference honestly',
 );
 

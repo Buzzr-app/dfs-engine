@@ -36,6 +36,10 @@ The Buzzr mobile app’s `release/ios-2.0.0` branch vendors `@buzzr/bets-core`, 
 - [Monorepo README](https://github.com/Buzzr-app/dfs-engine/blob/main/README.md): family table, architecture diagram, quick starts.
 - [AGENTS.md](https://github.com/Buzzr-app/dfs-engine/blob/main/AGENTS.md): invariants and workflow for AI coding agents (zero deps, frozen v4 shapes, verify gate).
 - [SECURITY.md](https://github.com/Buzzr-app/dfs-engine/blob/main/SECURITY.md): responsible disclosure for settlement-correctness issues.
+- [Architecture and data flow](docs/architecture.md): pure cores, boundary packages, provider injection, MCP flow, and app/repo separation.
+- [Security, privacy, and threat model](docs/security-and-privacy.md): trust boundaries, untrusted-input controls, data handling, supply-chain proof, and non-goals.
+- [Versioning, compatibility, and support](docs/versioning-and-support.md): independent package SemVer, Changesets, migrations, runtime support, and mobile-app compatibility.
+- [All-package API index](docs/api-reference.md): supported root APIs and detailed references for all ten packages.
 
 ## Optional
 
