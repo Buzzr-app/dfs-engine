@@ -46,6 +46,37 @@ for (const input of ['expected_version', 'expected_commit', 'confirm_publish']) 
 }
 assert.match(release, /^      id-token:\s+write$/m, 'npm publish job must mint an OIDC token');
 assert.match(release, /^    environment:\s+npm$/m, 'npm publish job must use the npm environment');
+assert.match(
+  release,
+  /^  authorize-release:\n(?:    .+\n|\n)*?    permissions:\n      contents:\s+read$/m,
+  'release inputs must be authorized in an unprivileged read-only job',
+);
+assert.match(
+  release,
+  /^  publish-npm:\n    needs:\s+authorize-release$/m,
+  'the OIDC publish job must depend on unprivileged release authorization',
+);
+assert.match(
+  release,
+  /gh api "repos\/\$GITHUB_REPOSITORY\/git\/ref\/heads\/main"/,
+  'release authorization must resolve the current main ref through GitHub',
+);
+assert.match(
+  release,
+  /test "\$REMOTE_MAIN" = "\$EXPECTED_COMMIT"/,
+  'release authorization must require the reviewed commit to equal current main',
+);
+const publishJobStart = release.indexOf('  publish-npm:');
+const githubReleaseJobStart = release.indexOf('  github-release:');
+assert.notEqual(publishJobStart, -1, 'release must define the npm publish job');
+assert.notEqual(githubReleaseJobStart, -1, 'release must define the GitHub release job');
+const publishJob = release.slice(publishJobStart, githubReleaseJobStart);
+const privilegedMainCheck = publishJob.indexOf('name: Revalidate current main before checkout');
+const privilegedCheckout = publishJob.indexOf('uses: actions/checkout@');
+assert.ok(
+  privilegedMainCheck >= 0 && privilegedMainCheck < privilegedCheckout,
+  'the OIDC job must revalidate current main before checking out repository code',
+);
 assert.match(release, /node-version:\s+24/, 'release must use Node 24');
 assert.match(release, /npm@12\.0\.1/, 'release must pin the reviewed npm CLI');
 assert.match(
@@ -57,6 +88,7 @@ assert.match(release, /npm exec changeset publish/, 'release must publish throug
 assert.match(release, /NPM_CONFIG_PROVENANCE:\s+['"]true['"]/, 'release must request provenance');
 assert.match(release, /npm run proof:mcp:published/, 'release must prove the exact live MCP artifact');
 assert.match(release, /gh release create/, 'release must create the reviewed GitHub release');
+assert.match(release, /gh release view/, 'GitHub release creation must be safe to rerun');
 assert.doesNotMatch(release, /NPM_TOKEN|NODE_AUTH_TOKEN|secrets\./, 'release must not use tokens');
 for (const variable of ['EXPECTED_MCP_VERSION', 'EXPECTED_MCP_INTEGRITY', 'EXPECTED_GIT_HEAD']) {
   assert.match(
@@ -65,6 +97,28 @@ for (const variable of ['EXPECTED_MCP_VERSION', 'EXPECTED_MCP_INTEGRITY', 'EXPEC
     `published proof must pass ${variable}`,
   );
 }
+
+const docs = workflows.find(({ path }) => path.endsWith('/docs.yml'))?.body ?? '';
+assert.doesNotMatch(docs, /^\s+tags:\s*$/m, 'docs must not deploy directly from mutable tags');
+assert.match(docs, /^\s+branches:\n\s+- main$/m, 'docs push deployments must come from main');
+const docsBuildStart = docs.indexOf('  build:');
+const docsDeployStart = docs.indexOf('  deploy:');
+assert.notEqual(docsBuildStart, -1, 'docs must define the build job');
+assert.notEqual(docsDeployStart, -1, 'docs must define the deploy job');
+const docsBuild = docs.slice(docsBuildStart, docsDeployStart);
+const docsDeploy = docs.slice(docsDeployStart);
+assert.match(
+  docsBuild,
+  /^    permissions:\n      contents:\s+read$/m,
+  'docs build must use explicit contents-read-only permissions',
+);
+assert.doesNotMatch(
+  docsBuild,
+  /^      (pages|id-token):\s+write$/m,
+  'docs build must not receive deployment credentials',
+);
+assert.match(docsDeploy, /^      pages:\s+write$/m, 'only docs deploy may write Pages');
+assert.match(docsDeploy, /^      id-token:\s+write$/m, 'only docs deploy may mint the Pages token');
 
 const rootPackage = JSON.parse(await readFile('package.json', 'utf8'));
 assert.match(rootPackage.scripts.verify, /npm run check:workflows/, 'verify must check workflows');
