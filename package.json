@@ -42,7 +42,8 @@
     "test:packages:packed": "node scripts/test-release-artifacts.mjs",
     "proof:mcp:published": "node scripts/prove-mcp-published.mjs",
     "build:mcpb": "node scripts/build-smithery-bundle.mjs",
-    "proof:mcpb": "node scripts/prove-smithery-bundle.mjs"
+    "proof:mcpb": "node scripts/prove-smithery-bundle.mjs",
+    "publish:smithery": "node scripts/publish-smithery-bundle.mjs"
   },
   "devDependencies": {
     "@changesets/cli": "^2.31.0",
