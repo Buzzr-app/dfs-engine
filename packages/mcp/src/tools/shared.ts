@@ -6,6 +6,18 @@ const MAX_VALIDATION_MESSAGE_LENGTH = 200;
 const MAX_VALIDATION_PATH_SEGMENTS = 8;
 const MAX_VALIDATION_PATH_STRING_LENGTH = 64;
 const MAX_TOOL_RESULT_BYTES = 1_048_576;
+const RESULT_SERIALIZATION_FAILED = {
+  error: {
+    code: 'result_serialization_failed',
+    message: 'Tool result could not be serialized.',
+  },
+};
+const RESULT_TOO_LARGE = {
+  error: {
+    code: 'result_too_large',
+    message: 'Tool result exceeded the maximum response size.',
+  },
+};
 
 /** Text content block returned to MCP clients. */
 export type ToolTextContent = {
@@ -28,15 +40,35 @@ export type BuzzrToolDefinition = {
   handler: (args: unknown) => Promise<ToolResult>;
 };
 
-/** Wraps a value as pretty-printed JSON text content. */
-export function jsonResult(value: unknown): ToolResult {
-  const text = JSON.stringify(value, null, 2);
+function fixedErrorResult(value: typeof RESULT_SERIALIZATION_FAILED | typeof RESULT_TOO_LARGE) {
+  return {
+    isError: true,
+    content: [{ type: 'text' as const, text: JSON.stringify(value, null, 2) }],
+  };
+}
+
+function serializeResult(value: unknown, isError = false): ToolResult {
+  let text: string | undefined;
+  try {
+    text = JSON.stringify(value, null, 2);
+  } catch {
+    return fixedErrorResult(RESULT_SERIALIZATION_FAILED);
+  }
+  if (text === undefined) {
+    return fixedErrorResult(RESULT_SERIALIZATION_FAILED);
+  }
   if (Buffer.byteLength(text, 'utf8') > MAX_TOOL_RESULT_BYTES) {
-    return errorResult('result_too_large', 'Tool result exceeded the maximum response size.');
+    return fixedErrorResult(RESULT_TOO_LARGE);
   }
   return {
+    ...(isError ? { isError: true } : {}),
     content: [{ type: 'text', text }],
   };
+}
+
+/** Wraps a value as pretty-printed JSON text content. */
+export function jsonResult(value: unknown): ToolResult {
+  return serializeResult(value);
 }
 
 /** Wraps an error code + message (and optional details) as an MCP error result. */
@@ -45,10 +77,7 @@ export function errorResult(code: string, message: string, details?: unknown): T
   if (details !== undefined) {
     error.details = details;
   }
-  return {
-    isError: true,
-    content: [{ type: 'text', text: JSON.stringify({ error }, null, 2) }],
-  };
+  return serializeResult({ error }, true);
 }
 
 function normalizeValidationIssues(issues: readonly z.core.$ZodIssue[]) {
