@@ -25,7 +25,7 @@
     "size:check": "node scripts/check-package-size.mjs",
     "audit:high": "npm audit --audit-level=high",
     "check:workflows": "node scripts/check-release-workflows.mjs",
-    "test:release-supply-chain": "node --test tests/release-supply-chain.test.mjs",
+    "test:release-supply-chain": "node --test tests/release-supply-chain.test.mjs tests/npm-pack-output.test.mjs",
     "check:mcp-registry": "node scripts/check-mcp-registry-metadata.mjs",
     "check:api-docs": "node scripts/check-api-docs.mjs",
     "check:docs": "node scripts/check-public-docs.mjs",

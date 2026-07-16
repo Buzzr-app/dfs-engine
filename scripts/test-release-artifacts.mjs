@@ -7,6 +7,8 @@ import { dirname, join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 
+import { parseNpmPackArtifacts } from './lib/npm-pack-output.mjs';
+
 const execFileAsync = promisify(execFile);
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const packages = [
@@ -67,9 +69,7 @@ async function packWorkspace(packageName, destination, environment) {
     ['pack', '--workspace', packageName, '--json', '--pack-destination', destination],
     { env: environment },
   );
-  const jsonStart = stdout.lastIndexOf('\n[');
-  const result = JSON.parse(jsonStart === -1 ? stdout : stdout.slice(jsonStart + 1));
-  assert.equal(result.length, 1, `Expected one packed artifact for ${packageName}`);
+  const result = parseNpmPackArtifacts(stdout, packageName);
   assert.equal(result[0].name, packageName, `Packed the wrong workspace for ${packageName}`);
   assert(
     result[0].files.some((file) => file.path === 'package.json'),
