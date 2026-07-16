@@ -532,22 +532,36 @@ jobs:
             process.stdout.write(`${lines.join("\n")}\n`);
           ' > "$notes_file"
 
-          tag_response=''
-          if tag_response="$(gh api \
-            --method POST \
-            "repos/$GITHUB_REPOSITORY/git/refs" \
-            --field "ref=refs/tags/$tag" \
-            --field "sha=$RELEASE_COMMIT" 2>&1)"; then
-            CREATED_TAG_RESPONSE="$tag_response" EXPECTED_TAG="refs/tags/$tag" EXPECTED_SHA="$RELEASE_COMMIT" \
+          existing_tag_response=''
+          if existing_tag_response="$(gh api \
+            "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" 2>&1)"; then
+            EXISTING_TAG_RESPONSE="$existing_tag_response" EXPECTED_TAG="refs/tags/$tag" EXPECTED_SHA="$RELEASE_COMMIT" \
               node --input-type=module -e '
                 import assert from "node:assert/strict";
-                const created = JSON.parse(process.env.CREATED_TAG_RESPONSE);
-                assert.equal(created.ref, process.env.EXPECTED_TAG);
-                assert.equal(created.object?.type, "commit");
-                assert.equal(created.object?.sha, process.env.EXPECTED_SHA);
+                const existing = JSON.parse(process.env.EXISTING_TAG_RESPONSE);
+                assert.equal(existing.ref, process.env.EXPECTED_TAG);
+                assert.equal(existing.object?.type, "commit");
+                assert.equal(existing.object?.sha, process.env.EXPECTED_SHA);
               '
           else
-            [[ "$tag_response" == *"HTTP 422"* ]]
+            [[ "$existing_tag_response" == *"HTTP 404"* ]]
+            tag_response=''
+            if tag_response="$(gh api \
+              --method POST \
+              "repos/$GITHUB_REPOSITORY/git/refs" \
+              --field "ref=refs/tags/$tag" \
+              --field "sha=$RELEASE_COMMIT" 2>&1)"; then
+              CREATED_TAG_RESPONSE="$tag_response" EXPECTED_TAG="refs/tags/$tag" EXPECTED_SHA="$RELEASE_COMMIT" \
+                node --input-type=module -e '
+                  import assert from "node:assert/strict";
+                  const created = JSON.parse(process.env.CREATED_TAG_RESPONSE);
+                  assert.equal(created.ref, process.env.EXPECTED_TAG);
+                  assert.equal(created.object?.type, "commit");
+                  assert.equal(created.object?.sha, process.env.EXPECTED_SHA);
+                '
+            else
+              [[ "$tag_response" == *"HTTP 422"* ]]
+            fi
           fi
           tag_commit="$(gh api "repos/$GITHUB_REPOSITORY/commits/$tag" --jq '.sha')"
           test "$tag_commit" = "$RELEASE_COMMIT"

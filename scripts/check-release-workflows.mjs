@@ -396,6 +396,20 @@ assert.match(release, /gh release create/, 'release must create the reviewed Git
 assert.match(release, /gh release view/, 'GitHub release creation must be safe to rerun');
 assert.match(
   release,
+  /if existing_tag_response="\$\(gh api \\\n\s+"repos\/\$GITHUB_REPOSITORY\/git\/ref\/tags\/\$tag" 2>&1\)"; then/,
+  'release recovery must read and verify an existing exact tag before attempting creation',
+);
+assert.ok(
+  release.indexOf('git/ref/tags/$tag') < release.indexOf('--method POST'),
+  'the existing-tag lookup must happen before the atomic tag-creation request',
+);
+assert.match(
+  release,
+  /\[\[ "\$existing_tag_response" == \*"HTTP 404"\* \]\]/,
+  'release may attempt tag creation only after an explicit not-found response',
+);
+assert.match(
+  release,
   /--method POST \\\n\s+"repos\/\$GITHUB_REPOSITORY\/git\/refs"/,
   'release must atomically create the exact tag through the Git refs API',
 );
