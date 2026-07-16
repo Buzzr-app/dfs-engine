@@ -41,8 +41,9 @@ describe('summarize_bet_history', () => {
 
     expect(result.isError).toBeUndefined();
     expect(parseResult(result)).toEqual({
-      contractVersion: 1,
-      rollup: expect.objectContaining({ totalBets: 2, won: 1, lost: 1, netUnits: 5 }),
+      contractVersion: '1',
+      period: 'day',
+      overall: expect.objectContaining({ totalBets: 2, won: 1, lost: 1, netUnits: 5 }),
       byPeriod: [
         expect.objectContaining({ periodStart: '2026-07-15' }),
         expect.objectContaining({ periodStart: '2026-07-16' }),

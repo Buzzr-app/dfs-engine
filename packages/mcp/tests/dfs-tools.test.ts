@@ -160,7 +160,7 @@ describe('grade_dfs_entries', () => {
     expect(result.isError).toBeUndefined();
     const batch = parseResult(result);
     expect(batch).toMatchObject({
-      contractVersion: 1,
+      contractVersion: '1',
       summary: { total: 2, settled: 2, pending: 0, failed: 0 },
       failures: [],
       cache: { providerCalls: 0, cacheHits: 0 },
@@ -192,7 +192,7 @@ describe('grade_dfs_entries', () => {
     });
   });
 
-  it('serializes Error failures without leaking stacks or non-JSON values', () => {
+  it('serializes failures without exposing thrown names, messages, or stacks', () => {
     const serialized = serializeBatchFailure({
       entryId: 'entry-failed',
       index: 3,
@@ -202,9 +202,14 @@ describe('grade_dfs_entries', () => {
     expect(serialized).toEqual({
       entryId: 'entry-failed',
       index: 3,
-      error: { name: 'TypeError', message: 'policy resolver failed' },
+      error: {
+        code: 'entry_settlement_failed',
+        message: 'Entry settlement failed.',
+      },
     });
     expect(JSON.stringify(serialized)).not.toContain('stack');
+    expect(JSON.stringify(serialized)).not.toContain('policy resolver failed');
+    expect(JSON.stringify(serialized)).not.toContain('TypeError');
   });
 });
 

@@ -63,7 +63,7 @@ describe('closing_line_value', () => {
 
     expect(result.isError).toBeUndefined();
     expect(parseResult(result)).toEqual({
-      contractVersion: 1,
+      contractVersion: '1',
       clvPercent: 3.6,
       beatClosingLine: true,
     });
@@ -71,6 +71,10 @@ describe('closing_line_value', () => {
 
   it.each([
     ['zero odds', { placedAmericanOdds: 0, closingAmericanOdds: -110 }],
+    ['positive odds below +100', { placedAmericanOdds: 99, closingAmericanOdds: -110 }],
+    ['negative odds above -100', { placedAmericanOdds: -99, closingAmericanOdds: -110 }],
+    ['positive odds above +100000', { placedAmericanOdds: 100_001, closingAmericanOdds: -110 }],
+    ['negative odds below -100000', { placedAmericanOdds: -100_001, closingAmericanOdds: -110 }],
     [
       'non-finite odds',
       { placedAmericanOdds: Number.NEGATIVE_INFINITY, closingAmericanOdds: -110 },
@@ -82,6 +86,15 @@ describe('closing_line_value', () => {
     expect(parseResult(result).error as Record<string, unknown>).toMatchObject({
       code: 'invalid_input',
     });
+  });
+
+  it.each([-100_000, -100, 100, 100_000])('accepts boundary American odds %d', async (odds) => {
+    const result = await closingLineValueTool.handler({
+      placedAmericanOdds: odds,
+      closingAmericanOdds: -110,
+    });
+
+    expect(result.isError).toBeUndefined();
   });
 });
 

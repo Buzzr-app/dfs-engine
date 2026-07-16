@@ -209,7 +209,7 @@ async function exerciseRealClient(consumerDirectory, cache, expectedVersion) {
         'Packed MCP DFS batch call',
       ),
     );
-    assert.equal(dfsBatch.contractVersion, 1);
+    assert.equal(dfsBatch.contractVersion, '1');
     assert.equal(dfsBatch.summary.settled, 1);
     assert.equal(dfsBatch.results[0].entryId, 'packed-batch-proof');
 
@@ -234,7 +234,7 @@ async function exerciseRealClient(consumerDirectory, cache, expectedVersion) {
       ),
     );
     assert.deepEqual(closingLine, {
-      contractVersion: 1,
+      contractVersion: '1',
       clvPercent: 3.6,
       beatClosingLine: true,
     });
@@ -263,8 +263,9 @@ async function exerciseRealClient(consumerDirectory, cache, expectedVersion) {
         'Packed MCP bet history call',
       ),
     );
-    assert.equal(betHistory.contractVersion, 1);
-    assert.equal(betHistory.rollup.totalBets, 1);
+    assert.equal(betHistory.contractVersion, '1');
+    assert.equal(betHistory.period, 'day');
+    assert.equal(betHistory.overall.totalBets, 1);
 
     const entertainment = parseToolResult(
       await withDeadline(
@@ -403,6 +404,44 @@ async function exerciseMalformedInput(consumerDirectory, cache, cliPath) {
   assert.match(stderr.value, /buzzr MCP server v\S+ listening on stdio/);
 }
 
+async function exerciseOversizedInput(consumerDirectory, cache, cliPath) {
+  const child = spawn(process.execPath, [cliPath], {
+    cwd: consumerDirectory,
+    env: commandEnvironment(cache),
+    stdio: ['pipe', 'pipe', 'pipe'],
+  });
+  const stdout = { value: '', overflow: null };
+  const stderr = { value: '', overflow: null };
+  child.stdout.on('data', (chunk) => {
+    captureOutput(stdout, chunk, 'Oversized-input MCP stdout');
+  });
+  child.stderr.on('data', (chunk) => {
+    captureOutput(stderr, chunk, 'Oversized-input MCP stderr');
+  });
+
+  const closed = new Promise((resolveClose, rejectClose) => {
+    const timeout = setTimeout(() => {
+      child.kill('SIGKILL');
+      rejectClose(new Error('Packed MCP did not reject oversized stdin'));
+    }, 5_000);
+    child.once('error', rejectClose);
+    child.once('close', (code, signal) => {
+      clearTimeout(timeout);
+      resolveClose({ code, signal });
+    });
+  });
+
+  child.stdin.end(Buffer.concat([Buffer.alloc(2 * 1_024 * 1_024 + 1, 0x78), Buffer.from('\n')]));
+
+  const exit = await closed;
+  assert.deepEqual(exit, { code: 1, signal: null });
+  assert.equal(stdout.overflow, null);
+  assert.equal(stderr.overflow, null);
+  assert.equal(stdout.value, '');
+  assert.match(stderr.value, /buzzr-mcp rejected oversized input\./);
+  assert.doesNotMatch(stderr.value, /RangeError|ERR_|frame length|2 MiB/i);
+}
+
 const temporaryRoot = await mkdtemp(join(tmpdir(), 'buzzr-mcp-packed-'));
 const packsDirectory = join(temporaryRoot, 'packs');
 const consumerDirectory = join(temporaryRoot, 'consumer');
@@ -457,6 +496,11 @@ try {
   const protocol = await exerciseRealClient(consumerDirectory, cache, installedManifest.version);
   assert.match(protocol.stderr(), /buzzr MCP server v\S+ listening on stdio/);
   await exerciseMalformedInput(
+    consumerDirectory,
+    cache,
+    join(installedPackagePath, 'dist', 'cli.js'),
+  );
+  await exerciseOversizedInput(
     consumerDirectory,
     cache,
     join(installedPackagePath, 'dist', 'cli.js'),
