@@ -7,6 +7,15 @@ const here = dirname(fileURLToPath(import.meta.url));
 const packageManifest = JSON.parse(readFileSync(resolve(here, '../package.json'), 'utf8')) as {
   dependencies: Record<string, string>;
 };
+const engineManifest = JSON.parse(
+  readFileSync(resolve(here, '../../dfs-engine/package.json'), 'utf8'),
+) as { version: string };
+const betsManifest = JSON.parse(
+  readFileSync(resolve(here, '../../bets-core/package.json'), 'utf8'),
+) as { version: string };
+const entertainmentManifest = JSON.parse(
+  readFileSync(resolve(here, '../../entertainment-engine/package.json'), 'utf8'),
+) as { version: string };
 const serverSource = readFileSync(resolve(here, '../src/server.ts'), 'utf8');
 const cliSource = readFileSync(resolve(here, '../src/cli.ts'), 'utf8');
 const publishedProof = readFileSync(
@@ -60,9 +69,9 @@ describe('release safety contracts', () => {
 
   it('pins all internal Buzzr runtime dependencies exactly', () => {
     expect(packageManifest.dependencies).toMatchObject({
-      '@buzzr/bets-core': '5.0.0',
-      '@buzzr/dfs-engine': '5.0.0',
-      '@buzzr/entertainment-engine': '5.0.0',
+      '@buzzr/bets-core': betsManifest.version,
+      '@buzzr/dfs-engine': engineManifest.version,
+      '@buzzr/entertainment-engine': entertainmentManifest.version,
     });
   });
 
@@ -72,7 +81,7 @@ describe('release safety contracts', () => {
     expect(publishedProof).not.toContain("process.platform === 'win32' ? 'npx.cmd' : 'npx'");
   });
 
-  it('proves all eleven public tools, including every new vNext contract', () => {
+  it('proves all eleven public tools in the reviewed release contract', () => {
     for (const toolName of [
       'grade_dfs_entry',
       'grade_dfs_entries',

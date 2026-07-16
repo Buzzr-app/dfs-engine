@@ -95,7 +95,7 @@ Engine instances own policy, payout-table, provider, adapter, clock, and audit c
 
 ## Repository and app boundary
 
-This monorepo is the public package source of record. The Buzzr mobile app's `release/ios-2.0.0` branch is a separate consumer that currently vendors local 5.0.0 tarballs for `@buzzr/bets-core`, `@buzzr/dfs-engine`, and `@buzzr/entertainment-engine`. Public vNext work does not update that app until a separate reviewed app release deliberately changes its vendored artifacts.
+This monorepo is the public package source of record. The Buzzr mobile app's `release/ios-2.0.0` branch is a separate consumer that currently vendors local 5.0.0 tarballs for `@buzzr/bets-core`, `@buzzr/dfs-engine`, and `@buzzr/entertainment-engine`. The public 5.1.0 toolkit does not update that app until a separate reviewed app release deliberately changes its vendored artifacts.
 
 ## Related references
 

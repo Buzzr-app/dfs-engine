@@ -53,7 +53,7 @@ Replay them in your CI → detect drift from the matching engine version.
 They are regression fixtures, not official operator certification.
 
 **7/**
-The vNext public-toolkit release includes:
+The 5.1.0 public-toolkit release includes:
 
 - settleEntries: batch settlement w/ memoized stat cache
 - book-policy validation
@@ -67,7 +67,7 @@ The vNext public-toolkit release includes:
 That last one matters: point your agent at `npx -y @buzzr/mcp` and it runs deterministic odds, history, DFS compatibility, and game-scoring math on supplied data. It does not fetch live odds, box scores, or operator rulings.
 
 **9/**
-All MIT, Node ≥22, ESM+CJS, typed to the teeth. Built by one person. Buzzr's mobile release branch currently vendors the three 5.0.0 engine tarballs; this public vNext is not an automatic app upgrade.
+All MIT, Node ≥22, ESM+CJS, typed to the teeth. Built by one person. Buzzr's mobile release branch currently vendors the three 5.0.0 engine tarballs; the public 5.1.0 toolkit is not an automatic app upgrade.
 
 ⭐ github.com/Buzzr-app/dfs-engine
 📚 buzzr-app.github.io/dfs-engine

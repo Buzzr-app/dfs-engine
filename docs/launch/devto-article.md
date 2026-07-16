@@ -17,7 +17,7 @@ Two years ago I shipped a sports app with a feature that grades DFS pick'em slip
 const won = actual > line; // what could go wrong
 ```
 
-Everything, it turns out. This article is about the architecture that replaced it: [`@buzzr/dfs-engine`](https://github.com/Buzzr-app/dfs-engine), a zero-dependency TypeScript settlement engine, and the design decisions that made it auditable rather than merely correct. The Buzzr mobile app currently vendors the 5.0.0 tarballs for three engine packages; the public repository's vNext work is not automatically deployed to the app.
+Everything, it turns out. This article is about the architecture that replaced it: [`@buzzr/dfs-engine`](https://github.com/Buzzr-app/dfs-engine), a zero-dependency TypeScript settlement engine, and the design decisions that made it auditable rather than merely correct. The Buzzr mobile app currently vendors the 5.0.0 tarballs for three engine packages; the public 5.1.0 toolkit is not automatically deployed to the app.
 
 ## Why settlement is harder than a comparison
 
@@ -155,6 +155,6 @@ If you're building anything that turns data into money decisions:
 4. Publish **engine regression fixtures**; executable examples catch integration drift.
 5. Zero dependencies is a feature you can only choose early.
 
-Everything above is MIT and on npm — the engine ([`@buzzr/dfs-engine`](https://www.npmjs.com/package/@buzzr/dfs-engine)), odds math ([`@buzzr/bets-core`](https://www.npmjs.com/package/@buzzr/bets-core)), entertainment scoring ([`@buzzr/entertainment-engine`](https://www.npmjs.com/package/@buzzr/entertainment-engine)), an 11-tool MCP server for AI agents ([`@buzzr/mcp`](https://www.npmjs.com/package/@buzzr/mcp)), plus CLI/testing/UI satellites. The vNext release adds effective-dated policy provenance, adversarial regression vectors, bounded MCP contracts, and a repository-owned Codex skill. Monorepo and docs: https://github.com/Buzzr-app/dfs-engine · https://buzzr-app.github.io/dfs-engine/
+Everything above is MIT and on npm — the engine ([`@buzzr/dfs-engine`](https://www.npmjs.com/package/@buzzr/dfs-engine)), odds math ([`@buzzr/bets-core`](https://www.npmjs.com/package/@buzzr/bets-core)), entertainment scoring ([`@buzzr/entertainment-engine`](https://www.npmjs.com/package/@buzzr/entertainment-engine)), an 11-tool MCP server for AI agents ([`@buzzr/mcp`](https://www.npmjs.com/package/@buzzr/mcp)), plus CLI/testing/UI satellites. Release 5.1.0 adds effective-dated policy provenance, adversarial regression vectors, bounded MCP contracts, and a repository-owned Codex skill. Monorepo and docs: https://github.com/Buzzr-app/dfs-engine · https://buzzr-app.github.io/dfs-engine/
 
 I'm one person building this alongside a production app, so issues and hostile code review are genuinely welcome.

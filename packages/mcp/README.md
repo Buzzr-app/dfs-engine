@@ -21,7 +21,7 @@ Run it directly with npx (Node 22+). Pin the version you reviewed instead of
 silently accepting a future `latest` release:
 
 ```sh
-npx -y @buzzr/mcp@<published-version>
+npx -y @buzzr/mcp@5.1.0
 ```
 
 The server speaks MCP over stdio: JSON-RPC on stdin/stdout, logs on stderr.
@@ -38,7 +38,7 @@ Config**, then fully quit and reopen Claude Desktop:
   "mcpServers": {
     "buzzr": {
       "command": "npx",
-      "args": ["-y", "@buzzr/mcp@<published-version>"]
+      "args": ["-y", "@buzzr/mcp@5.1.0"]
     }
   }
 }
@@ -47,7 +47,7 @@ Config**, then fully quit and reopen Claude Desktop:
 ### Claude Code
 
 ```sh
-claude mcp add --transport stdio buzzr -- npx -y @buzzr/mcp@<published-version>
+claude mcp add --transport stdio buzzr -- npx -y @buzzr/mcp@5.1.0
 ```
 
 For a version-controlled project configuration, add this to `.mcp.json`, trust
@@ -58,7 +58,7 @@ the project when prompted, and start a new Claude Code session:
   "mcpServers": {
     "buzzr": {
       "command": "npx",
-      "args": ["-y", "@buzzr/mcp@<published-version>"]
+      "args": ["-y", "@buzzr/mcp@5.1.0"]
     }
   }
 }
@@ -77,7 +77,7 @@ MCP configuration), then fully restart Cursor:
   "mcpServers": {
     "buzzr": {
       "command": "npx",
-      "args": ["-y", "@buzzr/mcp@<published-version>"]
+      "args": ["-y", "@buzzr/mcp@5.1.0"]
     }
   }
 }
@@ -93,7 +93,7 @@ The Codex CLI, IDE extension, and app share `config.toml`. The one-command user
 setup is:
 
 ```sh
-codex mcp add buzzr -- npx -y @buzzr/mcp@<published-version>
+codex mcp add buzzr -- npx -y @buzzr/mcp@5.1.0
 ```
 
 Or add the equivalent block to `~/.codex/config.toml` for all projects, or to a
@@ -102,7 +102,7 @@ trusted repository's `.codex/config.toml` for that project only:
 ```toml
 [mcp_servers.buzzr]
 command = "npx"
-args = ["-y", "@buzzr/mcp@<published-version>"]
+args = ["-y", "@buzzr/mcp@5.1.0"]
 ```
 
 Run `codex mcp get buzzr`, then start a new Codex task after changing the
@@ -117,7 +117,7 @@ Use this process configuration in any client that accepts a command plus args:
   "name": "buzzr",
   "transport": "stdio",
   "command": "npx",
-  "args": ["-y", "@buzzr/mcp@<published-version>"],
+  "args": ["-y", "@buzzr/mcp@5.1.0"],
   "env": {}
 }
 ```
@@ -146,7 +146,7 @@ The repository replays that workflow through a real MCP client in CI.
 1. Confirm Node.js 22+ and npm are visible to the same desktop process or shell:
    `node --version`, `npm --version`, and `npx --version`.
 2. Confirm the pinned release exists with
-   `npm view @buzzr/mcp@<published-version> version`, then run
+   `npm view @buzzr/mcp@5.1.0 version`, then run
    `npm cache verify`. If npm reports cache corruption, repair npm's cache before
    retrying; `npm cache clean --force` is a last resort because it removes the
    whole local cache.

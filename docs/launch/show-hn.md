@@ -23,9 +23,9 @@ So I extracted the settlement code into open-source packages and made "explain y
 - The engine does zero I/O. You inject a `StatProvider`; pure functions do the rest. Zero runtime dependencies, ESM+CJS, strict types.
 - Versioned engine regression fixtures ship as their own package, so an external integrator can detect drift from the matching engine behavior. They are not operator certification.
 
-The vNext release adds effective-dated policy provenance, adversarial regression vectors, bounded public contracts, and a repository-owned Codex skill. There is also an odds-math package (no-vig fair lines, parlay pricing, EV, Kelly, CLV), an entertainment-scoring engine, and an 11-tool MCP server so AI agents can call deterministic math from supplied data.
+Release 5.1.0 adds effective-dated policy provenance, adversarial regression vectors, bounded public contracts, and a repository-owned Codex skill. There is also an odds-math package (no-vig fair lines, parlay pricing, EV, Kelly, CLV), an entertainment-scoring engine, and an 11-tool MCP server so AI agents can call deterministic math from supplied data.
 
-The Buzzr mobile app's `release/ios-2.0.0` branch currently vendors 5.0.0 tarballs for the DFS, odds, and entertainment engines. The app is not automatically upgraded to this public vNext work.
+The Buzzr mobile app's `release/ios-2.0.0` branch currently vendors 5.0.0 tarballs for the DFS, odds, and entertainment engines. The app is not automatically upgraded to the public 5.1.0 toolkit.
 
 Repo: https://github.com/Buzzr-app/dfs-engine
 Docs: https://buzzr-app.github.io/dfs-engine/

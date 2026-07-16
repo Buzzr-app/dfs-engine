@@ -1,5 +1,12 @@
 # @buzzr/dfs-react
 
+## 5.0.0
+
+### Major Changes
+
+- Synchronized the framework-agnostic display helpers with
+  `@buzzr/dfs-engine@^5.0.0`; the exported display-model API was unchanged.
+
 ## 1.0.0
 
 ### Major Changes

@@ -57,7 +57,7 @@ node scripts/check-public-docs.mjs
 
 - To grade a DFS entry: build a `DfsEntryInput`, register a `StatProvider` that returns `PlayerGameLogEntryShape[]` rows, call `engine.settleEntry(entry, { statProviderId })`. See `packages/dfs-cli/src/index.ts` for a minimal end-to-end example.
 - To verify an integration, replay `TEST_VECTORS` from `@buzzr/dfs-engine-test-vectors` against the matching engine version and inspect the full expected policy, payout, validation, provenance, explanation, audit, pending, and leg contract.
-- For AI-agent runtimes, prefer the MCP server (`npx -y @buzzr/mcp@<published-version>`) over reimplementing odds/settlement math in prompts. Call `list_book_policies` before grading and use only `executable: true` policies.
+- For AI-agent runtimes, prefer the MCP server (`npx -y @buzzr/mcp@5.1.0`) over reimplementing odds/settlement math in prompts. Call `list_book_policies` before grading and use only `executable: true` policies.
 
 ## Public documentation
 

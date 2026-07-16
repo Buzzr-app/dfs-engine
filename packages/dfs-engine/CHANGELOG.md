@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased (vNext)
+## 5.1.0
+
+### Minor Changes
+
+- 5be07fa: Add effective-dated policy verification, source, payout-table, and immutable snapshot APIs while preserving v5 type compatibility. Correct explicit-status settlement, DNP/tie demotion and refunds, date-aware provider selection, all-removed outcomes, batch-cache annotations, and monetary rounding.
 
 ### Corrected
 
@@ -104,7 +108,7 @@ Turns the Settlement OS into a book-policy registry instead of a PrizePicks/Unde
 
 - `DfsEntryInput` now prefers `bookId` and `playTypeId`.
 - The bundled PrizePicks and Underdog compatibility behavior flows through the
-  policy registry. vNext corrects their public status and verification metadata.
+  policy registry. Version 5.1.0 corrects their public status and verification metadata.
 - `adaptBuzzrBetInput(...)` emits the v3 entry shape while preserving the current Buzzr `CreateDfsBetInput` migration path.
 - `@buzzr/dfs-testkit` fixture entries now use valid v3 book/play IDs.
 

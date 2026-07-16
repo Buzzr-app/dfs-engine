@@ -158,7 +158,7 @@ The server exposes 11 tools for DFS validation and settlement, odds and bet-hist
 
 ## Verified Buzzr app integration
 
-The Buzzr mobile app’s `release/ios-2.0.0` branch vendors `@buzzr/bets-core`, `@buzzr/dfs-engine`, and `@buzzr/entertainment-engine` as local 5.0.0 tarballs and imports all three. That verified snapshot is not automatically upgraded to this repository’s vNext work; an app update remains a separate, deliberate release task.
+The Buzzr mobile app’s `release/ios-2.0.0` branch vendors `@buzzr/bets-core`, `@buzzr/dfs-engine`, and `@buzzr/entertainment-engine` as local 5.0.0 tarballs and imports all three. That verified snapshot is not automatically upgraded to the public 5.1.0 toolkit; an app update remains a separate, deliberate release task.
 
 ## Codex skill
 

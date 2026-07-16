@@ -1,4 +1,4 @@
-# vNext public-toolkit launch checklist
+# 5.1.0 public-toolkit launch checklist
 
 Sequenced end-to-end. Everything in `docs/launch/` is a draft the maintainer publishes manually — nothing here auto-posts.
 
@@ -14,17 +14,17 @@ Sequenced end-to-end. Everything in `docs/launch/` is a draft the maintainer pub
 
 ## Phase 1 — Publish (day 0)
 
-- [ ] Publish only the changed packages selected by the final changesets; publish `@buzzr/dfs-engine` before packages pinned to its vNext version
+- [ ] Publish only the five packages in the reviewed release manifest; publish `@buzzr/dfs-engine@5.1.0` before packages pinned to that version
 - [ ] Verify every live npm artifact against the reviewed version, `gitHead`, exact integrity digest, registry tarball origin, and provenance attestation
 - [ ] Spot-check npm pages: README renders, keywords show, `repository`/`homepage` links resolve to the right package directory
-- [ ] The clean-cache published proof passes for the exact `@buzzr/mcp@<published-version>` on Linux, macOS, and Windows
-- [ ] `npx -y @buzzr/mcp@<published-version>` starts clean with isolated npm/home state and a real MCP client lists all 11 tools
+- [ ] The clean-cache published proof passes for the exact `@buzzr/mcp@5.1.0` on Linux, macOS, and Windows
+- [ ] `npx -y @buzzr/mcp@5.1.0` starts clean with isolated npm/home state and a real MCP client lists all 11 tools
 - [ ] `npm i -g @buzzr/dfs-cli && dfs-grade --help` works
 - [ ] `npx skills add https://github.com/Buzzr-app/dfs-engine --skill buzzr-sports-engine` discovers and installs the repository skill
 
 ## Phase 2 — GitHub release + docs (day 0)
 
-- [ ] Create and push the reviewed vNext `v*` tag only after npm artifacts are live
+- [ ] Create the reviewed `v5.1.0` tag only after npm artifacts are live
 - [ ] Verify https://buzzr-app.github.io/dfs-engine/ rebuilt from that exact tag
 - [ ] Write the GitHub Release: highlights (effective-dated policy truthfulness, settlement fixes, adversarial vectors, 11-tool bounded MCP, Codex skill), migration notes, and full changelog links
 - [ ] Publish and verify `io.github.Buzzr-app/dfs-engine` in the official MCP Registry after the npm version is live
@@ -49,7 +49,7 @@ Sequenced end-to-end. Everything in `docs/launch/` is a draft the maintainer pub
 ## Phase 5 — Sustain (week 2+)
 
 - [ ] Respond to every issue within 24h during launch window (responsiveness converts stars → users)
-- [ ] Reverify the Buzzr app cross-link. Its `release/ios-2.0.0` branch currently vendors three 5.0.0 tarballs; upgrading it to vNext is a separate reviewed release decision
+- [ ] Reverify the Buzzr app cross-link. Its `release/ios-2.0.0` branch currently vendors three 5.0.0 tarballs; upgrading it to the public 5.1.0 toolkit is a separate reviewed release decision
 - [ ] Watch npm download trends + GitHub traffic; note which channel converted for the next release
 - [ ] Follow-up content idea backlog: "How PrizePicks-style DNP rescue actually works", "Batch settlement cache design", "Giving AI agents real odds math via MCP"
 

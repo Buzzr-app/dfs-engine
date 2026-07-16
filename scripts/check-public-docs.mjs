@@ -25,6 +25,7 @@ const files = {
   mcpChangelog: 'packages/mcp/CHANGELOG.md',
   cliChangelog: 'packages/dfs-cli/CHANGELOG.md',
   vectorsChangelog: 'packages/dfs-engine-test-vectors/CHANGELOG.md',
+  testkitChangelog: 'packages/dfs-testkit/CHANGELOG.md',
   baseline: 'docs/launch/adoption-baseline-2026-07-16.md',
   checklist: 'docs/launch/launch-checklist.md',
   awesomeLists: 'docs/launch/awesome-lists.md',
@@ -82,6 +83,8 @@ const staleClaims = [
   [/300 total legs/i, 'the retired 300-leg MCP aggregate limit'],
   [/grades identically to Buzzr/i, 'production-conformance vectors'],
   [/canonical reference fixtures/i, 'canonical operator fixtures'],
+  [/<published-version>/i, 'an unresolved package-version placeholder'],
+  [/\bvNext\b/i, 'an unresolved release placeholder'],
 ];
 
 for (const [pattern, label] of staleClaims) {
@@ -175,8 +178,8 @@ requireText('llms', mobileSnapshot, 'carry the exact verified mobile integration
 for (const key of ['root', 'llms']) {
   requirePattern(
     key,
-    /not automatically (?:updated|upgraded)[^\n]*vNext/i,
-    'separate the app snapshot from vNext',
+    /not automatically (?:updated|upgraded)[^\n]*5\.1\.0/i,
+    'separate the app snapshot from public release 5.1.0',
   );
   requireText(
     key,
@@ -240,12 +243,15 @@ for (const key of ['checklist', 'awesomeLists', 'devto', 'reddit', 'showHn', 'tw
   requirePattern(key, /\bmanual(?:ly)?\b/i, 'require manual publication');
 }
 
-for (const key of ['engineChangelog', 'mcpChangelog', 'cliChangelog', 'vectorsChangelog']) {
-  requirePattern(
-    key,
-    /^## Unreleased \(vNext\)$/m,
-    'record the unreleased documentation contract without guessing a version',
-  );
+for (const [key, version] of Object.entries({
+  engineChangelog: '5.1.0',
+  mcpChangelog: '5.1.0',
+  cliChangelog: '5.0.1',
+  vectorsChangelog: '5.1.0',
+  testkitChangelog: '5.0.1',
+})) {
+  requirePattern(key, new RegExp(`^## ${version.replaceAll('.', '\\.')}$`, 'm'), `record ${version}`);
+  assert.doesNotMatch(docs[key], /^## Unreleased/m, `${files[key]} must not retain release-ready work as unreleased.`);
 }
 
 for (const key of ['root', 'agents']) {

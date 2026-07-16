@@ -1,8 +1,17 @@
 # @buzzr/dfs-engine-test-vectors
 
-## Unreleased (vNext)
+## 5.1.0
 
-### Added
+### Minor Changes
+
+- 5be07fa: Expand the public regression set from three happy paths to eleven version-matched fixtures covering policy evidence, payout tables, DNPs, pushes, missing and unsupported stats, ambiguous provider rows, warnings, provenance, and audit codes.
+
+### Patch Changes
+
+- Updated dependencies [5be07fa]
+  - @buzzr/dfs-engine@5.1.0
+
+### Details
 
 - Expanded the public regression set from three happy paths to eleven fixtures,
   including all-push, explicit-DNP repricing, missing-vs-unsupported stats,
@@ -16,6 +25,13 @@
 
 - Define the package as engine regression fixtures for the matching engine
   version, not proof of current operator rules or official operator equivalence.
+
+## 5.0.0
+
+### Major Changes
+
+- Synchronized with `@buzzr/dfs-engine@5.0.0` and published three deterministic
+  PrizePicks/Underdog regression fixtures for the v5 settlement contract.
 
 ## 1.0.0
 

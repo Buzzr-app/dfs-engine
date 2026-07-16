@@ -22,7 +22,7 @@ Key facts: all engine code is pure functions (no I/O; data providers are injecte
 
 ## Verified Buzzr app integration
 
-The Buzzr mobile app’s `release/ios-2.0.0` branch vendors `@buzzr/bets-core`, `@buzzr/dfs-engine`, and `@buzzr/entertainment-engine` as local 5.0.0 tarballs and imports all three. That app snapshot is not automatically upgraded to the public repository’s vNext work.
+The Buzzr mobile app’s `release/ios-2.0.0` branch vendors `@buzzr/bets-core`, `@buzzr/dfs-engine`, and `@buzzr/entertainment-engine` as local 5.0.0 tarballs and imports all three. That app snapshot is not automatically upgraded to the public 5.1.0 toolkit.
 
 ## Agent integration
 

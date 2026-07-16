@@ -1,6 +1,15 @@
 # @buzzr/mcp
 
-## Unreleased (vNext)
+## 5.1.0
+
+### Minor Changes
+
+- 5be07fa: Expand to eleven bounded tools with batch DFS settlement, closing-line value, bet-history analytics, authoritative policy discovery, portable bins, published examples, real-client proofs, and hardened packed/published startup and validation.
+
+### Patch Changes
+
+- Updated dependencies [5be07fa]
+  - @buzzr/dfs-engine@5.1.0
 
 ### Added
 
@@ -21,3 +30,11 @@
 
 - Labeled PrizePicks experimental/partial and Underdog
   experimental/unverified, with displayed entry terms authoritative.
+
+## 5.0.0
+
+### Major Changes
+
+- Published the first synchronized Buzzr MCP server with eight DFS settlement,
+  odds, Kelly, parlay, prediction, and ranking tools over local stdio transport.
+- Pinned the v5 Buzzr engine family and exposed the `buzzr-mcp` executable.

@@ -1,5 +1,12 @@
 # @buzzr/dfs-provider-sportradar
 
+## 5.0.0
+
+### Major Changes
+
+- Synchronized the Sportradar adapter with `@buzzr/dfs-engine@^5.0.0`; its
+  row-conversion and provider APIs were unchanged.
+
 ## 1.0.0
 
 ### Major Changes

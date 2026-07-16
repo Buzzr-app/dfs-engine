@@ -22,7 +22,7 @@ const clientContracts = [
   [
     'Claude Code',
     /### Claude Code/,
-    /claude mcp add --transport stdio buzzr -- npx -y @buzzr\/mcp@<published-version>/,
+    /claude mcp add --transport stdio buzzr -- npx -y @buzzr\/mcp@5\.1\.0/,
   ],
   ['Cursor', /### Cursor/, /\.cursor\/mcp\.json/],
   ['Codex', /### Codex/, /\[mcp_servers\.buzzr\]/],

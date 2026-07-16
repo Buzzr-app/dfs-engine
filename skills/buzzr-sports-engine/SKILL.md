@@ -26,7 +26,7 @@ For repeatable work, pin the reviewed published version:
 ```toml
 [mcp_servers.buzzr]
 command = "npx"
-args = ["-y", "@buzzr/mcp@<published-version>"]
+args = ["-y", "@buzzr/mcp@5.1.0"]
 ```
 
 Use `@buzzr/mcp@latest` only when automatic upgrades are acceptable. The server uses stdio, writes protocol messages only to stdout, and needs no API key. Restart the client after changing its MCP configuration.
@@ -34,8 +34,8 @@ Use `@buzzr/mcp@latest` only when automatic upgrades are acceptable. The server 
 If startup fails, check these in order:
 
 1. Node.js is version 22 or newer.
-2. The package version exists: `npm view @buzzr/mcp@<published-version> version`.
-3. The executable starts cleanly: `npx -y @buzzr/mcp@<published-version>`.
+2. The package version exists: `npm view @buzzr/mcp@5.1.0 version`.
+3. The executable starts cleanly: `npx -y @buzzr/mcp@5.1.0`.
 4. The client launches the command directly rather than through an interactive shell.
 
 ## Settle DFS entries

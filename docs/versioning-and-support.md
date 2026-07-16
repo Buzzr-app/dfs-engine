@@ -1,6 +1,6 @@
 # Versioning, compatibility, and support
 
-Buzzr uses SemVer and Changesets for independent package releases. The workspace packages happen to be at 5.0.0 in the 2026-07-16 baseline, but there is no lockstep-versioning promise: each release should bump the smallest set of packages whose public API, behavior, dependency pins, or published artifacts changed.
+Buzzr uses SemVer and Changesets for independent package releases. The 2026-07-16 public-toolkit train releases `@buzzr/dfs-engine`, `@buzzr/dfs-engine-test-vectors`, and `@buzzr/mcp` at 5.1.0, with 5.0.1 patches for `@buzzr/dfs-cli` and `@buzzr/dfs-testkit`. There is no lockstep-versioning promise: each release bumps the smallest set of packages whose public API, behavior, dependency pins, or published artifacts changed.
 
 ## Release selection
 
@@ -34,13 +34,13 @@ For every affected package:
 4. Document renamed fields, changed defaults, status/explanation codes, and required caller actions.
 5. Prove the packed artifacts, then verify the exact published version, integrity, `gitHead`, and provenance.
 
-The vNext documentation label means "unreleased work on the reviewed branch." Replace it with the actual version only when the release plan and generated package versions are final.
+Release documentation uses exact package versions only after Changesets has generated and the repository has verified the final manifests.
 
 ## Application compatibility
 
 The public monorepo and Buzzr mobile app are separate release surfaces. The app's `release/ios-2.0.0` branch currently vendors local 5.0.0 tarballs for `@buzzr/bets-core`, `@buzzr/dfs-engine`, and `@buzzr/entertainment-engine`. A public npm release does not update those files automatically. Any mobile migration needs its own dependency change, tests, build, and release decision, while unrelated app-branch work remains untouched.
 
-For MCP clients, pin `@buzzr/mcp@<published-version>` when reproducibility matters. Using `@latest` opts into future compatible updates and should be a conscious host policy.
+For MCP clients, pin `@buzzr/mcp@5.1.0` when reproducibility matters. Using `@latest` opts into future compatible updates and should be a conscious host policy.
 
 ## Support policy
 

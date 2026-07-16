@@ -1,6 +1,6 @@
 {
   "name": "@buzzr/mcp",
-  "version": "5.0.0",
+  "version": "5.1.0",
   "mcpName": "io.github.Buzzr-app/dfs-engine",
   "description": "MCP server exposing the @buzzr sports engines to AI agents — DFS settlement, odds math, and entertainment predictions as tools.",
   "license": "MIT",
@@ -56,7 +56,7 @@
   },
   "dependencies": {
     "@buzzr/bets-core": "5.0.0",
-    "@buzzr/dfs-engine": "5.0.0",
+    "@buzzr/dfs-engine": "5.1.0",
     "@buzzr/entertainment-engine": "5.0.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "zod": "^4.4.3"

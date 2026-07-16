@@ -69,7 +69,7 @@ Odds, expected-value, Kelly, and settlement outputs are calculations from suppli
 ## Deployment guidance
 
 - Keep MCP on local stdio unless an embedding application adds its own authentication, authorization, rate limiting, TLS, request isolation, and audit policy.
-- Pin `@buzzr/mcp@<published-version>` when repeatability matters.
+- Pin `@buzzr/mcp@5.1.0` when repeatability matters.
 - Run the server as a non-privileged user with the smallest environment and filesystem access the host permits.
 - Do not place secrets in MCP configuration because Buzzr needs none.
 - Review custom policy and provider code as trusted executable application code.

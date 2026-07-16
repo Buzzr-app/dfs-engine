@@ -20,13 +20,13 @@ What's in it:
 
 Design constraints: pure functions only, zero runtime dependencies, the engine never fetches — you inject your stat source and it validates rows at the boundary.
 
-It's all MIT. The Buzzr mobile release branch currently vendors the 5.0.0 tarballs for three engine packages; this public vNext is a separate release until the app is deliberately upgraded. Repo: https://github.com/Buzzr-app/dfs-engine — would genuinely value this sub picking holes in the Kelly/CLV implementations.
+It's all MIT. The Buzzr mobile release branch currently vendors the 5.0.0 tarballs for three engine packages; the public 5.1.0 toolkit is a separate release until the app is deliberately upgraded. Repo: https://github.com/Buzzr-app/dfs-engine — would genuinely value this sub picking holes in the Kelly/CLV implementations.
 
 ---
 
 ## r/typescript
 
-**Title:** Lessons from building a zero-dependency monorepo where the output is "money decisions" (DFS settlement engine, vNext)
+**Title:** Lessons from building a zero-dependency monorepo where the output is "money decisions" (DFS settlement engine 5.1)
 
 **Body:**
 
