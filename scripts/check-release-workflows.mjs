@@ -99,15 +99,30 @@ assert.match(
   /gh api "repos\/\$GITHUB_REPOSITORY\/git\/ref\/heads\/main"/,
   'release authorization must resolve the current main ref through GitHub',
 );
-assert.match(
+assert.doesNotMatch(
   authorizeJob,
   /test "\$REMOTE_MAIN" = "\$EXPECTED_COMMIT"/,
-  'release authorization must require the reviewed commit to equal current main',
+  'authorization must not block an exact partial-release recovery after main advances',
+);
+assert.doesNotMatch(
+  authorizeJob,
+  /test "\$GITHUB_SHA_AT_DISPATCH" = "\$EXPECTED_COMMIT"/,
+  'authorization must allow a historical reviewed main commit only for downstream exact-artifact recovery',
+);
+assert.equal(
+  [...authorizeJob.matchAll(/repos\/\$GITHUB_REPOSITORY\/compare\//g)].length,
+  2,
+  'authorization must prove both expected-to-dispatch and dispatch-to-current-main ancestry',
 );
 assert.match(
   authorizeJob,
-  /test "\$GITHUB_SHA_AT_DISPATCH" = "\$EXPECTED_COMMIT"/,
-  'release authorization must bind the input to the reviewed dispatch SHA',
+  /compare\/\$EXPECTED_COMMIT\.\.\.\$GITHUB_SHA_AT_DISPATCH[\s\S]*test "\$EXPECTED_MERGE_BASE" = "\$EXPECTED_COMMIT"/,
+  'the reviewed release commit must be an ancestor of main at dispatch',
+);
+assert.match(
+  authorizeJob,
+  /compare\/\$GITHUB_SHA_AT_DISPATCH\.\.\.\$REMOTE_MAIN[\s\S]*test "\$DISPATCH_MERGE_BASE" = "\$GITHUB_SHA_AT_DISPATCH"/,
+  'main at dispatch must still be an ancestor of current main',
 );
 assert.match(
   authorizeJob,
