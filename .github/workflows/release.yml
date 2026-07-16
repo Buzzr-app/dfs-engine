@@ -24,8 +24,36 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  publish-npm:
+  authorize-release:
     if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      reviewed-commit: ${{ steps.authorize.outputs.commit }}
+    steps:
+      - name: Authorize exact current main commit
+        id: authorize
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          EXPECTED_RELEASE_VERSION: ${{ inputs.expected_version }}
+          CONFIRM_PUBLISH: ${{ inputs.confirm_publish }}
+          GITHUB_SHA_AT_DISPATCH: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$CONFIRM_PUBLISH" == "PUBLISH" ]]
+          [[ "$EXPECTED_COMMIT" =~ ^[0-9a-fA-F]{40}$ ]]
+          [[ "$EXPECTED_RELEASE_VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?$ ]]
+          REMOTE_MAIN="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
+          test "$GITHUB_SHA_AT_DISPATCH" = "$EXPECTED_COMMIT"
+          test "$REMOTE_MAIN" = "$EXPECTED_COMMIT"
+          echo "commit=$EXPECTED_COMMIT" >> "$GITHUB_OUTPUT"
+
+  publish-npm:
+    needs: authorize-release
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment: npm
@@ -34,10 +62,20 @@ jobs:
       id-token: write
     outputs:
       integrity: ${{ steps.pack.outputs.integrity }}
+      reviewed-commit: ${{ needs.authorize-release.outputs.reviewed-commit }}
     steps:
+      - name: Revalidate current main before checkout
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_COMMIT: ${{ needs.authorize-release.outputs.reviewed-commit }}
+        run: |
+          set -euo pipefail
+          REMOTE_MAIN="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
+          test "$REMOTE_MAIN" = "$EXPECTED_COMMIT"
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          ref: ${{ inputs.expected_commit }}
+          ref: ${{ needs.authorize-release.outputs.reviewed-commit }}
           fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
@@ -45,17 +83,13 @@ jobs:
           node-version: 24
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
-      - name: Validate reviewed release inputs
+      - name: Validate checked-out release
         shell: bash
         env:
-          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          EXPECTED_COMMIT: ${{ needs.authorize-release.outputs.reviewed-commit }}
           EXPECTED_RELEASE_VERSION: ${{ inputs.expected_version }}
-          CONFIRM_PUBLISH: ${{ inputs.confirm_publish }}
         run: |
           set -euo pipefail
-          [[ "$CONFIRM_PUBLISH" == "PUBLISH" ]]
-          [[ "$EXPECTED_COMMIT" =~ ^[0-9a-fA-F]{40}$ ]]
-          [[ "$EXPECTED_RELEASE_VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?$ ]]
           test "$(git rev-parse HEAD)" = "$EXPECTED_COMMIT"
           node scripts/check-release-version.mjs
       - name: Install reviewed npm CLI and dependencies
@@ -89,7 +123,7 @@ jobs:
         env:
           EXPECTED_MCP_VERSION: ${{ inputs.expected_version }}
           EXPECTED_MCP_INTEGRITY: ${{ steps.pack.outputs.integrity }}
-          EXPECTED_GIT_HEAD: ${{ inputs.expected_commit }}
+          EXPECTED_GIT_HEAD: ${{ needs.authorize-release.outputs.reviewed-commit }}
         run: |
           set -euo pipefail
           for attempt in {1..12}; do
@@ -114,13 +148,27 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_VERSION: ${{ inputs.expected_version }}
-          RELEASE_COMMIT: ${{ inputs.expected_commit }}
+          RELEASE_COMMIT: ${{ needs.publish-npm.outputs.reviewed-commit }}
           MCP_INTEGRITY: ${{ needs.publish-npm.outputs.integrity }}
         run: |
           set -euo pipefail
-          gh release create "v$RELEASE_VERSION" \
+          tag="v$RELEASE_VERSION"
+          release_note="Published from $RELEASE_COMMIT with reviewed @buzzr/mcp integrity $MCP_INTEGRITY."
+
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" --silent 2>/dev/null; then
+            tag_commit="$(gh api "repos/$GITHUB_REPOSITORY/commits/$tag" --jq '.sha')"
+            test "$tag_commit" = "$RELEASE_COMMIT"
+          fi
+
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            existing_body="$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json body --jq '.body')"
+            grep -Fqx "$release_note" <<< "$existing_body"
+            exit 0
+          fi
+
+          gh release create "$tag" \
             --repo "$GITHUB_REPOSITORY" \
             --target "$RELEASE_COMMIT" \
-            --title "v$RELEASE_VERSION" \
+            --title "$tag" \
             --generate-notes \
-            --notes "Published from $RELEASE_COMMIT with reviewed @buzzr/mcp integrity $MCP_INTEGRITY."
+            --notes "$release_note"

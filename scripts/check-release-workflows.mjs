@@ -48,35 +48,59 @@ assert.match(release, /^      id-token:\s+write$/m, 'npm publish job must mint a
 assert.match(release, /^    environment:\s+npm$/m, 'npm publish job must use the npm environment');
 assert.match(
   release,
-  /^  authorize-release:\n(?:    .+\n|\n)*?    permissions:\n      contents:\s+read$/m,
-  'release inputs must be authorized in an unprivileged read-only job',
-);
-assert.match(
-  release,
   /^  publish-npm:\n    needs:\s+authorize-release$/m,
   'the OIDC publish job must depend on unprivileged release authorization',
 );
+const authorizeJobStart = release.indexOf('  authorize-release:');
+const publishJobStart = release.indexOf('  publish-npm:');
+const githubReleaseJobStart = release.indexOf('  github-release:');
+assert.notEqual(authorizeJobStart, -1, 'release must define the authorization job');
+assert.notEqual(publishJobStart, -1, 'release must define the npm publish job');
+assert.notEqual(githubReleaseJobStart, -1, 'release must define the GitHub release job');
+const authorizeJob = release.slice(authorizeJobStart, publishJobStart);
+const publishJob = release.slice(publishJobStart, githubReleaseJobStart);
 assert.match(
-  release,
+  authorizeJob,
+  /^    permissions:\n      contents:\s+read$/m,
+  'release inputs must be authorized in an unprivileged read-only job',
+);
+assert.doesNotMatch(
+  authorizeJob,
+  /^      (contents|id-token|packages|pages):\s+write$/m,
+  'release authorization must not receive write permissions',
+);
+assert.match(
+  authorizeJob,
   /gh api "repos\/\$GITHUB_REPOSITORY\/git\/ref\/heads\/main"/,
   'release authorization must resolve the current main ref through GitHub',
 );
 assert.match(
-  release,
+  authorizeJob,
   /test "\$REMOTE_MAIN" = "\$EXPECTED_COMMIT"/,
   'release authorization must require the reviewed commit to equal current main',
 );
-const publishJobStart = release.indexOf('  publish-npm:');
-const githubReleaseJobStart = release.indexOf('  github-release:');
-assert.notEqual(publishJobStart, -1, 'release must define the npm publish job');
-assert.notEqual(githubReleaseJobStart, -1, 'release must define the GitHub release job');
-const publishJob = release.slice(publishJobStart, githubReleaseJobStart);
+assert.match(
+  authorizeJob,
+  /test "\$GITHUB_SHA_AT_DISPATCH" = "\$EXPECTED_COMMIT"/,
+  'release authorization must bind the input to the reviewed dispatch SHA',
+);
 const privilegedMainCheck = publishJob.indexOf('name: Revalidate current main before checkout');
 const privilegedCheckout = publishJob.indexOf('uses: actions/checkout@');
 assert.ok(
   privilegedMainCheck >= 0 && privilegedMainCheck < privilegedCheckout,
   'the OIDC job must revalidate current main before checking out repository code',
 );
+assert.doesNotMatch(
+  publishJob.slice(0, privilegedMainCheck),
+  /^\s+(uses|run):/m,
+  'the current-main revalidation must be the OIDC job first step',
+);
+assert.match(
+  publishJob.slice(privilegedMainCheck, privilegedCheckout),
+  /test "\$REMOTE_MAIN" = "\$EXPECTED_COMMIT"/,
+  'the OIDC job must stop if main moved after authorization',
+);
+assert.match(publishJob, /^    environment:\s+npm$/m, 'the OIDC job must use the npm environment');
 assert.match(release, /node-version:\s+24/, 'release must use Node 24');
 assert.match(release, /npm@12\.0\.1/, 'release must pin the reviewed npm CLI');
 assert.match(
