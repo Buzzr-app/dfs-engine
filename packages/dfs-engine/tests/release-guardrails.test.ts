@@ -57,7 +57,7 @@ describe('release guardrails', () => {
     expect(proof).not.toContain('...process.env');
     expect(proof).toContain('@buzzr/mcp@${expectedVersion}');
     expect(proof).toContain('dist.integrity');
-    expect(proof).toContain('assert.match(expectedVersion');
+    expect(proof).toMatch(/assert\.match\(\s*expectedVersion/);
   });
 
   test('keeps runtime dependencies intentionally tiny', () => {

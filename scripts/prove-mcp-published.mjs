@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { delimiter, join, resolve } from 'node:path';
 import { promisify } from 'node:util';
@@ -11,6 +11,12 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 const execFileAsync = promisify(execFile);
 const expectedVersion = process.env.EXPECTED_MCP_VERSION?.trim();
 assert(expectedVersion, 'EXPECTED_MCP_VERSION is required');
+assert.match(
+  expectedVersion,
+  /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?$/,
+  'EXPECTED_MCP_VERSION must be an exact semantic version',
+);
+const packageSpec = `@buzzr/mcp@${expectedVersion}`;
 
 const coreToolNames = [
   'grade_dfs_entry',
@@ -52,22 +58,44 @@ async function withDeadline(promise, label, timeoutMs = 30_000) {
 
 const temporaryRoot = await mkdtemp(join(tmpdir(), 'buzzr-mcp-published-'));
 const cache = join(temporaryRoot, 'npm-cache');
+const emptyUserConfig = join(temporaryRoot, 'empty.npmrc');
 const repositoryBin = resolve('node_modules', '.bin');
 const path = (process.env.PATH ?? '')
   .split(delimiter)
   .filter((entry) => resolve(entry) !== repositoryBin)
   .join(delimiter);
-const environment = {
-  ...process.env,
+const inheritedEnvironmentKeys = [
+  'APPDATA',
+  'COMSPEC',
+  'HOME',
+  'LANG',
+  'LC_ALL',
+  'LOCALAPPDATA',
+  'PATHEXT',
+  'SHELL',
+  'SYSTEMROOT',
+  'TEMP',
+  'TMP',
+  'TMPDIR',
+  'USERPROFILE',
+];
+const environment = Object.fromEntries(
+  inheritedEnvironmentKeys.flatMap((key) =>
+    process.env[key] === undefined ? [] : [[key, process.env[key]]],
+  ),
+);
+Object.assign(environment, {
   NO_COLOR: '1',
   PATH: path,
   npm_config_cache: cache,
+  npm_config_userconfig: emptyUserConfig,
   npm_config_audit: 'false',
   npm_config_fund: 'false',
   npm_config_update_notifier: 'false',
-};
+});
 
 try {
+  await writeFile(emptyUserConfig, '');
   const { stdout: latestOutput } = await execNpm(
     ['view', '@buzzr/mcp', 'dist-tags.latest', '--json'],
     { cwd: temporaryRoot, env: environment },
@@ -79,9 +107,16 @@ try {
     `npm latest is ${latest}; expected ${expectedVersion}. Refusing to prove the wrong release.`,
   );
 
+  const { stdout: integrityOutput } = await execNpm(
+    ['view', packageSpec, 'dist.integrity', '--json'],
+    { cwd: temporaryRoot, env: environment },
+  );
+  const integrity = JSON.parse(integrityOutput);
+  assert.match(integrity, /^sha512-[A-Za-z0-9+/=]+$/, 'Published package has no sha512 integrity');
+
   const transport = new StdioClientTransport({
     command: process.platform === 'win32' ? 'npx.cmd' : 'npx',
-    args: ['-y', '@buzzr/mcp'],
+    args: ['-y', packageSpec],
     cwd: temporaryRoot,
     env: environment,
     stderr: 'pipe',
