@@ -13,11 +13,16 @@ const files = {
   security: 'docs/security-and-privacy.md',
   versioning: 'docs/versioning-and-support.md',
   apiIndex: 'docs/api-reference.md',
+  bets: 'packages/bets-core/README.md',
   engine: 'packages/dfs-engine/README.md',
   mcp: 'packages/mcp/README.md',
   cli: 'packages/dfs-cli/README.md',
   vectors: 'packages/dfs-engine-test-vectors/README.md',
   testkit: 'packages/dfs-testkit/README.md',
+  entertainment: 'packages/entertainment-engine/README.md',
+  react: 'packages/dfs-react/README.md',
+  espnProvider: 'packages/dfs-provider-espn/README.md',
+  sportradarProvider: 'packages/dfs-provider-sportradar/README.md',
   vectorManifest: 'packages/dfs-engine-test-vectors/package.json',
   skill: 'skills/buzzr-sports-engine/SKILL.md',
   skillTools: 'skills/buzzr-sports-engine/references/mcp-tools.md',
@@ -85,6 +90,10 @@ const staleClaims = [
   [/canonical reference fixtures/i, 'canonical operator fixtures'],
   [/<published-version>/i, 'an unresolved package-version placeholder'],
   [/\bvNext\b/i, 'an unresolved release placeholder'],
+  [
+    /zero-dependency npm packages \(@buzzr\/\*\)/i,
+    'zero runtime dependencies across every public package',
+  ],
 ];
 
 for (const [pattern, label] of staleClaims) {
@@ -100,6 +109,126 @@ function requireText(key, expected, reason) {
 
 function requirePattern(key, pattern, reason) {
   assert.match(docs[key], pattern, `${files[key]} must ${reason}.`);
+}
+
+const packageReadmes = [
+  {
+    key: 'engine',
+    name: '@buzzr/dfs-engine',
+    purpose: /DFS prop grading/i,
+    install: 'npm install @buzzr/dfs-engine',
+    typedoc: '_buzzr_dfs-engine.html',
+  },
+  {
+    key: 'bets',
+    name: '@buzzr/bets-core',
+    purpose: /sportsbook normalization/i,
+    install: 'npm install @buzzr/bets-core',
+    typedoc: '_buzzr_bets-core.html',
+  },
+  {
+    key: 'entertainment',
+    name: '@buzzr/entertainment-engine',
+    purpose: /entertainment scoring/i,
+    install: 'npm install @buzzr/entertainment-engine',
+    typedoc: '_buzzr_entertainment-engine.html',
+  },
+  {
+    key: 'mcp',
+    name: '@buzzr/mcp',
+    purpose: /MCP server/i,
+    install: 'npx -y @buzzr/mcp@5.1.0',
+    typedoc: '_buzzr_mcp.html',
+  },
+  {
+    key: 'cli',
+    name: '@buzzr/dfs-cli',
+    purpose: /command-line wrapper/i,
+    install: 'npm install -g @buzzr/dfs-cli',
+    typedoc: '_buzzr_dfs-cli.html',
+  },
+  {
+    key: 'react',
+    name: '@buzzr/dfs-react',
+    purpose: /render-ready view-model/i,
+    install: 'npm install @buzzr/dfs-react @buzzr/dfs-engine',
+    typedoc: '_buzzr_dfs-react.html',
+  },
+  {
+    key: 'testkit',
+    name: '@buzzr/dfs-testkit',
+    purpose: /Fixture builders/i,
+    install: 'npm install --save-dev @buzzr/dfs-testkit @buzzr/dfs-engine',
+    typedoc: '_buzzr_dfs-testkit.html',
+  },
+  {
+    key: 'espnProvider',
+    name: '@buzzr/dfs-provider-espn',
+    purpose: /ESPN-shaped gamelog data/i,
+    install: 'npm install @buzzr/dfs-provider-espn @buzzr/dfs-engine',
+    typedoc: '_buzzr_dfs-provider-espn.html',
+  },
+  {
+    key: 'sportradarProvider',
+    name: '@buzzr/dfs-provider-sportradar',
+    purpose: /Sportradar basketball statlines/i,
+    install: 'npm install @buzzr/dfs-provider-sportradar @buzzr/dfs-engine',
+    typedoc: '_buzzr_dfs-provider-sportradar.html',
+  },
+  {
+    key: 'vectors',
+    name: '@buzzr/dfs-engine-test-vectors',
+    purpose: /engine regression fixtures/i,
+    install:
+      'npm install --save-dev @buzzr/dfs-engine-test-vectors@5.1.0 @buzzr/dfs-engine@5.1.0',
+    typedoc: '_buzzr_dfs-engine-test-vectors.html',
+  },
+];
+
+for (const spec of packageReadmes) {
+  const manifestPath = `${root}packages/${spec.name.slice('@buzzr/'.length)}/package.json`;
+  const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+  const dependencies = Object.keys(manifest.dependencies ?? {});
+
+  assert.equal(manifest.name, spec.name, `${manifestPath} must retain its public package name.`);
+  assert.equal(manifest.engines?.node, '>=22', `${manifestPath} must retain the Node.js >= 22 floor.`);
+  assert.equal(manifest.license, 'MIT', `${manifestPath} must retain the MIT license.`);
+  requireText(spec.key, `# ${spec.name}`, 'use the exact public package name as its heading');
+  requirePattern(spec.key, spec.purpose, 'state its package-specific purpose');
+  requireText(spec.key, spec.install, 'show its supported install or execution command');
+  requirePattern(spec.key, /Node\.js >= 22/i, 'state the supported Node.js floor');
+  requireText(
+    spec.key,
+    `Import the supported API from \`${spec.name}\``,
+    'identify the supported package-root API',
+  );
+  requireText(
+    spec.key,
+    'Deep `src/*` and `dist/*` imports are unsupported.',
+    'reject unsupported deep imports',
+  );
+  requireText(spec.key, '../../docs/api-reference.md', 'link the all-package API index');
+  requireText(
+    spec.key,
+    `https://buzzr-app.github.io/dfs-engine/modules/${spec.typedoc}`,
+    'link its generated root-export reference',
+  );
+  requireText(
+    spec.key,
+    'https://github.com/Buzzr-app/dfs-engine/issues',
+    'link the shared support tracker',
+  );
+  requireText(spec.key, '../../SECURITY.md', 'link the private security-reporting policy');
+  requireText(spec.key, '../../docs/versioning-and-support.md', 'link the shared support policy');
+  requireText(spec.key, '../../LICENSE', 'link the repository MIT license');
+
+  if (/\bzero (?:external )?runtime dependencies\b/i.test(docs[spec.key])) {
+    assert.deepEqual(
+      dependencies,
+      [],
+      `${files[spec.key]} claims zero runtime dependencies but ${manifestPath} declares ${dependencies.join(', ')}.`,
+    );
+  }
 }
 
 for (const key of ['root', 'llms', 'mcp']) {
@@ -154,6 +283,16 @@ for (const key of ['engine', 'mcp']) {
     'https://www.prizepicks.com/help-center/potential-outcomes',
     'cite the reviewed PrizePicks standard outcomes source',
   );
+  requireText(
+    key,
+    'https://www.prizepicks.com/help-center/dnps-reboots-and-ties',
+    'cite the reviewed PrizePicks DNP, reboot, and tie source',
+  );
+  requirePattern(
+    key,
+    /2-pick Power[^\n]*DNP[^\n]*refund/i,
+    'state the reviewed two-pick Power DNP refund behavior',
+  );
   requireText(key, 'https://legal.underdogsports.com/', 'cite the canonical Underdog legal source');
 }
 
@@ -176,6 +315,11 @@ const mobileSnapshot =
 requireText('root', mobileSnapshot, 'state the exact verified mobile integration snapshot');
 requireText('llms', mobileSnapshot, 'carry the exact verified mobile integration snapshot');
 for (const key of ['root', 'llms']) {
+  requireText(
+    key,
+    'https://apps.apple.com/us/app/buzzr-sports/id6760628256',
+    'link the live Buzzr App Store listing without changing the verified app snapshot',
+  );
   requirePattern(
     key,
     /not automatically (?:updated|upgraded)[^\n]*5\.1\.0/i,
