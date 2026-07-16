@@ -188,10 +188,13 @@ export async function runBatchSettlement(
       const scoped = cache.scope();
       try {
         const result = await settle(input, settlementContext, scoped);
-        if (scoped.hitCount > 0 && !result.explanationCodes.includes('batch_cache_hit')) {
-          result.explanationCodes.push('batch_cache_hit');
-        }
-        slots[index] = result;
+        slots[index] =
+          scoped.hitCount > 0 && !result.explanationCodes.includes('batch_cache_hit')
+            ? {
+                ...result,
+                explanationCodes: [...result.explanationCodes, 'batch_cache_hit'],
+              }
+            : result;
       } catch (error) {
         failures.push({
           entryId: input.entryId,

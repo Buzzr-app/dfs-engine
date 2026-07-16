@@ -113,11 +113,7 @@ describe('v2 Settlement OS engine', () => {
     const engine = createDfsEngine({ statProviders: [provider] });
 
     await expect(
-      engine.extractLegStat(
-        leg(),
-        { statProviderId: 'dated-gamelog' },
-        entry({ legs: [leg()] }),
-      ),
+      engine.extractLegStat(leg(), { statProviderId: 'dated-gamelog' }, entry({ legs: [leg()] })),
     ).resolves.toMatchObject({ ok: true, value: 31 });
   });
 

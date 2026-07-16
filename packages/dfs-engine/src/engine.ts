@@ -1,5 +1,6 @@
-import { computeBoostSplit, extractStatForProp, gradeLegFromActual } from './grading';
+import { computeBoostSplit, findGameLogCandidates, gradeLegFromActual } from './grading';
 import type { BetStatus, PlayerGameLogEntryShape } from './grading';
+import { extractStatForPropExplained } from './stat-adapters';
 import { normalizeDfsPropType } from './prop-normalizer';
 import { DfsDefinitionError, DfsEngineInvariantError } from './errors';
 import { runBatchSettlement } from './batch';
@@ -1101,11 +1102,23 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
   function findPayoutTable(
     bookId: DfsBookId,
     playTypeId: DfsPlayTypeId,
+    entry?: Pick<DfsEntryInput, 'placedAt'>,
   ): DfsPayoutTableDefinition | null {
+    const matching = payoutTables
+      .map((table, index) => ({ table, index }))
+      .filter(({ table }) => table.bookId === bookId && table.playTypeId === playTypeId);
+    const placedAt = entry?.placedAt ? Date.parse(entry.placedAt) : null;
+    const eligible =
+      placedAt == null
+        ? matching
+        : matching.filter(({ table }) => Date.parse(table.effectiveFrom) <= placedAt);
+
     return (
-      [...payoutTables]
-        .reverse()
-        .find((table) => table.bookId === bookId && table.playTypeId === playTypeId) ?? null
+      eligible.sort((left, right) => {
+        const effectiveDelta =
+          Date.parse(right.table.effectiveFrom) - Date.parse(left.table.effectiveFrom);
+        return effectiveDelta !== 0 ? effectiveDelta : right.index - left.index;
+      })[0]?.table ?? null
     );
   }
 
@@ -1114,8 +1127,9 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
     playTypeId: DfsPlayTypeId,
     picks: number,
     hits: number,
+    entry?: Pick<DfsEntryInput, 'placedAt'>,
   ): number | null {
-    const table = findPayoutTable(bookId, playTypeId);
+    const table = findPayoutTable(bookId, playTypeId, entry);
     if (!table) {
       return null;
     }
@@ -1129,13 +1143,26 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
     if (input.baseMultiplier != null) {
       return input.baseMultiplier;
     }
-    return lookupTableMultiplier(input.bookId, input.playTypeId, input.pickCount, input.pickCount);
+    const originalPickCount = input.entry?.legs.length || input.pickCount;
+    return lookupTableMultiplier(
+      input.bookId,
+      input.playTypeId,
+      originalPickCount,
+      originalPickCount,
+      input.entry,
+    );
   }
 
   function normalizeEntry(input: DfsEntryInput): DfsEntryInput {
     const baseMultiplier =
       input.baseMultiplier ??
-      lookupTableMultiplier(input.bookId, input.playTypeId, input.legs.length, input.legs.length);
+      lookupTableMultiplier(
+        input.bookId,
+        input.playTypeId,
+        input.legs.length,
+        input.legs.length,
+        input,
+      );
     return {
       ...input,
       baseMultiplier,
@@ -1249,51 +1276,73 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
                 row,
               );
             }
-            const localActual = runEngineLeagueAdapter(leg, row);
-            if (localActual.status === 'invalid') {
-              return statFailure(
-                'invalid_adapter_result',
-                'stat_provider',
-                provider.id,
-                'league-adapter',
-                context.settledAt,
-                row,
-              );
-            }
-            if (localActual.status === 'ok') {
-              return {
-                ok: true,
-                actual: localActual.actual,
-                value: localActual.actual,
-                source: 'stat_provider',
-                providerId: provider.id,
-                provenance: {
-                  source: 'league-adapter',
-                  providerId: provider.id,
-                  observedAt: context.settledAt,
-                  confidence: 1,
-                  raw: row,
-                },
-              };
-            }
-            const actual = runAdapter(leg, row, entry.bookId);
-            if (actual != null) {
-              return {
-                ok: true,
-                actual,
-                value: actual,
-                source: 'stat_provider',
-                providerId: provider.id,
-                provenance: {
-                  source: 'stat-provider',
-                  providerId: provider.id,
-                  observedAt: context.settledAt,
-                  confidence: 1,
-                  raw: row,
-                },
-              };
-            }
           }
+          const candidates = findGameLogCandidates(leg.gameDate ?? null, rows, {
+            assumeFirst: rows.length === 1,
+          });
+          if (candidates.length !== 1) {
+            return statFailure(
+              'missing_provider_data',
+              'stat_provider',
+              provider.id,
+              provider.id,
+              context.settledAt,
+              rows,
+            );
+          }
+          const row = candidates[0];
+          const localActual = runEngineLeagueAdapter(leg, row);
+          if (localActual.status === 'invalid') {
+            return statFailure(
+              'invalid_adapter_result',
+              'stat_provider',
+              provider.id,
+              'league-adapter',
+              context.settledAt,
+              row,
+            );
+          }
+          if (localActual.status === 'ok') {
+            return {
+              ok: true,
+              actual: localActual.actual,
+              value: localActual.actual,
+              source: 'stat_provider',
+              providerId: provider.id,
+              provenance: {
+                source: 'league-adapter',
+                providerId: provider.id,
+                observedAt: context.settledAt,
+                confidence: 1,
+                raw: row,
+              },
+            };
+          }
+          const adapted = runAdapter(leg, row, entry.bookId);
+          if (adapted.ok) {
+            return {
+              ok: true,
+              actual: adapted.actual,
+              value: adapted.actual,
+              source: 'stat_provider',
+              providerId: provider.id,
+              provenance: {
+                source: 'stat-provider',
+                providerId: provider.id,
+                observedAt: context.settledAt,
+                confidence: 1,
+                raw: row,
+              },
+            };
+          }
+          return statFailure(
+            localActual.supported ? 'missing_stat' : adapted.reason,
+            'stat_provider',
+            provider.id,
+            provider.id,
+            context.settledAt,
+            row,
+          );
         }
       } catch (error) {
         return {
@@ -1321,13 +1370,16 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
     function runEngineLeagueAdapter(
       legInput: DfsLegInput,
       rawEntry: PlayerGameLogEntryShape,
-    ): { status: 'ok'; actual: number } | { status: 'miss' } | { status: 'invalid' } {
+    ):
+      | { status: 'ok'; actual: number }
+      | { status: 'miss'; supported: boolean }
+      | { status: 'invalid' } {
       const localAdapter = leagueAdapters.get(normalizeLeague(legInput.league));
       const localExtractor =
         localAdapter?.adapters?.[normalizeDfsPropType(legInput.propType)] ??
         localAdapter?.adapters?.[legInput.propType];
       if (!localExtractor) {
-        return { status: 'miss' };
+        return { status: 'miss', supported: false };
       }
 
       const localActual = localExtractor(rawEntry, legInput);
@@ -1335,7 +1387,7 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
         return { status: 'ok', actual: localActual };
       }
       if (localActual == null) {
-        return { status: 'miss' };
+        return { status: 'miss', supported: true };
       }
       return { status: 'invalid' };
     }
@@ -1386,11 +1438,11 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
       };
     }
 
-    const actual = runAdapter(leg, providerData, entry?.bookId ?? 'prizepicks');
-    if (actual == null) {
+    const adapted = runAdapter(leg, providerData, entry?.bookId ?? 'prizepicks');
+    if (!adapted.ok) {
       return {
         ok: false,
-        reason: 'unsupported_prop',
+        reason: localActual.supported ? 'missing_stat' : adapted.reason,
         source: 'provider_data',
         provenance: {
           ...provenance('provider_data', undefined, context.settledAt),
@@ -1401,8 +1453,8 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
 
     return {
       ok: true,
-      actual,
-      value: actual,
+      actual: adapted.actual,
+      value: adapted.actual,
       source: 'provider_data',
       provenance: {
         ...provenance('provider_data', undefined, context.settledAt),
@@ -1765,21 +1817,20 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
     const active = decisions.filter((decision) => !removedStatuses.has(decision.status));
     const removed = decisions.length - active.length;
     if (active.length === 0) {
+      const allPushed = decisions.every((decision) => decision.status === 'push');
       adjustments.push({
-        type: 'void',
-        message: 'All legs were removed by policy, so the entry returns stake.',
+        type: allPushed ? 'push' : 'void',
+        message: allPushed
+          ? 'All legs pushed, so the entry returns stake.'
+          : 'All legs were removed by policy, so the entry returns stake.',
       });
       explanationCodes.add('settlement.all_legs_removed_refund');
-      explanationCodes.add(
-        decisions.every((decision) => decision.status === 'push')
-          ? 'refund_no_survivors'
-          : 'void_no_survivors',
-      );
+      explanationCodes.add(allPushed ? 'refund_no_survivors' : 'void_no_survivors');
       return {
         entryId: entry.entryId,
         bookId: entry.bookId,
         playTypeId: entry.playTypeId,
-        status: 'void',
+        status: allPushed ? 'pushed' : 'void',
         multiplier: 1,
         effectiveMultiplier: 1,
         payout: splitAllWithdrawable(entry.stake),
@@ -1804,8 +1855,10 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
           ...auditTrail,
           {
             at: settledAt,
-            code: 'settlement.void',
-            message: 'Entry voided because no active legs remained.',
+            code: allPushed ? 'settlement.pushed' : 'settlement.void',
+            message: allPushed
+              ? 'Entry pushed because every leg pushed.'
+              : 'Entry voided because no active legs remained.',
           },
         ],
       };
@@ -1949,7 +2002,7 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
         decisions: input.decisions,
       });
       assertFiniteNonNegative(resolved.multiplier, 'custom payout multiplier');
-      const payout =
+      const rawPayout =
         resolved.payout ??
         splitPayout(policy, {
           stake: input.stake,
@@ -1958,7 +2011,8 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
           baseMultiplier: input.baseMultiplier,
           profitBoostPct: input.profitBoostPct,
         });
-      assertPayoutSplit(payout, 'custom payout');
+      assertPayoutSplit(rawPayout, 'custom payout');
+      const payout = roundPayoutSplit(rawPayout);
       return {
         status: resolved.multiplier > 0 ? 'won' : 'lost',
         multiplier: resolved.multiplier,
@@ -1977,11 +2031,18 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
       explanationCode = 'settlement.displayed_multiplier_payout';
       baseForSplit = input.baseMultiplier ?? multiplier;
     } else {
+      const matchingTables = payoutTables.some(
+        (table) => table.bookId === input.bookId && table.playTypeId === input.playTypeId,
+      );
+      if (matchingTables && !findPayoutTable(input.bookId, input.playTypeId, input.entry)) {
+        return null;
+      }
       const tableMultiplier = lookupTableMultiplier(
         input.bookId,
         input.playTypeId,
         input.pickCount,
         input.hits,
+        input.entry,
       );
       if (tableMultiplier == null) {
         multiplier = 0;
@@ -1989,16 +2050,31 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
       } else if (playType.scaleDisplayedMultiplier && input.displayedMultiplier != null) {
         const baseAllHit =
           resolveBaseMultiplier(input) ??
-          lookupTableMultiplier(input.bookId, input.playTypeId, input.pickCount, input.pickCount);
+          lookupTableMultiplier(
+            input.bookId,
+            input.playTypeId,
+            input.pickCount,
+            input.pickCount,
+            input.entry,
+          );
         const allHit = lookupTableMultiplier(
           input.bookId,
           input.playTypeId,
           input.pickCount,
           input.pickCount,
+          input.entry,
+        );
+        const originalPickCount = input.entry.legs.length || input.pickCount;
+        const originalAllHit = lookupTableMultiplier(
+          input.bookId,
+          input.playTypeId,
+          originalPickCount,
+          originalPickCount,
+          input.entry,
         );
         if (baseAllHit && allHit) {
           multiplier = (input.displayedMultiplier * tableMultiplier) / baseAllHit;
-          baseForSplit = (baseAllHit * tableMultiplier) / allHit;
+          baseForSplit = (baseAllHit * tableMultiplier) / (originalAllHit ?? allHit);
         } else {
           multiplier = tableMultiplier;
           baseForSplit = tableMultiplier;
@@ -2069,25 +2145,28 @@ function splitPayout(
   if (policy.payoutSplit.type === 'custom') {
     const split = policy.payoutSplit.split(input);
     assertPayoutSplit(split, 'custom payout split');
-    return split;
+    return roundPayoutSplit(split);
   }
   if (policy.payoutSplit.type === 'underdog_bonus_split') {
-    return computeBoostSplit({
-      app: 'underdog',
-      totalPayout: input.totalPayout,
-      stake: input.stake,
-      multiplier: input.multiplier,
-      baseMultiplier: input.baseMultiplier ?? input.multiplier,
-      profitBoostPct: input.profitBoostPct,
-    });
+    return roundPayoutSplit(
+      computeBoostSplit({
+        app: 'underdog',
+        totalPayout: input.totalPayout,
+        stake: input.stake,
+        multiplier: input.multiplier,
+        baseMultiplier: input.baseMultiplier ?? input.multiplier,
+        profitBoostPct: input.profitBoostPct,
+      }),
+    );
   }
   return splitAllWithdrawable(input.totalPayout);
 }
 
 function splitAllWithdrawable(total: number): DfsPayoutSplit {
+  const rounded = roundMoney(total);
   return {
-    total,
-    withdrawable: total,
+    total: rounded,
+    withdrawable: rounded,
     bonus: 0,
   };
 }
@@ -2186,13 +2265,20 @@ function runAdapter(
   leg: DfsLegInput,
   rawEntry: PlayerGameLogEntryShape,
   bookId: DfsBookId,
-): number | null {
-  const league = normalizeLeague(leg.league);
-  const value = extractStatForProp(leg.propType, league, rawEntry, bookId as DfsApp);
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return value;
+): { ok: true; actual: number } | { ok: false; reason: 'missing_stat' | 'unsupported_prop' } {
+  const result = extractStatForPropExplained(
+    leg.propType,
+    normalizeLeague(leg.league),
+    rawEntry,
+    bookId as DfsApp,
+  );
+  if (result.ok) {
+    return { ok: true, actual: result.value };
   }
-  return null;
+  return {
+    ok: false,
+    reason: result.reason === 'adapter_returned_null' ? 'missing_stat' : 'unsupported_prop',
+  };
 }
 
 function tableEntryPicks(entry: DfsPayoutTableEntry): number | null {
@@ -2309,6 +2395,16 @@ function isValidDate(value: string): boolean {
 
 function roundMoney(value: number): number {
   return Math.round(value * 100) / 100;
+}
+
+function roundPayoutSplit(payout: DfsPayoutSplit): DfsPayoutSplit {
+  const total = roundMoney(payout.total);
+  const bonus = Math.min(total, roundMoney(payout.bonus));
+  return {
+    total,
+    withdrawable: roundMoney(total - bonus),
+    bonus,
+  };
 }
 
 function pendingResult(input: {
