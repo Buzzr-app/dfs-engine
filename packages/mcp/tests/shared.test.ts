@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { describe, expect, it } from 'vitest';
 
-import { defineTool, jsonResult } from '../src/tools/shared';
+import { defineTool, errorResult, jsonResult } from '../src/tools/shared';
 import type { ToolResult } from '../src/tools/shared';
 
 function parseResult(result: ToolResult): Record<string, unknown> {
@@ -73,6 +73,19 @@ describe('tool handler safety boundary', () => {
       message: 'Tool result exceeded the maximum response size.',
     });
     expect(result.content[0].text).not.toContain('xxxxx');
+  });
+
+  it('applies the response cap to exported error details too', () => {
+    const result = errorResult('upstream_failed', 'Upstream failed.', {
+      debug: 'secret'.repeat(200_000),
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result).error).toEqual({
+      code: 'result_too_large',
+      message: 'Tool result exceeded the maximum response size.',
+    });
+    expect(result.content[0].text).not.toContain('secret');
   });
 
   it('allows 32 in-flight calls and rejects the next until capacity returns', async () => {
