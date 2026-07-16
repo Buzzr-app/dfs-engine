@@ -1,15 +1,15 @@
 # Buzzr Sports Engines
 
-> Pure-TypeScript, zero-dependency npm packages (@buzzr/*) for sports betting and DFS apps: auditable pick'em settlement (book policies, grading, payouts, audit trails), sportsbook odds math (no-vig fair lines, parlays, EV, Kelly, CLV), transparent game-entertainment scoring with hybrid ML, and an MCP server exposing it all to AI agents. ESM+CJS+d.ts, Node >= 22, MIT. Monorepo: https://github.com/Buzzr-app/dfs-engine
+> Pure-TypeScript sports engines and explicit boundary packages (@buzzr/*) for sports betting and DFS apps: auditable pick'em settlement (book policies, grading, payouts, audit trails), sportsbook odds math (no-vig fair lines, parlays, EV, Kelly, CLV), transparent game-entertainment scoring with hybrid ML, and an MCP server exposing it all to AI agents. The three core engines have zero external runtime dependencies; boundary packages declare the dependencies required by their I/O contract. Core libraries ship ESM+CJS+d.ts, the CLI and MCP packages are ESM, and every package supports Node >= 22 under MIT. Monorepo: https://github.com/Buzzr-app/dfs-engine
 
 Key facts: all engine code is pure functions (no I/O; data providers are injected). Canonical interchange shapes: DfsEntryInput, DfsLegInput, PlayerGameLogEntryShape (stat fields are strings, e.g. points: "31"). Settlement results include validation, provenance, auditTrail, and explanationCodes. Public API per package = its root export only.
 
 ## Core packages
 
-- [@buzzr/dfs-engine](https://www.npmjs.com/package/@buzzr/dfs-engine): DFS settlement OS. Exports: createDfsEngine, defineStatProvider, defineBookPolicy, definePayoutTable, engine.settleEntry, engine.settleEntries (v5 batch with memoized stat cache), grading + payout + validation helpers. Built-in PrizePicks/Underdog-style book policies; v5 adds policy validation and a draft prediction-market policy.
+- [@buzzr/dfs-engine](https://www.npmjs.com/package/@buzzr/dfs-engine): DFS settlement OS. Exports: createDfsEngine, defineStatProvider, defineBookPolicy, definePayoutTable, engine.settleEntry, engine.settleEntries (v5 batch with memoized stat cache), grading + payout + validation helpers. PrizePicks is an experimental, partially verified compatibility profile; Underdog is experimental and unverified. Displayed lineup terms are authoritative. Draft fixtures are not registered for settlement.
 - [@buzzr/bets-core](https://www.npmjs.com/package/@buzzr/bets-core): Odds math. Exports: americanOddsToImpliedProbability, calculateNoVigFairLine, combineAmericanOdds, calculateParlayProbability, calculateParlayFairValue, calculateExpectedValue, calculateKellyStake, calculateClosingLineValue, calculateBetRollup, calculateRollupByPeriod, calculateDrawdown, calculateStreaks.
 - [@buzzr/entertainment-engine](https://www.npmjs.com/package/@buzzr/entertainment-engine): Buzz scoring + predictions. Exports: resolveBuzzScores, enrichGameRowWithBuzzScores, isMustWatch, MUST_WATCH_THRESHOLD, rankGamesForUser (v5 personalized recommendations, calibrated ML confidence).
-- [@buzzr/mcp](https://www.npmjs.com/package/@buzzr/mcp): MCP server (bin: buzzr-mcp; run: npx -y @buzzr/mcp) exposing the three engines as 8 tools for AI agents.
+- [@buzzr/mcp](https://www.npmjs.com/package/@buzzr/mcp): MCP server (bin: buzzr-mcp; run: npx -y @buzzr/mcp@5.1.0) exposing the three engines as 11 tools for AI agents. It computes from supplied data and does not fetch live odds, box scores, operator accounts, or private user data.
 
 ## Satellite packages
 
@@ -18,14 +18,30 @@ Key facts: all engine code is pure functions (no I/O; data providers are injecte
 - [@buzzr/dfs-testkit](https://www.npmjs.com/package/@buzzr/dfs-testkit): test fixtures + mocks; exports makeDfsEntry, makeDfsLeg, makeGameLogEntry, createMockStatProvider, makeInvalidDfsEntry.
 - [@buzzr/dfs-provider-espn](https://www.npmjs.com/package/@buzzr/dfs-provider-espn): ESPN-shaped StatProvider contract; exports createEspnStatProvider. No network I/O of its own.
 - [@buzzr/dfs-provider-sportradar](https://www.npmjs.com/package/@buzzr/dfs-provider-sportradar): Sportradar-shaped StatProvider contract; exports createSportradarStatProvider, sportradarRowToGameLog. No network I/O of its own.
-- [@buzzr/dfs-engine-test-vectors](https://www.npmjs.com/package/@buzzr/dfs-engine-test-vectors): golden { entry, gameLogsByLegId, expected } conformance fixtures; exports TEST_VECTORS.
+- [@buzzr/dfs-engine-test-vectors](https://www.npmjs.com/package/@buzzr/dfs-engine-test-vectors): engine regression fixtures for a matching @buzzr/dfs-engine version; exports TEST_VECTORS. They are not official operator conformance.
+
+## Verified Buzzr app integration
+
+The Buzzr mobile app’s `release/ios-2.0.0` branch vendors `@buzzr/bets-core`, `@buzzr/dfs-engine`, and `@buzzr/entertainment-engine` as local 5.0.0 tarballs and imports all three. That app snapshot is not automatically upgraded to the public 5.1.0 toolkit.
+
+Live app: [Buzzr Sports on the App Store](https://apps.apple.com/us/app/buzzr-sports/id6760628256).
+
+## Agent integration
+
+- Repository skill: [skills/buzzr-sports-engine/SKILL.md](skills/buzzr-sports-engine/SKILL.md)
+- Install: `npx skills add https://github.com/Buzzr-app/dfs-engine --skill buzzr-sports-engine`
+- MCP install, client configuration, tools, and errors: [packages/mcp/README.md](packages/mcp/README.md)
 
 ## Docs
 
-- [API reference (typedoc)](https://buzzr-app.github.io/dfs-engine/): generated from @buzzr/dfs-engine.
+- [API reference (TypeDoc)](https://buzzr-app.github.io/dfs-engine/): generated from the supported root exports of all ten public packages.
 - [Monorepo README](https://github.com/Buzzr-app/dfs-engine/blob/main/README.md): family table, architecture diagram, quick starts.
-- [AGENTS.md](https://github.com/Buzzr-app/dfs-engine/blob/main/AGENTS.md): invariants and workflow for AI coding agents (zero deps, frozen v4 shapes, verify gate).
+- [AGENTS.md](https://github.com/Buzzr-app/dfs-engine/blob/main/AGENTS.md): invariants and workflow for AI coding agents (dependency boundaries, frozen v4 shapes, verify gate).
 - [SECURITY.md](https://github.com/Buzzr-app/dfs-engine/blob/main/SECURITY.md): responsible disclosure for settlement-correctness issues.
+- [Architecture and data flow](docs/architecture.md): pure cores, boundary packages, provider injection, MCP flow, and app/repo separation.
+- [Security, privacy, and threat model](docs/security-and-privacy.md): trust boundaries, untrusted-input controls, data handling, supply-chain proof, and non-goals.
+- [Versioning, compatibility, and support](docs/versioning-and-support.md): independent package SemVer, Changesets, migrations, runtime support, and mobile-app compatibility.
+- [All-package API index](docs/api-reference.md): supported root APIs and detailed references for all ten packages.
 
 ## Optional
 

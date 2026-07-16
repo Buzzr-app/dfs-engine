@@ -122,9 +122,9 @@ describe('gradeDfsBetFromGraded — PrizePicks Flex', () => {
       profitBoostPct: null,
     });
     expect(result.status).toBe('won');
-    // Scaled: 25 × (1.75 / 25) = 1.75
-    expect(result.effectiveMultiplier).toBe(1.75);
-    expect(result.totalPayout).toBe(17.5);
+    // Scaled: 25 × (2 / 25) = 2
+    expect(result.effectiveMultiplier).toBe(2);
+    expect(result.totalPayout).toBe(20);
   });
 
   test('3-of-6 hit → lost (below the schedule floor)', () => {

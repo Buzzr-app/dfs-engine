@@ -123,6 +123,34 @@ describe('v5 batch settlement (engine.settleEntries)', () => {
     expect(batch.results[2]?.explanationCodes).toContain('batch_cache_hit');
   });
 
+  test('adds cache-hit evidence without mutating the settlement object saved by the engine', async () => {
+    const saved: Array<{ explanationCodes: string[] }> = [];
+    const provider = defineStatProvider({
+      id: 'immutable-log',
+      getGameLog: () => [gameLogRow()],
+    });
+    const engine = createDfsEngine({
+      bookPolicies: [singleLegBook],
+      statProviders: [provider],
+      settlementStore: {
+        id: 'capture-store',
+        saveSettlement(result) {
+          saved.push(result);
+        },
+      },
+    });
+
+    const batch = await engine.settleEntries([
+      entry({ entryId: 'immutable-a', legs: [leg({ legId: 'a-1' })] }),
+      entry({ entryId: 'immutable-b', legs: [leg({ legId: 'b-1' })] }),
+    ]);
+
+    expect(saved).toHaveLength(2);
+    expect(saved[1]?.explanationCodes).not.toContain('batch_cache_hit');
+    expect(batch.results[1]?.explanationCodes).toContain('batch_cache_hit');
+    expect(batch.results[1]).not.toBe(saved[1]);
+  });
+
   test('does not dedupe different players, games, or leagues', async () => {
     let calls = 0;
     const provider = defineStatProvider({

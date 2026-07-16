@@ -1,5 +1,6 @@
-import { computeBoostSplit, extractStatForProp, gradeLegFromActual } from './grading';
+import { computeBoostSplit, findGameLogCandidates, gradeLegFromActual } from './grading';
 import type { BetStatus, PlayerGameLogEntryShape } from './grading';
+import { extractStatForPropExplained } from './stat-adapters';
 import { normalizeDfsPropType } from './prop-normalizer';
 import { DfsDefinitionError, DfsEngineInvariantError } from './errors';
 import { runBatchSettlement } from './batch';
@@ -31,6 +32,7 @@ export type BuiltInBookId = 'prizepicks' | 'underdog';
 export type DfsBookId = BuiltInBookId | string;
 export type DfsPlayTypeId = string;
 export type DfsPolicyStatus = 'stable' | 'draft' | 'experimental';
+export type DfsPolicyVerificationStatus = 'verified' | 'partial' | 'unverified';
 export type DfsPayoutModel = 'fixed-table' | 'displayed-multiplier' | 'custom';
 export type DfsSettlementConfidence = 'high' | 'medium' | 'low';
 export type DfsValidationSeverity = 'allow' | 'warn' | 'error';
@@ -41,6 +43,19 @@ export type DfsBookSourceRef = {
   url?: string;
   retrievedAt?: string;
   note?: string;
+};
+
+export type DfsPolicyVerification = {
+  status: DfsPolicyVerificationStatus;
+  reviewedAt?: string;
+  notes?: readonly string[];
+};
+
+export type DfsSelectedPayoutTable = {
+  version: string | null;
+  effectiveFrom: string;
+  sourceNotes: string[];
+  sources: DfsBookSourceRef[];
 };
 
 export type DfsBookPlayType = {
@@ -70,7 +85,11 @@ export type DfsTiePolicy =
     };
 
 export type DfsDnpPolicy =
-  | { type: 'remove_leg'; voidIfNoSurvivors?: boolean }
+  | {
+      type: 'remove_leg';
+      voidIfNoSurvivors?: boolean;
+      refundIfBelowMinimum?: boolean;
+    }
   | { type: 'loss' }
   | { type: 'manual'; reasonCode?: string }
   | {
@@ -158,14 +177,18 @@ export type DfsPayoutResolution = {
   payout: DfsPayoutSplit;
   explanationCode: string;
   confidence: DfsSettlementConfidence;
+  /** Additive audit metadata for fixed-table resolutions. */
+  payoutTable?: DfsSelectedPayoutTable | null;
 };
 
 export type DfsBookPolicy = {
   id: DfsBookId;
   displayName: string;
   version: string;
+  /** ISO timestamp or date-only value; date-only values begin at 00:00:00 UTC. */
   effectiveFrom: string;
   status: DfsPolicyStatus;
+  verification?: DfsPolicyVerification;
   sources: readonly DfsBookSourceRef[];
   playTypes: readonly DfsBookPlayType[];
   tiePolicy: DfsTiePolicy;
@@ -177,10 +200,23 @@ export type DfsBookPolicy = {
   payoutResolver?: (input: DfsPayoutResolverInput) => DfsPayoutResolverResult;
 };
 
+export type DfsBookPolicySnapshot = Readonly<{
+  id: DfsBookId;
+  displayName: string;
+  version: string;
+  effectiveFrom: string;
+  status: DfsPolicyStatus;
+  verification: Readonly<DfsPolicyVerification> | null;
+  sources: readonly Readonly<DfsBookSourceRef>[];
+  playTypes: readonly Readonly<DfsBookPlayType>[];
+}>;
+
 export type DfsPayoutTableEntry = {
   picks?: number;
   pickCount?: number;
   hits: number;
+  /** Optional discriminator for payout rows that apply only after tied legs. */
+  pushes?: number;
   multiplier: number;
 };
 
@@ -188,8 +224,10 @@ export type DfsPayoutTableDefinition = {
   bookId: DfsBookId;
   playTypeId: DfsPlayTypeId;
   version?: string;
+  /** ISO timestamp or date-only value; date-only values begin at 00:00:00 UTC. */
   effectiveFrom: string;
   sourceNotes?: readonly string[];
+  sources?: readonly DfsBookSourceRef[];
   entries: readonly DfsPayoutTableEntry[];
 };
 
@@ -427,7 +465,21 @@ export type DfsSettlementResult = {
   adjustments: DfsSettlementAdjustment[];
   pendingReasons: string[];
   policyVersion: string | null;
+  /**
+   * Policy metadata added after v5.0. Optional so externally constructed
+   * legacy results remain source-compatible; engine-produced results always
+   * include this field.
+   */
+  policyStatus?: DfsPolicyStatus | null;
+  /** @see DfsSettlementResult.policyStatus */
+  policyVerification?: DfsPolicyVerification | null;
   sourceRefs: DfsBookSourceRef[];
+  /**
+   * The fixed payout table selected for this settlement's deterministic
+   * as-of. Optional for legacy object compatibility; engine-produced results
+   * always include this field.
+   */
+  payoutTable?: DfsSelectedPayoutTable | null;
   confidence: DfsSettlementConfidence;
   explanationCodes: string[];
   validation: DfsValidationResult<DfsEntryInput>;
@@ -478,6 +530,14 @@ export interface DfsEngine {
   getRegisteredBooks(): DfsBookId[];
 }
 
+/**
+ * Engine returned by {@link createDfsEngine}, including immutable policy
+ * snapshots added after the original v5 `DfsEngine` contract.
+ */
+export interface DfsEngineWithPolicySnapshots extends DfsEngine {
+  getBookPolicies(): readonly DfsBookPolicySnapshot[];
+}
+
 export type DfsPayoutLookupInput = {
   bookId: DfsBookId;
   playTypeId: DfsPlayTypeId;
@@ -504,6 +564,8 @@ export type DfsPayoutLookupInput = {
  * - `void_no_survivors` — every leg was removed (at least one DNP/void) and
  *   the entry voided with a stake refund.
  * - `refund_no_survivors` — every leg pushed and the stake was refunded.
+ * - `refund_below_minimum` — a DNP left too few active picks and the stake
+ *   was refunded by policy.
  * - `rescue_applied` — a leg arrived with a `rescued` status and was
  *   excluded from payout math.
  * - `payout_table_lookup` — the payout came from a fixed payout table.
@@ -517,6 +579,7 @@ export type DfsV5ExplanationCode =
   | 'push_leg_removed'
   | 'void_no_survivors'
   | 'refund_no_survivors'
+  | 'refund_below_minimum'
   | 'rescue_applied'
   | 'payout_table_lookup'
   | 'payout_displayed_multiplier'
@@ -531,7 +594,7 @@ const PAYOUT_MODEL_EXPLANATION_CODES: Record<DfsPayoutModel, DfsV5ExplanationCod
 
 const EMPTY_PAYOUT: DfsPayoutSplit = { total: 0, withdrawable: 0, bonus: 0 };
 
-const PRIZEPICKS_POWER: readonly DfsPayoutTableEntry[] = [
+const PRIZEPICKS_POWER_2026_05: readonly DfsPayoutTableEntry[] = [
   { picks: 2, hits: 2, multiplier: 3 },
   { picks: 3, hits: 3, multiplier: 5 },
   { picks: 4, hits: 4, multiplier: 10 },
@@ -539,7 +602,7 @@ const PRIZEPICKS_POWER: readonly DfsPayoutTableEntry[] = [
   { picks: 6, hits: 6, multiplier: 37.5 },
 ];
 
-const PRIZEPICKS_FLEX: readonly DfsPayoutTableEntry[] = [
+const PRIZEPICKS_FLEX_2026_05: readonly DfsPayoutTableEntry[] = [
   { picks: 3, hits: 3, multiplier: 2.25 },
   { picks: 3, hits: 2, multiplier: 1.25 },
   { picks: 4, hits: 4, multiplier: 5 },
@@ -549,6 +612,28 @@ const PRIZEPICKS_FLEX: readonly DfsPayoutTableEntry[] = [
   { picks: 5, hits: 3, multiplier: 0.4 },
   { picks: 6, hits: 6, multiplier: 25 },
   { picks: 6, hits: 5, multiplier: 1.75 },
+  { picks: 6, hits: 4, multiplier: 0.4 },
+];
+
+const PRIZEPICKS_POWER_2026_07_02: readonly DfsPayoutTableEntry[] = [
+  { picks: 1, hits: 1, pushes: 1, multiplier: 1.5 },
+  { picks: 2, hits: 2, multiplier: 3 },
+  { picks: 3, hits: 3, multiplier: 6 },
+  { picks: 4, hits: 4, multiplier: 10 },
+  { picks: 5, hits: 5, multiplier: 20 },
+  { picks: 6, hits: 6, multiplier: 37.5 },
+];
+
+const PRIZEPICKS_FLEX_2026_07_02: readonly DfsPayoutTableEntry[] = [
+  { picks: 3, hits: 3, multiplier: 3 },
+  { picks: 3, hits: 2, multiplier: 1 },
+  { picks: 4, hits: 4, multiplier: 6 },
+  { picks: 4, hits: 3, multiplier: 1.5 },
+  { picks: 5, hits: 5, multiplier: 10 },
+  { picks: 5, hits: 4, multiplier: 2 },
+  { picks: 5, hits: 3, multiplier: 0.4 },
+  { picks: 6, hits: 6, multiplier: 25 },
+  { picks: 6, hits: 5, multiplier: 2 },
   { picks: 6, hits: 4, multiplier: 0.4 },
 ];
 
@@ -581,19 +666,39 @@ const UNDERDOG_FLEX: readonly DfsPayoutTableEntry[] = [
   { picks: 8, hits: 6, multiplier: 2 },
 ];
 
+const PRIZEPICKS_CURRENT_SOURCES: readonly DfsBookSourceRef[] = [
+  {
+    label: 'PrizePicks Payouts',
+    url: 'https://www.prizepicks.com/help-center/payouts',
+    retrievedAt: '2026-07-16',
+    note: 'Updated July 2, 2026; individual lineup details control and payouts may vary.',
+  },
+  {
+    label: 'PrizePicks Potential Outcomes',
+    url: 'https://www.prizepicks.com/help-center/potential-outcomes',
+    retrievedAt: '2026-07-16',
+    note: 'First-party standard Player Pick payout reference.',
+  },
+  {
+    label: 'PrizePicks DNPs, Reboots, and Ties',
+    url: 'https://www.prizepicks.com/help-center/dnps-reboots-and-ties',
+    retrievedAt: '2026-07-16',
+    note: 'Updated June 4, 2026; a DNP on a 2-pick Power lineup causes a refund.',
+  },
+];
+
+const UNDERDOG_LEGAL_SOURCES: readonly DfsBookSourceRef[] = [
+  {
+    label: 'Underdog Sports Legal Center',
+    url: 'https://legal.underdogsports.com/',
+    retrievedAt: '2026-07-16',
+    note: 'Rules entrypoint only; current compatibility payout values remain unverified.',
+  },
+];
+
 const BUILT_IN_SOURCES: Record<BuiltInBookId, readonly DfsBookSourceRef[]> = {
-  prizepicks: [
-    {
-      label: 'PrizePicks payout and settlement compatibility profile',
-      note: 'Stable built-in profile matching @buzzr/dfs-engine v2 behavior.',
-    },
-  ],
-  underdog: [
-    {
-      label: 'Underdog payout and settlement compatibility profile',
-      note: 'Stable built-in profile matching @buzzr/dfs-engine v2 behavior.',
-    },
-  ],
+  prizepicks: [...PRIZEPICKS_CURRENT_SOURCES],
+  underdog: [...UNDERDOG_LEGAL_SOURCES],
 };
 
 const DEFAULT_PAYOUT_TABLES: readonly DfsPayoutTableDefinition[] = [
@@ -602,20 +707,57 @@ const DEFAULT_PAYOUT_TABLES: readonly DfsPayoutTableDefinition[] = [
     playTypeId: 'power',
     version: '2026-05',
     effectiveFrom: '2026-05-01',
-    entries: PRIZEPICKS_POWER,
+    sourceNotes: [
+      'Historical @buzzr/dfs-engine compatibility snapshot; no current source assertion.',
+    ],
+    sources: [],
+    entries: PRIZEPICKS_POWER_2026_05,
   },
   {
     bookId: 'prizepicks',
     playTypeId: 'flex',
     version: '2026-05',
     effectiveFrom: '2026-05-01',
-    entries: PRIZEPICKS_FLEX,
+    sourceNotes: [
+      'Historical @buzzr/dfs-engine compatibility snapshot; no current source assertion.',
+    ],
+    sources: [],
+    entries: PRIZEPICKS_FLEX_2026_05,
+  },
+  {
+    bookId: 'prizepicks',
+    playTypeId: 'power',
+    version: '2026-07-02-player-picks',
+    effectiveFrom: '2026-07-02',
+    sourceNotes: [
+      'PrizePicks Payouts (updated July 2, 2026): https://www.prizepicks.com/help-center/payouts',
+      'Standard Player Pick rates: https://www.prizepicks.com/help-center/potential-outcomes',
+      'A 2-pick Power lineup with one correct pick and one tie pays the current standard 1.5x rate.',
+      'The submitted lineup details remain authoritative because PrizePicks states payouts may vary.',
+    ],
+    sources: PRIZEPICKS_CURRENT_SOURCES,
+    entries: PRIZEPICKS_POWER_2026_07_02,
+  },
+  {
+    bookId: 'prizepicks',
+    playTypeId: 'flex',
+    version: '2026-07-02-player-picks',
+    effectiveFrom: '2026-07-02',
+    sourceNotes: [
+      'PrizePicks Payouts (updated July 2, 2026): https://www.prizepicks.com/help-center/payouts',
+      'Standard Player Pick rates: https://www.prizepicks.com/help-center/potential-outcomes',
+      'The submitted lineup details remain authoritative because PrizePicks states payouts may vary.',
+    ],
+    sources: PRIZEPICKS_CURRENT_SOURCES,
+    entries: PRIZEPICKS_FLEX_2026_07_02,
   },
   {
     bookId: 'underdog',
     playTypeId: 'underdog_standard',
     version: '2026-05',
     effectiveFrom: '2026-05-01',
+    sourceNotes: ['Unverified compatibility snapshot; the submitted lineup remains authoritative.'],
+    sources: UNDERDOG_LEGAL_SOURCES,
     entries: UNDERDOG_STANDARD,
   },
   {
@@ -623,6 +765,8 @@ const DEFAULT_PAYOUT_TABLES: readonly DfsPayoutTableDefinition[] = [
     playTypeId: 'underdog_flex',
     version: '2026-05',
     effectiveFrom: '2026-05-01',
+    sourceNotes: ['Unverified compatibility snapshot; the submitted lineup remains authoritative.'],
+    sources: UNDERDOG_LEGAL_SOURCES,
     entries: UNDERDOG_FLEX,
   },
 ];
@@ -633,7 +777,15 @@ const DEFAULT_BOOK_POLICIES: readonly DfsBookPolicy[] = [
     displayName: 'PrizePicks',
     version: '2026-05',
     effectiveFrom: '2026-05-01',
-    status: 'stable',
+    status: 'experimental',
+    verification: {
+      status: 'partial',
+      reviewedAt: '2026-07-16',
+      notes: [
+        'Standard Player Pick payout references were reviewed from first-party sources.',
+        'Settlement behavior and variable lineup-specific payouts are not fully verified.',
+      ],
+    },
     sources: BUILT_IN_SOURCES.prizepicks,
     playTypes: [
       {
@@ -654,7 +806,11 @@ const DEFAULT_BOOK_POLICIES: readonly DfsBookPolicy[] = [
       },
     ],
     tiePolicy: { type: 'push' },
-    dnpPolicy: { type: 'remove_leg', voidIfNoSurvivors: true },
+    dnpPolicy: {
+      type: 'remove_leg',
+      voidIfNoSurvivors: true,
+      refundIfBelowMinimum: true,
+    },
     pushPolicy: { type: 'remove_leg', refundIfNoSurvivors: true },
     payoutSplit: { type: 'all_withdrawable' },
     validation: {
@@ -668,7 +824,15 @@ const DEFAULT_BOOK_POLICIES: readonly DfsBookPolicy[] = [
     displayName: 'Underdog',
     version: '2026-05',
     effectiveFrom: '2026-05-01',
-    status: 'stable',
+    status: 'experimental',
+    verification: {
+      status: 'unverified',
+      reviewedAt: '2026-07-16',
+      notes: [
+        'The legal center was recorded as a rules entrypoint.',
+        'Current payout and settlement compatibility values have not been verified.',
+      ],
+    },
     sources: BUILT_IN_SOURCES.underdog,
     playTypes: [
       {
@@ -859,6 +1023,32 @@ export function defineBookPolicy(policy: DfsBookPolicy): DfsBookPolicy {
   if (!['stable', 'draft', 'experimental'].includes(policy.status)) {
     throw new DfsDefinitionError('defineBookPolicy: status is invalid');
   }
+  if (
+    policy.verification &&
+    !['verified', 'partial', 'unverified'].includes(policy.verification.status)
+  ) {
+    throw new DfsDefinitionError('defineBookPolicy: verification.status is invalid');
+  }
+  if (policy.verification?.reviewedAt != null) {
+    if (typeof policy.verification.reviewedAt !== 'string') {
+      throw new DfsDefinitionError('defineBookPolicy: verification.reviewedAt must be a string');
+    }
+    if (!isValidDate(policy.verification.reviewedAt)) {
+      throw new DfsDefinitionError('defineBookPolicy: verification.reviewedAt must be parseable');
+    }
+  }
+  if (policy.verification?.notes != null) {
+    if (!Array.isArray(policy.verification.notes)) {
+      throw new DfsDefinitionError('defineBookPolicy: verification.notes must be an array');
+    }
+    for (const [index, note] of policy.verification.notes.entries()) {
+      if (typeof note !== 'string' || !note.trim()) {
+        throw new DfsDefinitionError(
+          `defineBookPolicy: verification.notes.${index} must be a non-empty string`,
+        );
+      }
+    }
+  }
   if (!policy.playTypes.length) {
     throw new DfsDefinitionError('defineBookPolicy: at least one play type is required');
   }
@@ -890,14 +1080,31 @@ export function defineBookPolicy(policy: DfsBookPolicy): DfsBookPolicy {
     if (!source.label || !source.label.trim()) {
       throw new DfsDefinitionError(`defineBookPolicy: sources.${index}.label is required`);
     }
-    if (source.retrievedAt && !isValidDate(source.retrievedAt)) {
-      throw new DfsDefinitionError(
-        `defineBookPolicy: sources.${index}.retrievedAt must be parseable`,
-      );
+    if (source.retrievedAt != null) {
+      if (typeof source.retrievedAt !== 'string') {
+        throw new DfsDefinitionError(
+          `defineBookPolicy: sources.${index}.retrievedAt must be a string`,
+        );
+      }
+      if (!isValidDate(source.retrievedAt)) {
+        throw new DfsDefinitionError(
+          `defineBookPolicy: sources.${index}.retrievedAt must be parseable`,
+        );
+      }
     }
   }
   return Object.freeze({
     ...policy,
+    verification: policy.verification
+      ? Object.freeze({
+          ...policy.verification,
+          notes: policy.verification.notes
+            ? Object.freeze([...policy.verification.notes])
+            : undefined,
+        })
+      : undefined,
+    // Preserve the v5 public definition API's shallow-freeze behavior. Deeply
+    // immutable copies are available through getBookPolicies() snapshots.
     sources: Object.freeze([...policy.sources]),
     playTypes: Object.freeze(policy.playTypes.map((playType) => Object.freeze({ ...playType }))),
   });
@@ -916,6 +1123,23 @@ export function definePayoutTable(table: DfsPayoutTableDefinition): DfsPayoutTab
   if (!table.entries.length) {
     throw new DfsDefinitionError('definePayoutTable: entries are required');
   }
+  for (const [index, source] of (table.sources ?? []).entries()) {
+    if (!source.label || !source.label.trim()) {
+      throw new DfsDefinitionError(`definePayoutTable: sources.${index}.label is required`);
+    }
+    if (source.retrievedAt != null) {
+      if (typeof source.retrievedAt !== 'string') {
+        throw new DfsDefinitionError(
+          `definePayoutTable: sources.${index}.retrievedAt must be a string`,
+        );
+      }
+      if (!isValidDate(source.retrievedAt)) {
+        throw new DfsDefinitionError(
+          `definePayoutTable: sources.${index}.retrievedAt must be parseable`,
+        );
+      }
+    }
+  }
   const rows = new Set<string>();
   for (const entry of table.entries) {
     const picks = tableEntryPicks(entry);
@@ -929,12 +1153,17 @@ export function definePayoutTable(table: DfsPayoutTableDefinition): DfsPayoutTab
         'definePayoutTable: hits must be an integer between 0 and pickCount',
       );
     }
+    if (entry.pushes != null && (!Number.isInteger(entry.pushes) || entry.pushes < 0)) {
+      throw new DfsDefinitionError(
+        'definePayoutTable: pushes must be a non-negative integer when provided',
+      );
+    }
     if (!Number.isFinite(entry.multiplier) || entry.multiplier <= 0) {
       throw new DfsDefinitionError(
         'definePayoutTable: multiplier must be a finite positive number',
       );
     }
-    const key = `${picks}:${entry.hits}`;
+    const key = `${picks}:${entry.hits}:pushes=${entry.pushes ?? 'any'}`;
     if (rows.has(key)) {
       throw new DfsDefinitionError(`definePayoutTable: duplicate payout row ${key}`);
     }
@@ -942,6 +1171,10 @@ export function definePayoutTable(table: DfsPayoutTableDefinition): DfsPayoutTab
   }
   return Object.freeze({
     ...table,
+    sourceNotes: table.sourceNotes ? Object.freeze([...table.sourceNotes]) : undefined,
+    sources: table.sources
+      ? Object.freeze(table.sources.map((source) => Object.freeze({ ...source })))
+      : undefined,
     entries: Object.freeze(table.entries.map((entry) => Object.freeze({ ...entry }))),
   });
 }
@@ -1031,7 +1264,7 @@ function adaptBuzzrLeg(leg: DfsBetLeg): DfsLegInput {
   };
 }
 
-export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
+export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngineWithPolicySnapshots {
   const clock = config.clock ?? (() => new Date());
   const bookPolicies = new Map<DfsBookId, DfsBookPolicy>();
   const payoutTables: DfsPayoutTableDefinition[] = DEFAULT_PAYOUT_TABLES.map((table) => ({
@@ -1084,6 +1317,14 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
     return [...bookPolicies.keys()];
   }
 
+  function getBookPolicies(): readonly DfsBookPolicySnapshot[] {
+    return Object.freeze(
+      [...bookPolicies.values()]
+        .sort((left, right) => String(left.id).localeCompare(String(right.id)))
+        .map(snapshotBookPolicy),
+    );
+  }
+
   function resolvePolicy(
     entry: Pick<DfsEntryInput, 'bookId' | 'playTypeId'>,
   ): { policy: DfsBookPolicy; playType: DfsBookPlayType } | null {
@@ -1101,11 +1342,22 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
   function findPayoutTable(
     bookId: DfsBookId,
     playTypeId: DfsPlayTypeId,
+    asOf: string,
   ): DfsPayoutTableDefinition | null {
+    const matching = payoutTables
+      .map((table, index) => ({ table, index }))
+      .filter(({ table }) => table.bookId === bookId && table.playTypeId === playTypeId);
+    const asOfTimestamp = parseEffectiveTimestamp(asOf);
+    const eligible = matching.filter(
+      ({ table }) => parseEffectiveTimestamp(table.effectiveFrom) <= asOfTimestamp,
+    );
+
     return (
-      [...payoutTables]
-        .reverse()
-        .find((table) => table.bookId === bookId && table.playTypeId === playTypeId) ?? null
+      eligible.sort((left, right) => {
+        const effectiveDelta =
+          Date.parse(right.table.effectiveFrom) - Date.parse(left.table.effectiveFrom);
+        return effectiveDelta !== 0 ? effectiveDelta : right.index - left.index;
+      })[0]?.table ?? null
     );
   }
 
@@ -1114,28 +1366,51 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
     playTypeId: DfsPlayTypeId,
     picks: number,
     hits: number,
+    asOf: string,
+    outcomes: { pushes?: number } = {},
   ): number | null {
-    const table = findPayoutTable(bookId, playTypeId);
+    const table = findPayoutTable(bookId, playTypeId, asOf);
     if (!table) {
       return null;
     }
-    return (
-      table.entries.find((entry) => tableEntryPicks(entry) === picks && entry.hits === hits)
-        ?.multiplier ?? null
+    const candidates = table.entries.filter(
+      (entry) => tableEntryPicks(entry) === picks && entry.hits === hits,
     );
+    const outcomeSpecific = candidates.find(
+      (entry) => entry.pushes != null && entry.pushes === (outcomes.pushes ?? 0),
+    );
+    const generic = candidates.find((entry) => entry.pushes == null);
+    return (outcomeSpecific ?? generic)?.multiplier ?? null;
   }
 
-  function resolveBaseMultiplier(input: DfsPayoutLookupInput): number | null {
+  function resolveBaseMultiplier(input: DfsPayoutLookupInput, asOf: string): number | null {
     if (input.baseMultiplier != null) {
       return input.baseMultiplier;
     }
-    return lookupTableMultiplier(input.bookId, input.playTypeId, input.pickCount, input.pickCount);
+    const originalPickCount = input.entry?.legs.length || input.pickCount;
+    return lookupTableMultiplier(
+      input.bookId,
+      input.playTypeId,
+      originalPickCount,
+      originalPickCount,
+      asOf,
+    );
   }
 
-  function normalizeEntry(input: DfsEntryInput): DfsEntryInput {
+  function normalizeEntry(
+    input: DfsEntryInput,
+    fallbackAsOf = clock().toISOString(),
+  ): DfsEntryInput {
+    const payoutAsOf = input.placedAt ?? fallbackAsOf;
     const baseMultiplier =
       input.baseMultiplier ??
-      lookupTableMultiplier(input.bookId, input.playTypeId, input.legs.length, input.legs.length);
+      lookupTableMultiplier(
+        input.bookId,
+        input.playTypeId,
+        input.legs.length,
+        input.legs.length,
+        payoutAsOf,
+      );
     return {
       ...input,
       baseMultiplier,
@@ -1249,51 +1524,73 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
                 row,
               );
             }
-            const localActual = runEngineLeagueAdapter(leg, row);
-            if (localActual.status === 'invalid') {
-              return statFailure(
-                'invalid_adapter_result',
-                'stat_provider',
-                provider.id,
-                'league-adapter',
-                context.settledAt,
-                row,
-              );
-            }
-            if (localActual.status === 'ok') {
-              return {
-                ok: true,
-                actual: localActual.actual,
-                value: localActual.actual,
-                source: 'stat_provider',
-                providerId: provider.id,
-                provenance: {
-                  source: 'league-adapter',
-                  providerId: provider.id,
-                  observedAt: context.settledAt,
-                  confidence: 1,
-                  raw: row,
-                },
-              };
-            }
-            const actual = runAdapter(leg, row, entry.bookId);
-            if (actual != null) {
-              return {
-                ok: true,
-                actual,
-                value: actual,
-                source: 'stat_provider',
-                providerId: provider.id,
-                provenance: {
-                  source: 'stat-provider',
-                  providerId: provider.id,
-                  observedAt: context.settledAt,
-                  confidence: 1,
-                  raw: row,
-                },
-              };
-            }
           }
+          const candidates = findGameLogCandidates(leg.gameDate ?? null, rows, {
+            assumeFirst: rows.length === 1,
+          });
+          if (candidates.length !== 1) {
+            return statFailure(
+              'missing_provider_data',
+              'stat_provider',
+              provider.id,
+              provider.id,
+              context.settledAt,
+              rows,
+            );
+          }
+          const row = candidates[0];
+          const localActual = runEngineLeagueAdapter(leg, row);
+          if (localActual.status === 'invalid') {
+            return statFailure(
+              'invalid_adapter_result',
+              'stat_provider',
+              provider.id,
+              'league-adapter',
+              context.settledAt,
+              row,
+            );
+          }
+          if (localActual.status === 'ok') {
+            return {
+              ok: true,
+              actual: localActual.actual,
+              value: localActual.actual,
+              source: 'stat_provider',
+              providerId: provider.id,
+              provenance: {
+                source: 'league-adapter',
+                providerId: provider.id,
+                observedAt: context.settledAt,
+                confidence: 1,
+                raw: row,
+              },
+            };
+          }
+          const adapted = runAdapter(leg, row, entry.bookId);
+          if (adapted.ok) {
+            return {
+              ok: true,
+              actual: adapted.actual,
+              value: adapted.actual,
+              source: 'stat_provider',
+              providerId: provider.id,
+              provenance: {
+                source: 'stat-provider',
+                providerId: provider.id,
+                observedAt: context.settledAt,
+                confidence: 1,
+                raw: row,
+              },
+            };
+          }
+          return statFailure(
+            localActual.supported ? 'missing_stat' : adapted.reason,
+            'stat_provider',
+            provider.id,
+            provider.id,
+            context.settledAt,
+            row,
+          );
         }
       } catch (error) {
         return {
@@ -1321,13 +1618,16 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
     function runEngineLeagueAdapter(
       legInput: DfsLegInput,
       rawEntry: PlayerGameLogEntryShape,
-    ): { status: 'ok'; actual: number } | { status: 'miss' } | { status: 'invalid' } {
+    ):
+      | { status: 'ok'; actual: number }
+      | { status: 'miss'; supported: boolean }
+      | { status: 'invalid' } {
       const localAdapter = leagueAdapters.get(normalizeLeague(legInput.league));
       const localExtractor =
         localAdapter?.adapters?.[normalizeDfsPropType(legInput.propType)] ??
         localAdapter?.adapters?.[legInput.propType];
       if (!localExtractor) {
-        return { status: 'miss' };
+        return { status: 'miss', supported: false };
       }
 
       const localActual = localExtractor(rawEntry, legInput);
@@ -1335,7 +1635,7 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
         return { status: 'ok', actual: localActual };
       }
       if (localActual == null) {
-        return { status: 'miss' };
+        return { status: 'miss', supported: true };
       }
       return { status: 'invalid' };
     }
@@ -1386,11 +1686,11 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
       };
     }
 
-    const actual = runAdapter(leg, providerData, entry?.bookId ?? 'prizepicks');
-    if (actual == null) {
+    const adapted = runAdapter(leg, providerData, entry?.bookId ?? 'prizepicks');
+    if (!adapted.ok) {
       return {
         ok: false,
-        reason: 'unsupported_prop',
+        reason: localActual.supported ? 'missing_stat' : adapted.reason,
         source: 'provider_data',
         provenance: {
           ...provenance('provider_data', undefined, context.settledAt),
@@ -1401,8 +1701,8 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
 
     return {
       ok: true,
-      actual,
-      value: actual,
+      actual: adapted.actual,
+      value: adapted.actual,
       source: 'provider_data',
       provenance: {
         ...provenance('provider_data', undefined, context.settledAt),
@@ -1440,6 +1740,7 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
     if (!resolved) {
       return null;
     }
+    const asOf = pseudoEntry.placedAt ?? clock().toISOString();
     return lookupPayoutForPolicy(
       {
         ...input,
@@ -1451,6 +1752,7 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
       },
       resolved.policy,
       resolved.playType,
+      asOf,
     );
   }
 
@@ -1599,7 +1901,7 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
       });
     }
 
-    const entry = normalizeEntry(input);
+    const entry = normalizeEntry(input, settledAt);
     const resolved = resolvePolicy(entry);
     if (!resolved) {
       return pendingResult({
@@ -1614,12 +1916,38 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
     }
 
     const { policy, playType } = resolved;
+    const policyVerification = copyPolicyVerification(policy.verification);
+    const payoutAsOf = entry.placedAt ?? settledAt;
+    const payoutTable = selectedPayoutTable(
+      playType.payoutModel === 'fixed-table'
+        ? findPayoutTable(entry.bookId, entry.playTypeId, payoutAsOf)
+        : null,
+      policy,
+    );
+    auditTrail.push({
+      at: settledAt,
+      code: 'settlement.policy_selected',
+      message: `Selected ${policy.id}/${playType.id} policy for settlement.`,
+      metadata: {
+        policyVersion: policy.version,
+        policyStatus: policy.status,
+        policyVerification,
+        payoutAsOf,
+        payoutTable,
+      },
+    });
     const decisions: DfsLegDecision[] = [];
     const adjustments: DfsSettlementAdjustment[] = [];
     const pendingReasons: string[] = [];
     const explanationCodes = new Set<string>();
     for (const warning of validation.warnings) {
       explanationCodes.add(warning.code);
+    }
+    if (policy.status !== 'stable') {
+      explanationCodes.add(`policy.status.${policy.status}`);
+    }
+    if (policy.verification && policy.verification.status !== 'verified') {
+      explanationCodes.add(`policy.verification.${policy.verification.status}`);
     }
 
     for (const leg of entry.legs) {
@@ -1673,6 +2001,34 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
         explanationCodes.add(`leg.${contextStatus}`);
         if (contextStatus === 'rescued') {
           explanationCodes.add('rescue_applied');
+        }
+        continue;
+      }
+
+      if (contextStatus === 'won' || contextStatus === 'lost' || contextStatus === 'push') {
+        const status =
+          contextStatus === 'push'
+            ? resolvePushOutcome(policy, leg, entry, context)
+            : contextStatus;
+        decisions.push({
+          legId: leg.legId,
+          status,
+          actual: context.actualsByLegId?.[leg.legId] ?? leg.actual ?? null,
+          line: leg.line,
+          direction: leg.direction,
+          playerName: leg.playerName,
+          propType: leg.propType,
+          provider: provenance('status', context.providerId, settledAt),
+          pendingReason: null,
+        });
+        if (status === 'push') {
+          adjustments.push({
+            type: 'push',
+            legId: leg.legId,
+            message: `${leg.playerName} pushed and was removed by policy.`,
+          });
+          explanationCodes.add('leg.push_removed');
+          explanationCodes.add('push_leg_removed');
         }
         continue;
       }
@@ -1748,7 +2104,10 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
         adjustments,
         pendingReasons,
         policyVersion: policy.version,
+        policyStatus: policy.status,
+        policyVerification,
         sourceRefs: [...policy.sources],
+        payoutTable,
         confidence: 'low',
         explanationCodes: [...explanationCodes],
         validation,
@@ -1764,22 +2123,41 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
     const removedStatuses = new Set<DfsLegOutcome>(['dnp', 'push', 'void', 'rescued', 'canceled']);
     const active = decisions.filter((decision) => !removedStatuses.has(decision.status));
     const removed = decisions.length - active.length;
-    if (active.length === 0) {
+    const dnpCount = decisions.filter((decision) => decision.status === 'dnp').length;
+    const refundBelowMinimum =
+      active.length > 0 &&
+      active.length < playType.pickCount.min &&
+      dnpCount > 0 &&
+      policy.dnpPolicy.type === 'remove_leg' &&
+      policy.dnpPolicy.refundIfBelowMinimum === true;
+    if (active.length === 0 || refundBelowMinimum) {
+      const allPushed =
+        !refundBelowMinimum && decisions.every((decision) => decision.status === 'push');
       adjustments.push({
-        type: 'void',
-        message: 'All legs were removed by policy, so the entry returns stake.',
+        type: allPushed ? 'push' : 'void',
+        message: refundBelowMinimum
+          ? `A DNP left fewer than ${playType.pickCount.min} active picks, so the entry returns stake.`
+          : allPushed
+            ? 'All legs pushed, so the entry returns stake.'
+            : 'All legs were removed by policy, so the entry returns stake.',
       });
-      explanationCodes.add('settlement.all_legs_removed_refund');
       explanationCodes.add(
-        decisions.every((decision) => decision.status === 'push')
-          ? 'refund_no_survivors'
-          : 'void_no_survivors',
+        refundBelowMinimum
+          ? 'settlement.below_minimum_refund'
+          : 'settlement.all_legs_removed_refund',
+      );
+      explanationCodes.add(
+        refundBelowMinimum
+          ? 'refund_below_minimum'
+          : allPushed
+            ? 'refund_no_survivors'
+            : 'void_no_survivors',
       );
       return {
         entryId: entry.entryId,
         bookId: entry.bookId,
         playTypeId: entry.playTypeId,
-        status: 'void',
+        status: allPushed ? 'pushed' : 'void',
         multiplier: 1,
         effectiveMultiplier: 1,
         payout: splitAllWithdrawable(entry.stake),
@@ -1791,8 +2169,11 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
         adjustments,
         pendingReasons,
         policyVersion: policy.version,
+        policyStatus: policy.status,
+        policyVerification,
         sourceRefs: [...policy.sources],
-        confidence: 'high',
+        payoutTable,
+        confidence: capPolicyConfidence('high', policy),
         explanationCodes: [...explanationCodes],
         validation,
         provenance: {
@@ -1804,8 +2185,12 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
           ...auditTrail,
           {
             at: settledAt,
-            code: 'settlement.void',
-            message: 'Entry voided because no active legs remained.',
+            code: allPushed ? 'settlement.pushed' : 'settlement.void',
+            message: refundBelowMinimum
+              ? 'Entry voided because a DNP left fewer than the minimum active picks.'
+              : allPushed
+                ? 'Entry pushed because every leg pushed.'
+                : 'Entry voided because no active legs remained.',
           },
         ],
       };
@@ -1832,16 +2217,24 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
       },
       policy,
       playType,
+      payoutAsOf,
     ) ?? {
       status: losses > 0 ? 'lost' : 'pending',
       multiplier: 0,
       payout: EMPTY_PAYOUT,
       explanationCode: 'settlement.no_payout_resolution',
       confidence: 'low' as const,
+      payoutTable,
     };
 
     explanationCodes.add(payout.explanationCode);
     explanationCodes.add(PAYOUT_MODEL_EXPLANATION_CODES[playType.payoutModel]);
+    if (
+      payout.status === 'pending' &&
+      payout.explanationCode === 'settlement.no_payout_table_row'
+    ) {
+      pendingReasons.push('missing_payout_table_row');
+    }
     if (removed > 0) {
       explanationCodes.add('settlement.repriced_after_removed_legs');
       adjustments.push({
@@ -1859,6 +2252,7 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
         hits,
         losses,
         removed,
+        payoutTable: payout.payoutTable ?? null,
       },
     });
 
@@ -1878,8 +2272,11 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
       adjustments,
       pendingReasons,
       policyVersion: policy.version,
+      policyStatus: policy.status,
+      policyVerification,
       sourceRefs: [...policy.sources],
-      confidence: payout.confidence,
+      payoutTable: payout.payoutTable ?? null,
+      confidence: capPolicyConfidence(payout.confidence, policy),
       explanationCodes: [...explanationCodes],
       validation,
       provenance: {
@@ -1918,7 +2315,20 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
       },
     policy: DfsBookPolicy,
     playType: DfsBookPlayType,
+    asOf: string,
   ): DfsPayoutResolution | null {
+    const matchingTables = payoutTables.some(
+      (table) => table.bookId === input.bookId && table.playTypeId === input.playTypeId,
+    );
+    const tableDefinition =
+      playType.payoutModel === 'fixed-table'
+        ? findPayoutTable(input.bookId, input.playTypeId, asOf)
+        : null;
+    const payoutTable = selectedPayoutTable(tableDefinition, policy);
+    if (playType.payoutModel === 'fixed-table' && matchingTables && !tableDefinition) {
+      return null;
+    }
+
     if (playType.allOrNothing && input.losses > 0) {
       return {
         status: 'lost',
@@ -1926,6 +2336,7 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
         payout: EMPTY_PAYOUT,
         explanationCode: 'settlement.all_or_nothing_loss',
         confidence: 'high',
+        payoutTable,
       };
     }
 
@@ -1949,7 +2360,7 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
         decisions: input.decisions,
       });
       assertFiniteNonNegative(resolved.multiplier, 'custom payout multiplier');
-      const payout =
+      const rawPayout =
         resolved.payout ??
         splitPayout(policy, {
           stake: input.stake,
@@ -1958,13 +2369,15 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
           baseMultiplier: input.baseMultiplier,
           profitBoostPct: input.profitBoostPct,
         });
-      assertPayoutSplit(payout, 'custom payout');
+      assertPayoutSplit(rawPayout, 'custom payout');
+      const payout = roundPayoutSplit(rawPayout);
       return {
         status: resolved.multiplier > 0 ? 'won' : 'lost',
         multiplier: resolved.multiplier,
         payout,
         explanationCode: resolved.explanationCode ?? 'settlement.custom_payout',
         confidence: resolved.confidence ?? 'medium',
+        payoutTable: null,
       };
     }
 
@@ -1982,23 +2395,40 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
         input.playTypeId,
         input.pickCount,
         input.hits,
+        asOf,
+        { pushes: input.pushes },
       );
       if (tableMultiplier == null) {
         multiplier = 0;
         explanationCode = 'settlement.no_payout_table_row';
       } else if (playType.scaleDisplayedMultiplier && input.displayedMultiplier != null) {
         const baseAllHit =
-          resolveBaseMultiplier(input) ??
-          lookupTableMultiplier(input.bookId, input.playTypeId, input.pickCount, input.pickCount);
+          resolveBaseMultiplier(input, asOf) ??
+          lookupTableMultiplier(
+            input.bookId,
+            input.playTypeId,
+            input.pickCount,
+            input.pickCount,
+            asOf,
+          );
         const allHit = lookupTableMultiplier(
           input.bookId,
           input.playTypeId,
           input.pickCount,
           input.pickCount,
+          asOf,
+        );
+        const originalPickCount = input.entry.legs.length || input.pickCount;
+        const originalAllHit = lookupTableMultiplier(
+          input.bookId,
+          input.playTypeId,
+          originalPickCount,
+          originalPickCount,
+          asOf,
         );
         if (baseAllHit && allHit) {
           multiplier = (input.displayedMultiplier * tableMultiplier) / baseAllHit;
-          baseForSplit = (baseAllHit * tableMultiplier) / allHit;
+          baseForSplit = (baseAllHit * tableMultiplier) / (originalAllHit ?? allHit);
         } else {
           multiplier = tableMultiplier;
           baseForSplit = tableMultiplier;
@@ -2016,6 +2446,7 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
         payout: EMPTY_PAYOUT,
         explanationCode,
         confidence: 'high',
+        payoutTable,
       };
     }
 
@@ -2028,11 +2459,17 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
     });
     assertPayoutSplit(payout, 'payout');
     return {
-      status: multiplier > 0 ? 'won' : 'lost',
+      status:
+        multiplier > 0
+          ? 'won'
+          : explanationCode === 'settlement.no_payout_table_row' && input.losses === 0
+            ? 'pending'
+            : 'lost',
       multiplier,
       payout,
       explanationCode,
       confidence: explanationCode === 'settlement.no_payout_table_row' ? 'low' : 'high',
+      payoutTable,
     };
   }
 
@@ -2050,6 +2487,7 @@ export function createDfsEngine(config: DfsEngineConfig = {}): DfsEngine {
     registerLeagueAdapter,
     registerStatProvider,
     getRegisteredBooks,
+    getBookPolicies,
   };
 }
 
@@ -2069,25 +2507,28 @@ function splitPayout(
   if (policy.payoutSplit.type === 'custom') {
     const split = policy.payoutSplit.split(input);
     assertPayoutSplit(split, 'custom payout split');
-    return split;
+    return roundPayoutSplit(split);
   }
   if (policy.payoutSplit.type === 'underdog_bonus_split') {
-    return computeBoostSplit({
-      app: 'underdog',
-      totalPayout: input.totalPayout,
-      stake: input.stake,
-      multiplier: input.multiplier,
-      baseMultiplier: input.baseMultiplier ?? input.multiplier,
-      profitBoostPct: input.profitBoostPct,
-    });
+    return roundPayoutSplit(
+      computeBoostSplit({
+        app: 'underdog',
+        totalPayout: input.totalPayout,
+        stake: input.stake,
+        multiplier: input.multiplier,
+        baseMultiplier: input.baseMultiplier ?? input.multiplier,
+        profitBoostPct: input.profitBoostPct,
+      }),
+    );
   }
   return splitAllWithdrawable(input.totalPayout);
 }
 
 function splitAllWithdrawable(total: number): DfsPayoutSplit {
+  const rounded = roundMoney(total);
   return {
-    total,
-    withdrawable: total,
+    total: rounded,
+    withdrawable: rounded,
     bonus: 0,
   };
 }
@@ -2186,13 +2627,20 @@ function runAdapter(
   leg: DfsLegInput,
   rawEntry: PlayerGameLogEntryShape,
   bookId: DfsBookId,
-): number | null {
-  const league = normalizeLeague(leg.league);
-  const value = extractStatForProp(leg.propType, league, rawEntry, bookId as DfsApp);
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return value;
+): { ok: true; actual: number } | { ok: false; reason: 'missing_stat' | 'unsupported_prop' } {
+  const result = extractStatForPropExplained(
+    leg.propType,
+    normalizeLeague(leg.league),
+    rawEntry,
+    bookId as DfsApp,
+  );
+  if (result.ok) {
+    return { ok: true, actual: result.value };
   }
-  return null;
+  return {
+    ok: false,
+    reason: result.reason === 'adapter_returned_null' ? 'missing_stat' : 'unsupported_prop',
+  };
 }
 
 function tableEntryPicks(entry: DfsPayoutTableEntry): number | null {
@@ -2273,12 +2721,11 @@ function assertPayoutLookupInvariants(input: DfsPayoutLookupInput): void {
     }
   }
   const losses = input.losses ?? 0;
-  const pushes = input.pushes ?? 0;
   if (input.hits > input.pickCount) {
     throw new DfsEngineInvariantError('hits cannot exceed pickCount');
   }
-  if (input.hits + losses + pushes > input.pickCount) {
-    throw new DfsEngineInvariantError('hits, losses, and pushes cannot exceed pickCount');
+  if (input.hits + losses > input.pickCount) {
+    throw new DfsEngineInvariantError('hits and losses cannot exceed pickCount');
   }
 }
 
@@ -2304,11 +2751,116 @@ function assertFiniteNonNegative(value: number, label: string): void {
 }
 
 function isValidDate(value: string): boolean {
-  return Number.isFinite(Date.parse(value));
+  return Number.isFinite(parseEffectiveTimestamp(value));
 }
 
 function roundMoney(value: number): number {
-  return Math.round(value * 100) / 100;
+  return roundDecimalHalfUp(value, 2);
+}
+
+function roundDecimalHalfUp(value: number, places: number): number {
+  const sign = value < 0 ? -1 : 1;
+  const shifted = shiftDecimalExponent(Math.abs(value), places);
+  const roundingTolerance = Number.EPSILON * Math.max(1, shifted);
+  const rounded = sign * shiftDecimalExponent(Math.round(shifted + roundingTolerance), -places);
+  return Object.is(rounded, -0) ? 0 : rounded;
+}
+
+function shiftDecimalExponent(value: number, places: number): number {
+  const [coefficient, exponent = '0'] = value.toString().split('e');
+  return Number(`${coefficient}e${Number(exponent) + places}`);
+}
+
+function parseEffectiveTimestamp(value: string): number {
+  const normalized = /^\d{4}-\d{2}-\d{2}$/u.test(value) ? `${value}T00:00:00.000Z` : value;
+  return Date.parse(normalized);
+}
+
+function selectedPayoutTable(
+  table: DfsPayoutTableDefinition | null,
+  policy: DfsBookPolicy,
+): DfsSelectedPayoutTable | null {
+  if (!table) {
+    return null;
+  }
+  return {
+    version: table.version ?? null,
+    effectiveFrom: table.effectiveFrom,
+    sourceNotes: [...(table.sourceNotes ?? [])],
+    sources: (table.sources ?? policy.sources).map((source) => ({ ...source })),
+  };
+}
+
+function snapshotPolicyVerification(
+  verification: DfsPolicyVerification | undefined,
+): Readonly<DfsPolicyVerification> | null {
+  if (!verification) {
+    return null;
+  }
+  return Object.freeze({
+    ...verification,
+    notes: verification.notes ? Object.freeze([...verification.notes]) : undefined,
+  });
+}
+
+function copyPolicyVerification(
+  verification: DfsPolicyVerification | undefined,
+): DfsPolicyVerification | null {
+  return verification
+    ? {
+        ...verification,
+        notes: verification.notes ? [...verification.notes] : undefined,
+      }
+    : null;
+}
+
+function capPolicyConfidence(
+  confidence: DfsSettlementConfidence,
+  policy: DfsBookPolicy,
+): DfsSettlementConfidence {
+  const ranks: Record<DfsSettlementConfidence, number> = { low: 0, medium: 1, high: 2 };
+  let maximum: DfsSettlementConfidence = 'high';
+  if (policy.status === 'draft') {
+    maximum = 'low';
+  } else if (policy.status === 'experimental') {
+    maximum = 'medium';
+  }
+  if (policy.verification?.status === 'unverified') {
+    maximum = 'low';
+  } else if (policy.verification?.status === 'partial' && ranks[maximum] > ranks.medium) {
+    maximum = 'medium';
+  }
+  return ranks[confidence] <= ranks[maximum] ? confidence : maximum;
+}
+
+function snapshotBookPolicy(policy: DfsBookPolicy): DfsBookPolicySnapshot {
+  return Object.freeze({
+    id: policy.id,
+    displayName: policy.displayName,
+    version: policy.version,
+    effectiveFrom: policy.effectiveFrom,
+    status: policy.status,
+    verification: snapshotPolicyVerification(policy.verification),
+    sources: Object.freeze(policy.sources.map((source) => Object.freeze({ ...source }))),
+    playTypes: Object.freeze(
+      policy.playTypes.map((playType) =>
+        Object.freeze({
+          ...playType,
+          pickCount: Object.freeze({ ...playType.pickCount }),
+        }),
+      ),
+    ),
+  });
+}
+
+function roundPayoutSplit(payout: DfsPayoutSplit): DfsPayoutSplit {
+  const total = roundMoney(payout.total);
+  const bonus = Math.min(total, roundMoney(payout.bonus));
+  return {
+    total,
+    withdrawable: roundMoney(total - bonus),
+    bonus,
+  };
 }
 
 function pendingResult(input: {
@@ -2336,7 +2888,10 @@ function pendingResult(input: {
     adjustments: [],
     pendingReasons: input.pendingReasons,
     policyVersion: null,
+    policyStatus: null,
+    policyVerification: null,
     sourceRefs: [],
+    payoutTable: null,
     confidence: 'low',
     explanationCodes: [
       ...input.explanationCodes,

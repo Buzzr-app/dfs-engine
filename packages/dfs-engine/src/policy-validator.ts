@@ -15,6 +15,7 @@ import type { DfsBookPolicy } from './engine';
 import type { DfsValidationIssue, DfsValidationResult } from './validators';
 
 const POLICY_STATUSES = ['stable', 'draft', 'experimental'] as const;
+const POLICY_VERIFICATION_STATUSES = ['verified', 'partial', 'unverified'] as const;
 const PAYOUT_MODELS = ['fixed-table', 'displayed-multiplier', 'custom'] as const;
 
 /**
@@ -75,10 +76,76 @@ export function validateBookPolicyDefinition(
 
   validatePlayTypes(policy, errors);
   validateSources(policy, errors);
+  validateVerification(policy, errors);
 
   return errors.length
     ? invalid(errors)
     : { ok: true, value: definition as unknown as DfsBookPolicy, errors: [], warnings: [] };
+}
+
+function validateVerification(policy: Record<string, unknown>, errors: DfsValidationIssue[]): void {
+  if (policy.verification == null) {
+    return;
+  }
+  if (!isPlainObject(policy.verification)) {
+    errors.push(
+      issue(
+        'policy.invalid_verification',
+        'verification must be an object when provided.',
+        'verification',
+      ),
+    );
+    return;
+  }
+  if (
+    !POLICY_VERIFICATION_STATUSES.includes(
+      policy.verification.status as (typeof POLICY_VERIFICATION_STATUSES)[number],
+    )
+  ) {
+    errors.push(
+      issue(
+        'policy.invalid_verification_status',
+        `verification.status must be one of ${POLICY_VERIFICATION_STATUSES.join(', ')}.`,
+        'verification.status',
+      ),
+    );
+  }
+  if (
+    policy.verification.reviewedAt != null &&
+    (typeof policy.verification.reviewedAt !== 'string' ||
+      !isValidDate(policy.verification.reviewedAt))
+  ) {
+    errors.push(
+      issue(
+        'policy.invalid_verification_reviewed_at',
+        'verification.reviewedAt must be a parseable date.',
+        'verification.reviewedAt',
+      ),
+    );
+  }
+  if (policy.verification.notes != null) {
+    if (!Array.isArray(policy.verification.notes)) {
+      errors.push(
+        issue(
+          'policy.invalid_verification_notes',
+          'verification.notes must be an array when provided.',
+          'verification.notes',
+        ),
+      );
+    } else {
+      policy.verification.notes.forEach((note, index) => {
+        if (typeof note !== 'string' || !note.trim()) {
+          errors.push(
+            issue(
+              'policy.invalid_verification_note',
+              `verification.notes.${index} must be a non-empty string.`,
+              `verification.notes.${index}`,
+            ),
+          );
+        }
+      });
+    }
+  }
 }
 
 function validatePlayTypes(policy: Record<string, unknown>, errors: DfsValidationIssue[]): void {

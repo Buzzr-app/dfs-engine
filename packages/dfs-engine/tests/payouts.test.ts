@@ -1,7 +1,7 @@
 /**
  * Tests for DFS payout schedules + DNP demotion math.
  *
- * Schedules are reference values current as of 2026-05; if either app
+ * Schedules are latest reference values reviewed on 2026-07-16; if either app
  * publishes new payouts these tests will fail loudly so we know to update
  * dfs-payouts.ts in lockstep.
  */
@@ -24,10 +24,25 @@ describe('dfs-payouts: lookupStandardMultiplier', () => {
     ).toBe(25);
     expect(
       lookupStandardMultiplier({ app: 'prizepicks', playType: 'flex', pickCount: 6, hits: 5 }),
-    ).toBe(1.75);
+    ).toBe(2);
     expect(
       lookupStandardMultiplier({ app: 'prizepicks', playType: 'flex', pickCount: 6, hits: 4 }),
     ).toBe(0.4);
+  });
+
+  test('PrizePicks latest standard Player Pick tiers match the July 2026 reference', () => {
+    expect(
+      lookupStandardMultiplier({ app: 'prizepicks', playType: 'power', pickCount: 3, hits: 3 }),
+    ).toBe(6);
+    expect(
+      lookupStandardMultiplier({ app: 'prizepicks', playType: 'flex', pickCount: 3, hits: 3 }),
+    ).toBe(3);
+    expect(
+      lookupStandardMultiplier({ app: 'prizepicks', playType: 'flex', pickCount: 3, hits: 2 }),
+    ).toBe(1);
+    expect(
+      lookupStandardMultiplier({ app: 'prizepicks', playType: 'flex', pickCount: 4, hits: 4 }),
+    ).toBe(6);
   });
 
   test('Underdog Standard 4-pick all-hit = 10x', () => {
@@ -92,7 +107,7 @@ describe('dfs-payouts: recalcMultiplierAfterDnp', () => {
 
   test('Flex demotion uses surviving hit count', () => {
     // 5-pick flex → 4-pick flex at 4/4 hits.
-    // PP 5-pick all-hit = 10x; PP 4-pick all-hit (flex) = 5x → ratio 0.5.
+    // PP 5-pick all-hit = 10x; PP 4-pick all-hit (flex) = 6x → ratio 0.6.
     const result = recalcMultiplierAfterDnp({
       app: 'prizepicks',
       playType: 'flex',
@@ -102,7 +117,7 @@ describe('dfs-payouts: recalcMultiplierAfterDnp', () => {
       originalMultiplier: 10,
     });
     expect(result.usedFallback).toBe(false);
-    expect(result.newMultiplier).toBeCloseTo(5, 4);
+    expect(result.newMultiplier).toBeCloseTo(6, 4);
   });
 
   test('throws when survivingPickCount is impossible', () => {

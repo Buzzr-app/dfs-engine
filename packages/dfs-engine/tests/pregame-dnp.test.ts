@@ -210,7 +210,7 @@ describe('applyLegDnp — Phase E.pre transitions', () => {
   });
 
   describe('post-game-style DNP (surviving hits known) — recalc math sanity', () => {
-    test('PrizePicks Flex 4-pick @ 5x → DNP one leg with 3 surviving wins → 2.25x', () => {
+    test('PrizePicks Flex 4-pick @ 5x → DNP one leg with 3 surviving wins → 2.5x', () => {
       // Exercises the meaningful demotion path: ratio = surviving(3 picks,
       // 3 hits) / original(4 picks, 4 hits) = 2.25 / 5 = 0.45.
       // Slip multiplier 5 × 0.45 = 2.25. The pre-game path doesn't hit
@@ -232,8 +232,8 @@ describe('applyLegDnp — Phase E.pre transitions', () => {
       });
 
       expect(result.isVoided).toBe(false);
-      expect(result.newMultiplier).toBeCloseTo(2.25, 4);
-      expect(result.newPotentialPayout).toBeCloseTo(22.5, 2);
+      expect(result.newMultiplier).toBeCloseTo(2.5, 4);
+      expect(result.newPotentialPayout).toBeCloseTo(25, 2);
     });
   });
 

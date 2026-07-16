@@ -60,6 +60,20 @@ describe('predict_game_buzz', () => {
     expect(result.isError).toBe(true);
     expect((parseResult(result).error as Record<string, unknown>).code).toBe('invalid_input');
   });
+
+  it.each([
+    ['invalid startsAt', { ...nbaGame, startsAt: 'tonight' }],
+    ['oversized team name', { ...nbaGame, homeTeam: 'L'.repeat(201) }],
+    [
+      'non-finite market data',
+      { ...nbaGame, odds: { spread: Number.POSITIVE_INFINITY, overUnder: 228.5 } },
+    ],
+  ])('rejects %s at the MCP boundary', async (_label, input) => {
+    const result = await tool.handler(input);
+
+    expect(result.isError).toBe(true);
+    expect((parseResult(result).error as Record<string, unknown>).code).toBe('invalid_input');
+  });
 });
 
 describe('rank_games', () => {
@@ -143,5 +157,35 @@ describe('rank_games', () => {
 
     expect(result.isError).toBe(true);
     expect((parseResult(result).error as Record<string, unknown>).code).toBe('invalid_input');
+  });
+
+  it('rejects more than 100 games', async () => {
+    const tool = createRankGamesTool(baseEngineModule);
+    const result = await tool.handler({
+      games: Array.from({ length: 101 }, (_, index) => ({
+        ...nbaGame,
+        id: `game-${index}`,
+      })),
+    });
+
+    expect(result.isError).toBe(true);
+    expect((parseResult(result).error as Record<string, unknown>).code).toBe('invalid_input');
+  });
+
+  it('rejects oversized affinity maps before validating every value', () => {
+    const parsed = rankGamesTool.inputSchema.safeParse({
+      games: [nbaGame],
+      profile: {
+        teamAffinity: Object.fromEntries(
+          Array.from({ length: 1_000 }, (_, index) => [`team-${index}`, 'invalid']),
+        ),
+      },
+    });
+
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      expect(parsed.error.issues).toHaveLength(1);
+      expect(parsed.error.issues[0].message).toContain('100 entries');
+    }
   });
 });

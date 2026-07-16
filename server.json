@@ -1,0 +1,24 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.Buzzr-app/dfs-engine",
+  "title": "Buzzr Sports Engine",
+  "description": "Local sports math, DFS settlement, bet analytics, and game-entertainment tools.",
+  "repository": {
+    "url": "https://github.com/Buzzr-app/dfs-engine",
+    "source": "github",
+    "id": "1234984143",
+    "subfolder": "packages/mcp"
+  },
+  "version": "5.1.0",
+  "websiteUrl": "https://buzzr-app.github.io/dfs-engine/",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@buzzr/mcp",
+      "version": "5.1.0",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}

@@ -13,6 +13,10 @@ function readPackageJson(path: string): {
   return JSON.parse(readFileSync(resolve(root, path), 'utf8'));
 }
 
+function readText(path: string): string {
+  return readFileSync(resolve(root, path), 'utf8');
+}
+
 describe('release guardrails', () => {
   test('keeps release-hardening scripts wired at the workspace root', () => {
     const rootPackage = readPackageJson('package.json');
@@ -23,7 +27,37 @@ describe('release guardrails', () => {
       'smoke:exports': 'node scripts/smoke-exports.mjs',
       'size:check': 'node scripts/check-package-size.mjs',
       'audit:high': 'npm audit --audit-level=high',
+      'test:mcp:packed': expect.stringContaining('scripts/test-mcp-packed.mjs'),
+      'proof:mcp:published': 'node scripts/prove-mcp-published.mjs',
     });
+    expect(rootPackage.scripts?.verify).toContain('test:mcp:packed');
+
+    const mcpPackage = readPackageJson('packages/mcp/package.json');
+    expect(mcpPackage.scripts?.prepack).toBe('npm run build');
+  });
+
+  test('runs the packed MCP proof in CI on Linux, macOS, and Windows', () => {
+    const workflow = readText('.github/workflows/ci.yml');
+
+    expect(workflow).toContain('npm run test:mcp:packed');
+    expect(workflow).toContain('macos-latest');
+    expect(workflow).toContain('windows-latest');
+  });
+
+  test('keeps a version-guarded post-publish proof workflow', () => {
+    const workflow = readText('.github/workflows/prove-mcp-published.yml');
+
+    expect(workflow).toContain('EXPECTED_MCP_VERSION');
+    expect(workflow).toContain('npm run proof:mcp:published');
+  });
+
+  test('proves an immutable published MCP artifact without forwarding parent secrets', () => {
+    const proof = readText('scripts/prove-mcp-published.mjs');
+
+    expect(proof).not.toContain('...process.env');
+    expect(proof).toContain('@buzzr/mcp@${expectedVersion}');
+    expect(proof).toContain('dist.integrity');
+    expect(proof).toMatch(/assert\.match\(\s*expectedVersion/);
   });
 
   test('keeps runtime dependencies intentionally tiny', () => {

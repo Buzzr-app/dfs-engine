@@ -66,6 +66,75 @@ const customPolicy = defineBookPolicy({
 });
 
 describe('Book Policy Registry 3.0', () => {
+  test('rejects malformed runtime verification metadata instead of coercing it', () => {
+    expect(() =>
+      defineBookPolicy({
+        ...customPolicy,
+        verification: { status: 'partial', notes: 'bad' } as never,
+      }),
+    ).toThrow('verification.notes must be an array');
+    expect(() =>
+      defineBookPolicy({
+        ...customPolicy,
+        verification: { status: 'partial', notes: ['reviewed', ''] },
+      }),
+    ).toThrow('verification.notes.1 must be a non-empty string');
+    expect(() =>
+      defineBookPolicy({
+        ...customPolicy,
+        verification: { status: 'partial', reviewedAt: 17 } as never,
+      }),
+    ).toThrow('verification.reviewedAt must be a string');
+    expect(() =>
+      defineBookPolicy({
+        ...customPolicy,
+        sources: [{ label: 'Fixture rules', retrievedAt: 17 } as never],
+      }),
+    ).toThrow('sources.0.retrievedAt must be a string');
+    expect(() =>
+      definePayoutTable({
+        bookId: 'custom-book',
+        playTypeId: 'all-in',
+        effectiveFrom: '2026-05-01',
+        sources: [{ label: 'Fixture table', retrievedAt: new Date('2026-05-01') } as never],
+        entries: [{ pickCount: 2, hits: 2, multiplier: 3 }],
+      }),
+    ).toThrow('sources.0.retrievedAt must be a string');
+  });
+
+  test('prefers outcome-specific payout rows regardless of table order', () => {
+    const generic = { pickCount: 1, hits: 1, multiplier: 2 };
+    const tied = { pickCount: 1, hits: 1, pushes: 1, multiplier: 1.5 };
+
+    for (const entries of [
+      [generic, tied],
+      [tied, generic],
+    ]) {
+      const engine = createDfsEngine({
+        bookPolicies: [customPolicy],
+        payoutTables: [
+          definePayoutTable({
+            bookId: 'custom-book',
+            playTypeId: 'all-in',
+            effectiveFrom: '2026-05-01',
+            entries,
+          }),
+        ],
+      });
+      expect(
+        engine.lookupPayout({
+          bookId: 'custom-book',
+          playTypeId: 'all-in',
+          stake: 10,
+          pickCount: 1,
+          hits: 1,
+          pushes: 1,
+          removedCount: 1,
+        }),
+      ).toMatchObject({ status: 'won', multiplier: 1.5 });
+    }
+  });
+
   test('settles a non-PrizePicks custom book with bookId/playTypeId and policy metadata', async () => {
     const engine = createDfsEngine({
       bookPolicies: [customPolicy],
@@ -152,6 +221,188 @@ describe('Book Policy Registry 3.0', () => {
     expect(result.effectiveMultiplier).toBe(9.5);
     expect(result.payout.total).toBe(95);
     expect(result.explanationCodes).toContain('settlement.displayed_multiplier_payout');
+  });
+
+  test('selects payout tables by an explicit UTC as-of and audits the selected table', async () => {
+    const datedPolicy = defineBookPolicy({
+      ...customPolicy,
+      id: 'dated-book',
+      version: '2026-01',
+      effectiveFrom: '2026-01-01',
+    });
+    const engine = createDfsEngine({
+      clock: () => new Date('2026-06-15T12:00:00.000Z'),
+      bookPolicies: [datedPolicy],
+      payoutTables: [
+        definePayoutTable({
+          bookId: 'dated-book',
+          playTypeId: 'all-in',
+          version: '2026-05',
+          effectiveFrom: '2026-05-01',
+          sourceNotes: ['May fixture schedule'],
+          entries: [{ pickCount: 2, hits: 2, multiplier: 2 }],
+        }),
+        definePayoutTable({
+          bookId: 'dated-book',
+          playTypeId: 'all-in',
+          version: '2026-07',
+          effectiveFrom: '2026-07-01',
+          sourceNotes: ['July fixture schedule'],
+          entries: [{ pickCount: 2, hits: 2, multiplier: 4 }],
+        }),
+      ],
+    });
+    const lookup = (placedAt: string) => {
+      const placedEntry = entry({ bookId: 'dated-book', placedAt });
+      return engine.lookupPayout({
+        bookId: 'dated-book',
+        playTypeId: 'all-in',
+        stake: 10,
+        pickCount: 2,
+        hits: 2,
+        entry: placedEntry,
+      });
+    };
+
+    expect(lookup('2026-06-15T12:00:00.000Z')).toMatchObject({ multiplier: 2 });
+    expect(lookup('2026-07-15T12:00:00.000Z')).toMatchObject({ multiplier: 4 });
+    expect(lookup('2026-04-30T23:59:59.000Z')).toBeNull();
+
+    const clockSelected = engine.lookupPayout({
+      bookId: 'dated-book',
+      playTypeId: 'all-in',
+      stake: 10,
+      pickCount: 2,
+      hits: 2,
+    });
+    expect(clockSelected).toMatchObject({
+      multiplier: 2,
+      payoutTable: {
+        version: '2026-05',
+        effectiveFrom: '2026-05-01',
+        sourceNotes: ['May fixture schedule'],
+        sources: datedPolicy.sources,
+      },
+    });
+
+    const settlementSelected = await engine.settleEntry(entry({ bookId: 'dated-book' }), {
+      settledAt: '2026-06-20T12:00:00.000Z',
+      actualsByLegId: { 'leg-1': 12, 'leg-2': 8 },
+    });
+    expect(settlementSelected).toMatchObject({
+      effectiveMultiplier: 2,
+      payoutTable: {
+        version: '2026-05',
+        effectiveFrom: '2026-05-01',
+        sourceNotes: ['May fixture schedule'],
+        sources: datedPolicy.sources,
+      },
+    });
+    expect(settlementSelected.auditTrail.at(-1)?.metadata).toMatchObject({
+      payoutTable: settlementSelected.payoutTable,
+    });
+
+    // Date-only effectiveFrom values are interpreted at UTC midnight.
+    await expect(
+      engine.settleEntry(entry({ bookId: 'dated-book' }), {
+        settledAt: '2026-06-30T23:59:59.999Z',
+        actualsByLegId: { 'leg-1': 12, 'leg-2': 8 },
+      }),
+    ).resolves.toMatchObject({
+      effectiveMultiplier: 2,
+      payoutTable: { version: '2026-05' },
+    });
+    await expect(
+      engine.settleEntry(entry({ bookId: 'dated-book' }), {
+        settledAt: '2026-07-01T00:00:00.000Z',
+        actualsByLegId: { 'leg-1': 12, 'leg-2': 8 },
+      }),
+    ).resolves.toMatchObject({
+      effectiveMultiplier: 4,
+      payoutTable: { version: '2026-07' },
+    });
+
+    await expect(
+      engine.settleEntry(entry({ bookId: 'dated-book' }), {
+        settledAt: '2026-04-30T23:59:59.999Z',
+        actualsByLegId: { 'leg-1': 12, 'leg-2': 8 },
+      }),
+    ).resolves.toMatchObject({
+      status: 'pending',
+      payout: { total: 0, withdrawable: 0, bonus: 0 },
+      payoutTable: null,
+      explanationCodes: expect.arrayContaining(['settlement.no_payout_resolution']),
+    });
+  });
+
+  test('scales a demoted fixed-table payout against the original all-hit tier', () => {
+    const scalingPolicy = defineBookPolicy({
+      ...customPolicy,
+      id: 'scaling-book',
+      payoutSplit: { type: 'underdog_bonus_split' },
+      playTypes: [
+        {
+          id: 'all-in',
+          displayName: 'All-In',
+          payoutModel: 'fixed-table',
+          pickCount: { min: 2, max: 3 },
+          scaleDisplayedMultiplier: true,
+        },
+      ],
+    });
+    const engine = createDfsEngine({
+      bookPolicies: [scalingPolicy],
+      payoutTables: [
+        definePayoutTable({
+          bookId: 'scaling-book',
+          playTypeId: 'all-in',
+          effectiveFrom: '2026-05-01',
+          entries: [
+            { pickCount: 2, hits: 2, multiplier: 3 },
+            { pickCount: 3, hits: 3, multiplier: 6 },
+          ],
+        }),
+      ],
+    });
+    const originalEntry = entry({
+      bookId: 'scaling-book',
+      displayedMultiplier: 6,
+      placedAt: '2026-06-01',
+      legs: [leg({ legId: 'a' }), leg({ legId: 'b' }), leg({ legId: 'c' })],
+    });
+
+    expect(
+      engine.lookupPayout({
+        bookId: 'scaling-book',
+        playTypeId: 'all-in',
+        stake: 10,
+        displayedMultiplier: 6,
+        pickCount: 2,
+        hits: 2,
+        removedCount: 1,
+        entry: originalEntry,
+      }),
+    ).toMatchObject({
+      status: 'won',
+      multiplier: 3,
+      payout: { total: 30, withdrawable: 30, bonus: 0 },
+    });
+    expect(
+      engine.lookupPayout({
+        bookId: 'scaling-book',
+        playTypeId: 'all-in',
+        stake: 10,
+        displayedMultiplier: 7,
+        pickCount: 2,
+        hits: 2,
+        removedCount: 1,
+        entry: originalEntry,
+      }),
+    ).toMatchObject({
+      status: 'won',
+      multiplier: 3.5,
+      payout: { total: 35, withdrawable: 30, bonus: 5 },
+    });
   });
 
   test('supports custom payout resolvers', async () => {

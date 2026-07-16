@@ -15,6 +15,8 @@ The package has zero runtime dependencies. Consumers can install
 Settlement OS, but app-side odds and rollup helpers do not pull the engine into
 the bundle.
 
+## Install
+
 ```bash
 npm install @buzzr/bets-core
 ```
@@ -162,3 +164,19 @@ calculateDrawdown(bets);
 calculateStreaks(bets);
 // { longestWinStreak: 2, longestLossStreak: 3, currentStreak: { status: 'won', count: 1 } }
 ```
+
+## Compatibility and support
+
+Node.js >= 22 is supported. Import the supported API from `@buzzr/bets-core`.
+Deep `src/*` and `dist/*` imports are unsupported. See the
+[all-package API index](../../docs/api-reference.md) and the
+[generated root-export reference](https://buzzr-app.github.io/dfs-engine/modules/_buzzr_bets-core.html).
+
+Report reproducible defects in [GitHub Issues](https://github.com/Buzzr-app/dfs-engine/issues).
+Report vulnerabilities privately through [SECURITY.md](../../SECURITY.md). The
+[versioning and support policy](../../docs/versioning-and-support.md) defines the
+supported runtime and SemVer contract.
+
+## License
+
+[MIT](../../LICENSE)

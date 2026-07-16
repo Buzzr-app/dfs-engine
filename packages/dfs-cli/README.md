@@ -6,7 +6,9 @@
 [![types](https://img.shields.io/npm/types/@buzzr/dfs-cli)](https://www.npmjs.com/package/@buzzr/dfs-cli)
 [![license](https://img.shields.io/npm/l/@buzzr/dfs-cli)](https://github.com/Buzzr-app/dfs-engine/blob/main/LICENSE)
 
-**Grade a DFS pick'em entry from two JSON files — no code required.** A command-line wrapper around [`@buzzr/dfs-engine`](https://www.npmjs.com/package/@buzzr/dfs-engine), the settlement engine that grades PrizePicks/Underdog-style entries with book-accurate payout math and a full audit trail.
+**Grade a DFS pick'em entry from two JSON files — no code required.** This is a command-line wrapper around [`@buzzr/dfs-engine`](https://www.npmjs.com/package/@buzzr/dfs-engine), with bounded inputs, effective-dated compatibility tables, policy metadata, and a full audit trail.
+
+The operator-named built-ins are independent estimates: PrizePicks is experimental and partially verified; Underdog is experimental and unverified. Displayed entry terms are authoritative. Treat output as an audit aid, inspect `policyStatus`, `policyVerification`, `payoutTable`, `confidence`, `sourceRefs`, and `explanationCodes`, and confirm DNP, reboot, tie, rescue, void, and correction rulings with the operator.
 
 ## 30-second quick start
 
@@ -107,7 +109,6 @@ const fromFiles = await runGradeFromFiles({
 | `dfs-grade` (bin)       | Grade an entry JSON against a gamelogs JSON, print settlement        |
 | `runGrade()`            | Grade an in-memory `DfsEntryInput` against a `legId → gamelog[]` map |
 | `runGradeFromFiles()`   | Same, reading both inputs from file paths                            |
-| `createDfsEngine` et al | Re-exported engine primitives for convenience                        |
 
 ## When to use this vs siblings
 
@@ -117,14 +118,25 @@ const fromFiles = await runGradeFromFiles({
 | Grade entries inside a TypeScript/JavaScript app    | [`@buzzr/dfs-engine`](https://www.npmjs.com/package/@buzzr/dfs-engine)                            |
 | Render results in a UI                              | [`@buzzr/dfs-react`](https://www.npmjs.com/package/@buzzr/dfs-react)                              |
 | Build fixtures for your own tests                   | [`@buzzr/dfs-testkit`](https://www.npmjs.com/package/@buzzr/dfs-testkit)                          |
-| Verify your integration grades identically to Buzzr | [`@buzzr/dfs-engine-test-vectors`](https://www.npmjs.com/package/@buzzr/dfs-engine-test-vectors)  |
+| Replay versioned engine regression cases           | [`@buzzr/dfs-engine-test-vectors`](https://www.npmjs.com/package/@buzzr/dfs-engine-test-vectors) |
 
 ## Links
 
-- [Engine API docs](https://buzzr-app.github.io/dfs-engine/)
+- [All-package API index](../../docs/api-reference.md)
+- [Generated root-export reference](https://buzzr-app.github.io/dfs-engine/modules/_buzzr_dfs-cli.html)
 - [Monorepo & full package family](https://github.com/Buzzr-app/dfs-engine)
 - [Issues](https://github.com/Buzzr-app/dfs-engine/issues)
 
+## Compatibility and support
+
+Node.js >= 22 is supported. Use the `dfs-grade` executable for the command line.
+Import the supported API from `@buzzr/dfs-cli`.
+Deep `src/*` and `dist/*` imports are unsupported.
+
+Report vulnerabilities privately through [SECURITY.md](../../SECURITY.md). The
+[versioning and support policy](../../docs/versioning-and-support.md) defines the
+supported runtime and SemVer contract.
+
 ## License
 
-MIT
+[MIT](../../LICENSE)

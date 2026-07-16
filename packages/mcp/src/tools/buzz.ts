@@ -2,6 +2,15 @@ import * as entertainmentEngine from '@buzzr/entertainment-engine';
 import type { EntertainmentGameInput, PredictionContext } from '@buzzr/entertainment-engine';
 import { z } from 'zod';
 
+import {
+  boundedArray,
+  boundedIdentifier,
+  boundedLabel,
+  boundedRecord,
+  finiteNumber,
+  isoTimestamp,
+  nonNegativeFiniteNumber,
+} from './schemas';
 import { defineTool, errorResult, jsonResult } from './shared';
 import type { BuzzrToolDefinition } from './shared';
 
@@ -34,16 +43,16 @@ const statusSchema = z
 
 const oddsSchema = z
   .object({
-    spread: z.number().nullish().describe('Point spread relative to the home team.'),
-    overUnder: z.number().nullish(),
-    homeMoneyline: z.number().nullish(),
-    awayMoneyline: z.number().nullish(),
+    spread: finiteNumber.nullish().describe('Point spread relative to the home team.'),
+    overUnder: finiteNumber.nullish(),
+    homeMoneyline: finiteNumber.nullish(),
+    awayMoneyline: finiteNumber.nullish(),
   })
   .describe('Betting-market context for the game.');
 
 const teamPairSchema = z.object({
-  home: z.number().nullish(),
-  away: z.number().nullish(),
+  home: finiteNumber.nullish(),
+  away: finiteNumber.nullish(),
 });
 
 const narrativesSchema = z
@@ -56,27 +65,24 @@ const narrativesSchema = z
   .describe('Narrative flags that boost buzz (rivalries, debuts, revenge games).');
 
 const engagementSchema = z.object({
-  fireCount: z.number().nullish(),
-  skipCount: z.number().nullish(),
-  averageRating: z.number().nullish(),
-  ratingCount: z.number().nullish(),
+  fireCount: nonNegativeFiniteNumber.nullish(),
+  skipCount: nonNegativeFiniteNumber.nullish(),
+  averageRating: finiteNumber.nullish(),
+  ratingCount: nonNegativeFiniteNumber.nullish(),
 });
 
 const searchHeatSchema = z
   .object({
-    home: z.number().min(-1).max(1).nullish(),
-    away: z.number().min(-1).max(1).nullish(),
+    home: finiteNumber.min(-1).max(1).nullish(),
+    away: finiteNumber.min(-1).max(1).nullish(),
   })
   .describe('Per-team search interest in [-1, 1].');
 
 const gameFieldsSchema = z.object({
-  league: z.string().min(1).describe('League code, e.g. "NBA", "NFL", "EPL", "WC".'),
-  homeTeam: z.string().min(1),
-  awayTeam: z.string().min(1),
-  startsAt: z
-    .string()
-    .min(1)
-    .describe('ISO 8601 kickoff/tip-off time, e.g. "2026-07-06T19:30:00Z".'),
+  league: boundedIdentifier.describe('League code, e.g. "NBA", "NFL", "EPL", "WC".'),
+  homeTeam: boundedLabel,
+  awayTeam: boundedLabel,
+  startsAt: isoTimestamp.describe('ISO 8601 kickoff/tip-off time, e.g. "2026-07-06T19:30:00Z".'),
   status: statusSchema.optional(),
   gameType: z
     .enum(['regular', 'playin', 'playoff'])
@@ -90,6 +96,7 @@ const gameFieldsSchema = z.object({
   searchHeat: searchHeatSchema.optional(),
   starPower: z
     .number()
+    .finite()
     .min(0)
     .max(1)
     .nullish()
@@ -168,39 +175,41 @@ export function createPredictGameBuzzTool(
 
 const profileSchema = z
   .object({
-    favoriteTeams: z.array(z.string()).optional(),
-    favoriteLeagues: z.array(z.string()).optional(),
-    teamAffinity: z
-      .record(z.string(), z.number().min(-1).max(1))
+    favoriteTeams: boundedArray(boundedLabel, 50).optional(),
+    favoriteLeagues: boundedArray(boundedIdentifier, 50).optional(),
+    teamAffinity: boundedRecord(boundedLabel, finiteNumber.min(-1).max(1), 100, 'teamAffinity')
       .optional()
       .describe('Per-team affinity in [-1, 1], keyed by team name.'),
-    leagueAffinity: z
-      .record(z.string(), z.number().min(-1).max(1))
+    leagueAffinity: boundedRecord(
+      boundedIdentifier,
+      finiteNumber.min(-1).max(1),
+      100,
+      'leagueAffinity',
+    )
       .optional()
       .describe('Per-league affinity in [-1, 1], keyed by league code.'),
-    socialSignal: z
-      .record(z.string(), z.number().min(-1).max(1))
+    socialSignal: boundedRecord(boundedIdentifier, finiteNumber.min(-1).max(1), 100, 'socialSignal')
       .optional()
       .describe('Fire-ratio in [-1, 1], keyed by game id.'),
   })
   .describe('The user taste profile used to personalize the ranking.');
 
 const rankGamesSchema = z.object({
-  games: z
-    .array(
-      gameFieldsSchema.extend({
-        id: z.string().nullish().describe('Stable game id, used for social signals.'),
-        baseScore: z
-          .number()
-          .min(0)
-          .max(10)
-          .nullish()
-          .describe('Precomputed base entertainment score (1-10). Estimated when absent.'),
-      }),
-    )
-    .min(1),
+  games: boundedArray(
+    gameFieldsSchema.extend({
+      id: boundedIdentifier.nullish().describe('Stable game id, used for social signals.'),
+      baseScore: z
+        .number()
+        .min(0)
+        .max(10)
+        .nullish()
+        .describe('Precomputed base entertainment score (1-10). Estimated when absent.'),
+    }),
+    100,
+    1,
+  ),
   profile: profileSchema.default({}),
-  limit: z.number().int().positive().optional().describe('Return only the top N games.'),
+  limit: z.number().int().positive().max(100).optional().describe('Return only the top N games.'),
 });
 
 export function createRankGamesTool(

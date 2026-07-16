@@ -1,0 +1,38 @@
+{
+  "name": "buzzr-sports-engine",
+  "version": "0.1.0",
+  "description": "Auditable sports math, DFS settlement, and game-entertainment workflows for Codex.",
+  "author": {
+    "name": "Buzzr",
+    "url": "https://github.com/Buzzr-app"
+  },
+  "homepage": "https://buzzr-app.github.io/dfs-engine/",
+  "repository": "https://github.com/Buzzr-app/dfs-engine",
+  "license": "MIT",
+  "keywords": [
+    "sports",
+    "dfs",
+    "odds",
+    "mcp",
+    "settlement"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Buzzr Sports Engine",
+    "shortDescription": "Auditable sports math and DFS settlement",
+    "longDescription": "Use deterministic Buzzr engines for sportsbook odds math, DFS pick-em settlement, bet-history analytics, and game-entertainment scoring.",
+    "developerName": "Buzzr",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Interactive"
+    ],
+    "websiteURL": "https://buzzr-app.github.io/dfs-engine/",
+    "supportURL": "https://github.com/Buzzr-app/dfs-engine/issues",
+    "defaultPrompt": [
+      "Audit this DFS entry with its displayed terms and explain every settlement decision.",
+      "Calculate the no-vig fair line and closing-line value for these prices."
+    ],
+    "brandColor": "#FF6B35",
+    "screenshots": []
+  }
+}

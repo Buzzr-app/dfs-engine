@@ -18,13 +18,13 @@
  *
  *         new_multiplier ≈ current_multiplier × (table[demoted] / table[original])
  *
- *   - Tables current as of 2026-05. Apps adjust these periodically; if a
+ *   - Latest standard references reviewed on 2026-07-16. Apps adjust these periodically; if a
  *     user reports a recalc that looks wrong, the first thing to verify
  *     is whether the published payout schedule has changed.
  *
- *   - For PrizePicks Flex 5/6 = 1.75x in our last reference, but some
- *     promos show 2x. The displayed multiplier always wins; this table
- *     is only the demotion baseline.
+ *   - PrizePicks states payouts may vary by lineup. The displayed
+ *     multiplier always wins; this table is only the latest standard
+ *     demotion baseline.
  */
 import type { DfsApp, DfsPlayType } from './types';
 import { DfsEngineInvariantError } from './errors';
@@ -38,17 +38,17 @@ type PayoutSchedule = Record<number, Record<number, number>>;
 
 const PRIZEPICKS_POWER: PayoutSchedule = {
   2: { 2: 3 },
-  3: { 3: 5 },
+  3: { 3: 6 },
   4: { 4: 10 },
   5: { 5: 20 },
   6: { 6: 37.5 },
 };
 
 const PRIZEPICKS_FLEX: PayoutSchedule = {
-  3: { 3: 2.25, 2: 1.25 },
-  4: { 4: 5, 3: 1.5 },
+  3: { 3: 3, 2: 1 },
+  4: { 4: 6, 3: 1.5 },
   5: { 5: 10, 4: 2, 3: 0.4 },
-  6: { 6: 25, 5: 1.75, 4: 0.4 },
+  6: { 6: 25, 5: 2, 4: 0.4 },
 };
 
 const UNDERDOG_STANDARD: PayoutSchedule = {

@@ -16,7 +16,7 @@ github.com/Buzzr-app/dfs-engine 🧵
 **2/**
 The problem: every book settles differently.
 
-Player ruled out? PrizePicks drops the leg and RECALCULATES your multiplier. Exact-line push? Depends on the play type. Stat correction 36h later? Re-grade window varies by league.
+Player ruled out? Does the entry remove the leg, reboot it, reprice, or void? Exact-line push? Which displayed terms apply? Stat correction 36h later? What is the re-grade window?
 
 These rules move real money. `if` statements don't scale to that.
 
@@ -27,7 +27,7 @@ So in @buzzr/dfs-engine, book rules are DATA, not code:
 - versioned + source-cited
 - validated at definition time (v5)
 
-When a user disputes a grade, you can prove exactly which rules ran.
+When a user disputes a grade, you can show exactly which compatibility or custom policy ran. PrizePicks is experimental/partial; Underdog is experimental/unverified. The displayed entry still controls.
 
 **4/**
 The engine does zero I/O. You inject a StatProvider; it validates every row at the boundary.
@@ -48,22 +48,26 @@ The result object can testify.
 **6/**
 And you don't have to trust me: golden fixtures ship as their own npm package (@buzzr/dfs-engine-test-vectors).
 
-Replay them in your CI → prove your integration grades identically to production.
+Replay them in your CI → detect drift from the matching engine version.
+
+They are regression fixtures, not official operator certification.
 
 **7/**
-v5.0.0 just shipped across the family:
+The 5.1.0 public-toolkit release includes:
 
 - settleEntries: batch settlement w/ memoized stat cache
 - book-policy validation
 - @buzzr/bets-core: parlay math, EV, Kelly staking, CLV
 - @buzzr/entertainment-engine: calibrated ML + game recommendations
-- NEW @buzzr/mcp: the engines as MCP tools for AI agents
+- @buzzr/mcp: 11 bounded tools for AI agents
+- effective-dated policy sources + verification metadata
+- a repository-owned Codex skill
 
 **8/**
-That last one matters: point your agent at `npx -y @buzzr/mcp` and it prices parlays and settles entries with book-accurate math instead of hallucinating payouts.
+That last one matters: point your agent at `npx -y @buzzr/mcp` and it runs deterministic odds, history, DFS compatibility, and game-scoring math on supplied data. It does not fetch live odds, box scores, or operator rulings.
 
 **9/**
-All MIT, Node ≥22, ESM+CJS, typed to the teeth. Built by one person, running in production in the Buzzr app.
+All MIT, Node ≥22, ESM+CJS, typed to the teeth. Built by one person. Buzzr's mobile release branch currently vendors the three 5.0.0 engine tarballs; the public 5.1.0 toolkit is not an automatic app upgrade.
 
 ⭐ github.com/Buzzr-app/dfs-engine
 📚 buzzr-app.github.io/dfs-engine
@@ -73,4 +77,4 @@ Questions about settlement edge cases welcome — the DNP matrix is cursed.
 
 ## Standalone short post (alternative, single tweet)
 
-I open-sourced my sports app's money-grading code: a zero-dependency TypeScript DFS settlement engine with declarative book policies, boundary-validated stat providers, audit trails on every result, and published conformance vectors. v5 adds batch settlement + an MCP server for AI agents. github.com/Buzzr-app/dfs-engine
+I open-sourced my sports app's settlement core: a zero-dependency TypeScript DFS engine with declarative compatibility policies, boundary-validated stat providers, audit trails, versioned regression fixtures, and an 11-tool MCP server. Operator-named profiles disclose verification limits. github.com/Buzzr-app/dfs-engine

@@ -1,4 +1,5 @@
 import {
+  calculateClosingLineValue,
   calculateEdgePercent,
   calculateExpectedValue,
   calculateKellyStake,
@@ -8,13 +9,9 @@ import {
 } from '@buzzr/bets-core';
 import { z } from 'zod';
 
+import { americanOdds, positiveFiniteNumber } from './schemas';
 import { defineTool, jsonResult } from './shared';
 import type { BuzzrToolDefinition } from './shared';
-
-const americanOdds = z
-  .number()
-  .refine((value) => value !== 0, { message: 'American odds cannot be 0.' })
-  .describe('American odds, e.g. -110 or +145.');
 
 const fairLineSchema = z.object({
   selected: americanOdds.describe('American odds offered for the side you are evaluating.'),
@@ -22,8 +19,28 @@ const fairLineSchema = z.object({
   selectedSide: z
     .string()
     .min(1)
+    .max(200)
     .optional()
     .describe('Optional label for the selected side, e.g. "Lakers -3.5".'),
+});
+
+const closingLineValueSchema = z.object({
+  placedAmericanOdds: americanOdds.describe('American odds when the bet was placed.'),
+  closingAmericanOdds: americanOdds.describe('American odds when the market closed.'),
+});
+
+export const closingLineValueTool = defineTool({
+  name: 'closing_line_value',
+  title: 'Closing line value',
+  description:
+    'Compare placed and closing American odds with @buzzr/bets-core. Returns the ' +
+    'implied-probability delta in percentage points and whether the bet beat the close.',
+  inputSchema: closingLineValueSchema,
+  run: (args) =>
+    jsonResult({
+      contractVersion: '1',
+      ...calculateClosingLineValue(args),
+    }),
 });
 
 export const fairLineTool = defineTool({
@@ -52,6 +69,7 @@ const parlayValueSchema = z.object({
       }),
     )
     .min(1)
+    .max(50)
     .describe('Every leg of the parlay, each with both sides of its market.'),
   offeredAmericanOdds: americanOdds
     .optional()
@@ -59,9 +77,7 @@ const parlayValueSchema = z.object({
       'Combined parlay price the book is offering. Defaults to the product of the ' +
         'selected leg prices when omitted.',
     ),
-  stake: z
-    .number()
-    .positive()
+  stake: positiveFiniteNumber
     .optional()
     .describe('Optional stake; adds expected-value math to the result.'),
 });
@@ -104,15 +120,17 @@ export const parlayValueTool = defineTool({
 });
 
 const kellyStakeSchema = z.object({
-  bankroll: z.number().positive().describe('Total bankroll in currency units.'),
+  bankroll: positiveFiniteNumber.describe('Total bankroll in currency units.'),
   americanOdds: americanOdds.describe('American odds offered for the bet.'),
   winProbability: z
     .number()
+    .finite()
     .gt(0)
     .lt(1)
     .describe('Your estimated win probability, strictly between 0 and 1.'),
   fraction: z
     .number()
+    .finite()
     .gt(0)
     .max(1)
     .optional()
@@ -140,6 +158,7 @@ export const kellyStakeTool = defineTool({
 
 export const oddsTools: readonly BuzzrToolDefinition[] = [
   fairLineTool,
+  closingLineValueTool,
   parlayValueTool,
   kellyStakeTool,
 ];

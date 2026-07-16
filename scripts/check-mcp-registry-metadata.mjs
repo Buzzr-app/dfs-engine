@@ -1,0 +1,57 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+
+import Ajv from 'ajv';
+import addFormats from 'ajv-formats';
+
+const [rootManifest, mcpManifest, server] = await Promise.all(
+  ['package.json', 'packages/mcp/package.json', 'server.json'].map(async (path) =>
+    JSON.parse(await readFile(path, 'utf8')),
+  ),
+);
+
+const schema = 'https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json';
+const registryName = 'io.github.Buzzr-app/dfs-engine';
+const repositoryUrl = 'https://github.com/Buzzr-app/dfs-engine';
+
+const schemaResponse = await fetch(schema, { signal: AbortSignal.timeout(15_000) });
+assert.equal(
+  schemaResponse.ok,
+  true,
+  `Could not fetch MCP Registry schema: ${schemaResponse.status}`,
+);
+const registrySchema = await schemaResponse.json();
+const ajv = new Ajv({ allErrors: true, strict: false });
+addFormats(ajv);
+const validate = ajv.compile(registrySchema);
+assert.equal(
+  validate(server),
+  true,
+  `server.json does not match the MCP Registry schema: ${ajv.errorsText(validate.errors)}`,
+);
+
+assert.equal(server.$schema, schema);
+assert.equal(mcpManifest.mcpName, registryName);
+assert.equal(server.name, registryName);
+assert.equal(server.title, 'Buzzr Sports Engine');
+assert.equal(typeof server.description, 'string');
+assert(server.description.length > 0 && server.description.length <= 100);
+assert.equal(server.version, mcpManifest.version);
+assert.equal(server.version, rootManifest.version);
+assert.deepEqual(server.repository, {
+  url: repositoryUrl,
+  source: 'github',
+  id: '1234984143',
+  subfolder: 'packages/mcp',
+});
+assert.equal(server.websiteUrl, 'https://buzzr-app.github.io/dfs-engine/');
+assert.equal(server.packages.length, 1);
+assert.deepEqual(server.packages[0], {
+  registryType: 'npm',
+  identifier: '@buzzr/mcp',
+  version: mcpManifest.version,
+  transport: { type: 'stdio' },
+});
+assert(!JSON.stringify(server).match(/environmentVariables|secret|token|api.?key/i));
+
+console.log(`Verified MCP Registry metadata for ${registryName}@${server.version}.`);

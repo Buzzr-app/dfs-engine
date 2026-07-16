@@ -102,6 +102,53 @@ describe('v2 Settlement OS engine', () => {
     });
   });
 
+  test('selects a provider game-log row by the leg game date instead of array order', async () => {
+    const provider = defineStatProvider({
+      id: 'dated-gamelog',
+      getGameLog: () => [
+        gameLogEntry({ date: '2026-05-08T00:00:00.000Z', points: '12' }),
+        gameLogEntry({ date: '2026-05-07T00:00:00.000Z', points: '31' }),
+      ],
+    });
+    const engine = createDfsEngine({ statProviders: [provider] });
+
+    await expect(
+      engine.extractLegStat(leg(), { statProviderId: 'dated-gamelog' }, entry({ legs: [leg()] })),
+    ).resolves.toMatchObject({ ok: true, value: 31 });
+  });
+
+  test('leaves an ambiguous provider game log pending instead of guessing a row', async () => {
+    const provider = defineStatProvider({
+      id: 'ambiguous-gamelog',
+      getGameLog: () => [
+        gameLogEntry({ date: '2026-05-07T01:00:00.000Z', points: '31' }),
+        gameLogEntry({ date: '2026-05-07T05:00:00.000Z', points: '41' }),
+      ],
+    });
+    const engine = createDfsEngine({ statProviders: [provider] });
+
+    await expect(
+      engine.extractLegStat(
+        leg(),
+        { statProviderId: 'ambiguous-gamelog' },
+        entry({ legs: [leg()] }),
+      ),
+    ).resolves.toMatchObject({ ok: false, reason: 'missing_provider_data' });
+  });
+
+  test('distinguishes a supported prop with missing data from an unsupported prop', async () => {
+    const engine = createDfsEngine();
+
+    await expect(
+      engine.extractLegStat(leg(), { actualEntry: gameLogEntry({ points: '' }) }),
+    ).resolves.toMatchObject({ ok: false, reason: 'missing_stat' });
+    await expect(
+      engine.extractLegStat(leg({ propType: 'Unsupported Stat' }), {
+        actualEntry: gameLogEntry(),
+      }),
+    ).resolves.toMatchObject({ ok: false, reason: 'unsupported_prop' });
+  });
+
   test('keeps league registries isolated per engine instance', async () => {
     const customLeague = defineLeagueAdapter({
       league: 'SIM',
@@ -164,6 +211,91 @@ describe('v2 Settlement OS engine', () => {
     expect(result.status).toBe('void');
     expect(result.payout).toEqual({ total: 25, withdrawable: 25, bonus: 0 });
     expect(result.adjustments).toContainEqual(expect.objectContaining({ type: 'void' }));
+  });
+
+  test('marks an all-push refund as pushed while all-DNP remains void', async () => {
+    const engine = createDfsEngine();
+    const result = await engine.settleEntry(entry({ stake: 25 }), {
+      actualsByLegId: { 'leg-1': 20.5, 'leg-2': 7.5 },
+    });
+
+    expect(result.status).toBe('pushed');
+    expect(result.payout).toEqual({ total: 25, withdrawable: 25, bonus: 0 });
+    expect(result.explanationCodes).toContain('refund_no_survivors');
+    expect(result.auditTrail.at(-1)?.code).toBe('settlement.pushed');
+  });
+
+  test('cent-rounds payout totals and split components', async () => {
+    const roundedPolicy = {
+      id: 'rounding-book',
+      displayName: 'Rounding Book',
+      version: 'test-1',
+      effectiveFrom: '2026-01-01',
+      status: 'draft' as const,
+      sources: [{ label: 'Rounding fixture' }],
+      playTypes: [
+        {
+          id: 'main',
+          displayName: 'Main',
+          payoutModel: 'displayed-multiplier' as const,
+          pickCount: { min: 2, max: 2 },
+        },
+      ],
+      tiePolicy: { type: 'push' as const },
+      dnpPolicy: { type: 'remove_leg' as const, voidIfNoSurvivors: true },
+      pushPolicy: { type: 'remove_leg' as const, refundIfNoSurvivors: true },
+      payoutSplit: {
+        type: 'custom' as const,
+        split: ({ totalPayout }: { totalPayout: number }) => ({
+          total: totalPayout,
+          withdrawable: totalPayout * (2 / 3),
+          bonus: totalPayout * (1 / 3),
+        }),
+      },
+    };
+    const engine = createDfsEngine({ bookPolicies: [roundedPolicy] });
+
+    const result = await engine.settleEntry(
+      entry({
+        bookId: 'rounding-book',
+        playTypeId: 'main',
+        stake: 10.01,
+        displayedMultiplier: 1.005,
+      }),
+      { actualsByLegId: { 'leg-1': 30, 'leg-2': 10 } },
+    );
+
+    expect(result.payout).toEqual({ total: 10.06, withdrawable: 6.71, bonus: 3.35 });
+
+    const halfCent = await engine.settleEntry(
+      entry({
+        entryId: 'half-cent',
+        bookId: 'rounding-book',
+        playTypeId: 'main',
+        stake: 1,
+        displayedMultiplier: 1.005,
+      }),
+      { actualsByLegId: { 'leg-1': 30, 'leg-2': 10 } },
+    );
+    expect(halfCent.payout).toEqual({ total: 1.01, withdrawable: 0.67, bonus: 0.34 });
+
+    for (const [stake, expectedTotal] of [
+      [10.075, 10.08],
+      [128.015, 128.02],
+    ] as const) {
+      const decimalHalf = await engine.settleEntry(
+        entry({
+          entryId: `decimal-half-${stake}`,
+          bookId: 'rounding-book',
+          playTypeId: 'main',
+          stake,
+          displayedMultiplier: 1,
+        }),
+        { actualsByLegId: { 'leg-1': 30, 'leg-2': 10 } },
+      );
+
+      expect(decimalHalf.payout.total).toBe(expectedTotal);
+    }
   });
 
   test('prices boosted Underdog flex payouts against the surviving hit count', async () => {

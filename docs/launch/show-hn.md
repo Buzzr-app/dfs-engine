@@ -21,11 +21,11 @@ So I extracted the settlement code into open-source packages and made "explain y
 - Book rules are data, not code: a `DfsBookPolicy` declares play types, payout tables, DNP/push/tie/rescue behavior, and is versioned so you can prove which rules graded a slip.
 - Every settlement returns a full audit trail, provider provenance (which stat source, what raw row), a validation report, and machine-readable explanation codes.
 - The engine does zero I/O. You inject a `StatProvider`; pure functions do the rest. Zero runtime dependencies, ESM+CJS, strict types.
-- Golden test vectors ship as their own package, so an external integrator can prove their wiring grades identically to production.
+- Versioned engine regression fixtures ship as their own package, so an external integrator can detect drift from the matching engine behavior. They are not operator certification.
 
-v5.0.0 just landed: batch settlement with a memoized per-call stat cache, book-policy validation, and a draft prediction-market policy. There's also an odds-math package (no-vig fair lines, parlay pricing, EV, Kelly, CLV), an entertainment-scoring engine, and an MCP server so AI agents can call the real math instead of hallucinating payouts.
+Release 5.1.0 adds effective-dated policy provenance, adversarial regression vectors, bounded public contracts, and a repository-owned Codex skill. There is also an odds-math package (no-vig fair lines, parlay pricing, EV, Kelly, CLV), an entertainment-scoring engine, and an 11-tool MCP server so AI agents can call deterministic math from supplied data.
 
-Everything runs in production in the Buzzr app; the app is the first consumer of every release.
+The Buzzr mobile app's `release/ios-2.0.0` branch currently vendors 5.0.0 tarballs for the DFS, odds, and entertainment engines. The app is not automatically upgraded to the public 5.1.0 toolkit.
 
 Repo: https://github.com/Buzzr-app/dfs-engine
 Docs: https://buzzr-app.github.io/dfs-engine/
@@ -37,4 +37,4 @@ Happy to answer questions about settlement edge cases — the DNP/rescue matrix 
 
 - Why zero dependencies: settlement code is audit-surface; every dep is something a money-grading pipeline has to trust.
 - Why "engine + injected providers": books/apps have wildly different data sources; the engine validates rows at the boundary and refuses malformed data (`invalid_provider_data`) instead of mis-grading.
-- Honest limitations: built-in policies cover PrizePicks/Underdog-style play types; prediction-market policy is a draft; provider packages are contracts, not API clients — you bring the fetch.
+- Honest limitations: PrizePicks is an experimental/partial compatibility profile; Underdog is experimental/unverified; displayed entry terms and operator rulings remain authoritative. Draft fixtures are non-executable, and provider packages are contracts, not API clients — you bring the fetch.

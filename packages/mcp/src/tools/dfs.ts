@@ -4,6 +4,7 @@ import {
   validateDfsEntryInput,
 } from '@buzzr/dfs-engine';
 import type {
+  DfsBatchEntryFailure,
   DfsBookPolicy,
   DfsEntryInput,
   DfsLegInput,
@@ -11,10 +12,19 @@ import type {
 } from '@buzzr/dfs-engine';
 import { z } from 'zod';
 
+import {
+  boundedIdentifier,
+  boundedArray,
+  boundedLabel,
+  boundedRecord,
+  finiteNumber,
+  isoDateOrTimestamp,
+  isoTimestamp,
+  nonNegativeFiniteNumber,
+  positiveFiniteNumber,
+} from './schemas';
 import { defineTool, jsonResult } from './shared';
 import type { BuzzrToolDefinition } from './shared';
-
-const americanNumber = z.number();
 
 const legStatusSchema = z.enum([
   'pending',
@@ -29,18 +39,20 @@ const legStatusSchema = z.enum([
 ]);
 
 const legSchema = z.object({
-  legId: z.string().min(1).describe('Stable id for this leg, unique within the entry.'),
-  playerId: z.string().nullish().describe('Optional provider player id.'),
-  playerName: z.string().min(1).describe('Player display name, e.g. "LeBron James".'),
-  team: z.string().nullish(),
-  opponent: z.string().nullish(),
-  gameId: z.string().nullish(),
-  gameDate: z.string().nullish().describe('ISO date of the game, e.g. "2026-07-06".'),
-  league: z.string().min(1).describe('League code, e.g. "NBA", "NFL", "MLB".'),
-  propType: z.string().min(1).describe('Prop market, e.g. "points", "rebounds", "pass_yards".'),
-  line: americanNumber.describe('The prop line, e.g. 25.5.'),
+  legId: boundedIdentifier.describe('Stable id for this leg, unique within the entry.'),
+  playerId: boundedIdentifier.nullish().describe('Optional provider player id.'),
+  playerName: boundedLabel.describe('Player display name, e.g. "LeBron James".'),
+  team: boundedLabel.nullish(),
+  opponent: boundedLabel.nullish(),
+  gameId: boundedIdentifier.nullish(),
+  gameDate: isoDateOrTimestamp
+    .nullish()
+    .describe('ISO date or timestamp for the game, e.g. "2026-07-06".'),
+  league: boundedIdentifier.describe('League code, e.g. "NBA", "NFL", "MLB".'),
+  propType: boundedIdentifier.describe('Prop market, e.g. "points", "rebounds", "pass_yards".'),
+  line: finiteNumber.describe('The prop line, e.g. 25.5.'),
   direction: z.enum(['over', 'under']).describe('Which side of the line was picked.'),
-  actual: americanNumber
+  actual: finiteNumber
     .nullish()
     .describe('Observed stat value, when already known. Omit to leave the leg pending.'),
   status: legStatusSchema
@@ -48,30 +60,72 @@ const legSchema = z.object({
     .describe('Pre-graded leg status (e.g. "dnp" or "void") when the book already ruled it.'),
 });
 
-const gradeDfsEntrySchema = z.object({
-  entryId: z.string().min(1).describe('Stable id for the entry being graded.'),
-  bookId: z
-    .string()
-    .min(1)
-    .describe('DFS book id, e.g. "prizepicks" or "underdog". See list_book_policies.'),
-  playTypeId: z
-    .string()
-    .min(1)
-    .describe('Play type id for the book, e.g. "power", "flex", "underdog_standard".'),
-  stake: z.number().positive().describe('Entry stake in currency units.'),
-  displayedMultiplier: z
-    .number()
-    .positive()
-    .describe('The payout multiplier the book displayed at entry time.'),
-  baseMultiplier: z.number().positive().nullish(),
-  profitBoostPct: z.number().min(0).nullish(),
-  placedAt: z.string().nullish().describe('ISO timestamp the entry was placed.'),
-  legs: z.array(legSchema).min(1),
-  actualsByLegId: z
-    .record(z.string(), z.number().nullable())
-    .optional()
-    .describe('Optional map of legId to observed stat value, merged in at settlement time.'),
-});
+const entryFields = {
+  entryId: boundedIdentifier.describe('Stable id for the entry being graded.'),
+  bookId: boundedIdentifier.describe(
+    'DFS book id, e.g. "prizepicks" or "underdog". See list_book_policies.',
+  ),
+  playTypeId: boundedIdentifier.describe(
+    'Play type id for the book, e.g. "power", "flex", "underdog_standard".',
+  ),
+  stake: positiveFiniteNumber.describe('Entry stake in currency units.'),
+  displayedMultiplier: positiveFiniteNumber.describe(
+    'The payout multiplier the book displayed at entry time.',
+  ),
+  baseMultiplier: positiveFiniteNumber.nullish(),
+  profitBoostPct: nonNegativeFiniteNumber.nullish(),
+  placedAt: isoTimestamp.nullish().describe('ISO timestamp the entry was placed.'),
+  legs: boundedArray(legSchema, 12, 1),
+};
+
+function requireUniqueLegIds(
+  value: { legs: readonly { legId: string }[] },
+  context: z.RefinementCtx,
+): void {
+  const seen = new Set<string>();
+  for (const [index, leg] of value.legs.entries()) {
+    if (seen.has(leg.legId)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['legs', index, 'legId'],
+        message: `Duplicate legId: ${leg.legId}`,
+      });
+    }
+    seen.add(leg.legId);
+  }
+}
+
+const actualsByLegIdSchema = boundedRecord(
+  boundedIdentifier,
+  finiteNumber.nullable(),
+  12,
+  'actualsByLegId',
+);
+
+const gradeDfsEntrySchema = z
+  .object({
+    ...entryFields,
+    actualsByLegId: actualsByLegIdSchema
+      .optional()
+      .describe('Optional map of legId to observed stat value, merged in at settlement time.'),
+  })
+  .superRefine((value, context) => {
+    requireUniqueLegIds(value, context);
+    if (value.actualsByLegId) {
+      const legIds = new Set(value.legs.map((leg) => leg.legId));
+      for (const legId of Object.keys(value.actualsByLegId)) {
+        if (!legIds.has(legId)) {
+          context.addIssue({
+            code: 'custom',
+            path: ['actualsByLegId', legId],
+            message: `actualsByLegId contains unknown legId: ${legId}`,
+          });
+        }
+      }
+    }
+  });
+
+const batchEntrySchema = z.object(entryFields).superRefine(requireUniqueLegIds);
 
 type GradeDfsEntryArgs = z.output<typeof gradeDfsEntrySchema>;
 
@@ -107,9 +161,9 @@ function toDfsEntryInput(args: GradeDfsEntryArgs): DfsEntryInput {
   };
 }
 
-/** Engine with the built-in stable books plus the published draft fixtures. */
+/** Engine with only the built-in executable compatibility policies. */
 function buildEngine() {
-  return createDfsEngine({ bookPolicies: DRAFT_BOOK_POLICY_FIXTURES });
+  return createDfsEngine();
 }
 
 export const gradeDfsEntryTool = defineTool({
@@ -126,28 +180,91 @@ export const gradeDfsEntryTool = defineTool({
       ? { actualsByLegId: args.actualsByLegId }
       : undefined;
     const result = await engine.settleEntry(toDfsEntryInput(args), context);
+    return jsonResult({ ...result, explanation: engine.explainSettlement(result) });
+  },
+});
+
+const gradeDfsEntriesSchema = z
+  .object({
+    entries: boundedArray(batchEntrySchema, 50, 1),
+    concurrency: z.number().int().min(1).max(8).optional(),
+  })
+  .superRefine((value, context) => {
+    const entryIds = new Set<string>();
+    let totalLegs = 0;
+    for (const [index, entry] of value.entries.entries()) {
+      totalLegs += entry.legs.length;
+      if (entryIds.has(entry.entryId)) {
+        context.addIssue({
+          code: 'custom',
+          path: ['entries', index, 'entryId'],
+          message: `Duplicate entryId: ${entry.entryId}`,
+        });
+      }
+      entryIds.add(entry.entryId);
+    }
+    if (totalLegs > 600) {
+      context.addIssue({
+        code: 'custom',
+        path: ['entries'],
+        message: 'A batch cannot contain more than 600 total legs.',
+      });
+    }
+  });
+
+export function serializeBatchFailure(failure: DfsBatchEntryFailure) {
+  return {
+    entryId: failure.entryId,
+    index: failure.index,
+    error: {
+      code: 'entry_settlement_failed',
+      message: 'Entry settlement failed.',
+    },
+  };
+}
+
+export const gradeDfsEntriesTool = defineTool({
+  name: 'grade_dfs_entries',
+  title: 'Grade DFS entries',
+  description:
+    'Settle up to 50 DFS entries with @buzzr/dfs-engine batch settlement. ' +
+    'Returns full explainable settlement results, isolated serializable failures, ' +
+    'summary counts, and per-call stat-cache metrics.',
+  inputSchema: gradeDfsEntriesSchema,
+  run: async (args) => {
+    const engine = buildEngine();
+    const batch = await engine.settleEntries(args.entries.map(toDfsEntryInput), {
+      concurrency: args.concurrency ?? 1,
+    });
     return jsonResult({
-      entryId: result.entryId,
-      bookId: result.bookId,
-      playTypeId: result.playTypeId,
-      status: result.status,
-      multiplier: result.multiplier,
-      effectiveMultiplier: result.effectiveMultiplier,
-      stake: result.stake,
-      payout: result.payout,
-      legs: result.legs,
-      adjustments: result.adjustments,
-      pendingReasons: result.pendingReasons,
-      explanationCodes: result.explanationCodes,
-      confidence: result.confidence,
-      policyVersion: result.policyVersion,
+      contractVersion: '1',
+      results: batch.results.map((result) => ({
+        ...result,
+        explanation: engine.explainSettlement(result),
+      })),
+      failures: batch.failures.map(serializeBatchFailure),
+      summary: batch.summary,
+      cache: batch.cache,
     });
   },
 });
 
 const validateDfsEntrySchema = z.object({
   entry: z
-    .record(z.string(), z.unknown())
+    .record(boundedIdentifier, z.unknown())
+    .refine((entry) => Object.keys(entry).length <= 1_000, {
+      message: 'Entry objects cannot contain more than 1,000 top-level fields.',
+    })
+    .refine(
+      (entry) => {
+        try {
+          return Buffer.byteLength(JSON.stringify(entry), 'utf8') <= 64 * 1_024;
+        } catch {
+          return false;
+        }
+      },
+      { message: 'Entry payload cannot exceed 64 KiB of JSON.' },
+    )
     .describe(
       'A candidate DfsEntryInput object (entryId, bookId, playTypeId, stake, ' +
         'displayedMultiplier, legs[]). Passed as-is to the engine validators so ' +
@@ -173,53 +290,18 @@ export const validateDfsEntryTool = defineTool({
   },
 });
 
-/**
- * Play-type metadata for the engine's built-in stable policies. The engine's
- * public API exposes registered book ids (getRegisteredBooks) but not the
- * built-in policy objects themselves, so this mirrors the ids/display names of
- * the built-ins shipped in @buzzr/dfs-engine v5.
- */
-const BUILT_IN_POLICY_SUMMARIES: readonly {
-  id: string;
-  displayName: string;
-  status: string;
-  playTypes: { id: string; displayName: string }[];
-}[] = [
-  {
-    id: 'prizepicks',
-    displayName: 'PrizePicks',
-    status: 'stable',
-    playTypes: [
-      { id: 'power', displayName: 'Power Play' },
-      { id: 'flex', displayName: 'Flex Play' },
-    ],
-  },
-  {
-    id: 'underdog',
-    displayName: 'Underdog',
-    status: 'stable',
-    playTypes: [
-      { id: 'underdog_standard', displayName: 'Standard' },
-      { id: 'underdog_flex', displayName: 'Flex' },
-    ],
-  },
-];
-
-function describePolicy(policy: DfsBookPolicy) {
+function describeDraftPolicy(policy: DfsBookPolicy) {
   return {
     id: policy.id,
     displayName: policy.displayName,
-    status: policy.status,
     version: policy.version,
+    effectiveFrom: policy.effectiveFrom,
+    status: policy.status,
+    verification: policy.verification ?? null,
+    sources: policy.sources,
+    playTypes: policy.playTypes,
+    executable: false as const,
     source: 'draft_fixture' as const,
-    playTypes: policy.playTypes.map((playType) => ({
-      id: playType.id,
-      displayName: playType.displayName,
-      payoutModel: playType.payoutModel,
-      pickCount: playType.pickCount,
-      allOrNothing: playType.allOrNothing ?? false,
-      flex: playType.flex ?? false,
-    })),
   };
 }
 
@@ -227,27 +309,19 @@ export const listBookPoliciesTool = defineTool({
   name: 'list_book_policies',
   title: 'List DFS book policies',
   description:
-    'Enumerate the DFS books the settlement engine knows: built-in stable policies ' +
-    '(PrizePicks, Underdog) plus the published draft fixtures, with play types and ' +
-    'policy status. Use the ids here as bookId/playTypeId for grade_dfs_entry.',
+    'Enumerate registered executable DFS compatibility policies from the engine and ' +
+    'published draft fixtures that are metadata-only. Includes version, effective date, ' +
+    'verification, source references, complete play-type metadata, and executable status.',
   inputSchema: z.object({}),
   run: () => {
     const engine = buildEngine();
-    const registeredIds = engine.getRegisteredBooks();
-    const draftsById = new Map(DRAFT_BOOK_POLICY_FIXTURES.map((policy) => [policy.id, policy]));
-    const builtInsById = new Map(BUILT_IN_POLICY_SUMMARIES.map((summary) => [summary.id, summary]));
-
-    const books = registeredIds.map((id) => {
-      const draft = draftsById.get(id);
-      if (draft) {
-        return describePolicy(draft);
-      }
-      const builtIn = builtInsById.get(id);
-      if (builtIn) {
-        return { ...builtIn, source: 'built_in' as const };
-      }
-      return { id, displayName: id, status: 'unknown', source: 'engine' as const, playTypes: [] };
-    });
+    const executableBooks = engine.getBookPolicies().map((policy) => ({
+      ...policy,
+      executable: true as const,
+      source: 'built_in' as const,
+    }));
+    const draftBooks = DRAFT_BOOK_POLICY_FIXTURES.map(describeDraftPolicy);
+    const books = [...executableBooks, ...draftBooks];
 
     return jsonResult({ count: books.length, books });
   },
@@ -255,6 +329,7 @@ export const listBookPoliciesTool = defineTool({
 
 export const dfsTools: readonly BuzzrToolDefinition[] = [
   gradeDfsEntryTool,
+  gradeDfsEntriesTool,
   validateDfsEntryTool,
   listBookPoliciesTool,
 ];

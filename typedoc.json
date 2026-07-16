@@ -1,0 +1,48 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": [
+    "packages/bets-core",
+    "packages/dfs-cli",
+    "packages/dfs-engine",
+    "packages/dfs-engine-test-vectors",
+    "packages/dfs-provider-espn",
+    "packages/dfs-provider-sportradar",
+    "packages/dfs-react",
+    "packages/dfs-testkit",
+    "packages/entertainment-engine",
+    "packages/mcp"
+  ],
+  "entryPointStrategy": "packages",
+  "packageOptions": {
+    "entryPoints": ["src/index.ts"],
+    "readme": "README.md",
+    "excludePrivate": true,
+    "excludeInternal": true
+  },
+  "out": "docs/api",
+  "json": "docs/api/api.json",
+  "name": "Buzzr Sports Engine API",
+  "readme": "docs/api-reference.md",
+  "categorizeByGroup": true,
+  "highlightLanguages": [
+    "bash",
+    "console",
+    "css",
+    "html",
+    "javascript",
+    "json",
+    "jsonc",
+    "json5",
+    "yaml",
+    "toml",
+    "tsx",
+    "typescript"
+  ],
+  "navigation": {
+    "includeCategories": true,
+    "includeGroups": true
+  },
+  "githubPages": true,
+  "hideGenerator": true,
+  "treatWarningsAsErrors": true
+}

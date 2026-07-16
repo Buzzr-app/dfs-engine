@@ -1,28 +1,33 @@
-# v5.0.0 launch checklist
+# 5.1.0 public-toolkit launch checklist
 
 Sequenced end-to-end. Everything in `docs/launch/` is a draft the maintainer publishes manually — nothing here auto-posts.
 
 ## Phase 0 — Pre-flight (day −1)
 
-- [ ] `npm run verify` green on `release/v5.0.0` (typecheck, lint, format, tests, coverage, build, docs, smoke, size, pack)
+- [ ] `npm run verify` green at the reviewed release commit (typecheck, lint, format, tests, coverage, build, packed MCP, docs, smoke, size, pack, workflows, registry metadata, audit)
 - [ ] `npm run audit:high` clean
+- [ ] `node scripts/check-public-docs.mjs` green
 - [ ] All 10 package READMEs render correctly on GitHub (badges, tables, code fences)
 - [ ] Root README, AGENTS.md, llms.txt merged to `main`
 - [ ] CHANGELOGs current for every package (changesets)
-- [ ] Merge `release/v5.0.0` → `main` via PR
+- [ ] Required CI is green and the reviewed PR is merged to protected `main`
 
 ## Phase 1 — Publish (day 0)
 
-- [ ] `npm publish` all 10 packages (workspaces; verify publish order lets `@buzzr/dfs-engine` land before dependents, or use `--workspaces` with existing tooling)
+- [ ] Publish only the five packages in the reviewed release manifest; publish `@buzzr/dfs-engine@5.1.0` before packages pinned to that version
+- [ ] Verify every live npm artifact against the reviewed version, `gitHead`, exact integrity digest, registry tarball origin, and provenance attestation
 - [ ] Spot-check npm pages: README renders, keywords show, `repository`/`homepage` links resolve to the right package directory
-- [ ] `npx -y @buzzr/mcp` starts clean on a machine that has never installed it
+- [ ] The clean-cache published proof passes for the exact `@buzzr/mcp@5.1.0` on Linux, macOS, and Windows
+- [ ] `npx -y @buzzr/mcp@5.1.0` starts clean with isolated npm/home state and a real MCP client lists all 11 tools
 - [ ] `npm i -g @buzzr/dfs-cli && dfs-grade --help` works
+- [ ] `npx skills add https://github.com/Buzzr-app/dfs-engine --skill buzzr-sports-engine` discovers and installs the repository skill
 
 ## Phase 2 — GitHub release + docs (day 0)
 
-- [ ] Tag `v5.0.0` and push the tag (this triggers the docs workflow → GitHub Pages)
-- [ ] Verify https://buzzr-app.github.io/dfs-engine/ rebuilt with v5 API
-- [ ] Write the GitHub Release: highlights (batch settlement, policy validation, parlay/EV/Kelly/CLV, calibrated ML + recommendations, new MCP server), migration notes, full changelog links
+- [ ] Create the reviewed `v5.1.0` tag only after npm artifacts are live
+- [ ] Verify https://buzzr-app.github.io/dfs-engine/ rebuilt from that exact tag
+- [ ] Write the GitHub Release: highlights (effective-dated policy truthfulness, settlement fixes, adversarial vectors, 11-tool bounded MCP, Codex skill), migration notes, and full changelog links
+- [ ] Publish and verify `io.github.Buzzr-app/dfs-engine` in the official MCP Registry after the npm version is live
 - [ ] Repo polish: description, website field → docs site, topics (`typescript`, `dfs`, `sports-betting`, `settlement`, `mcp`, `zero-dependency`, `prizepicks`, `underdog`)
 - [ ] Confirm the bug-report issue template still matches the README's "Reporting bugs" section
 
@@ -44,15 +49,35 @@ Sequenced end-to-end. Everything in `docs/launch/` is a draft the maintainer pub
 ## Phase 5 — Sustain (week 2+)
 
 - [ ] Respond to every issue within 24h during launch window (responsiveness converts stars → users)
-- [ ] Add "Powered by @buzzr open-source engines" section to the Buzzr app README (cross-promo) — done in the app repo
+- [ ] Reverify the Buzzr app cross-link. Its `release/ios-2.0.0` branch currently vendors three 5.0.0 tarballs; upgrading it to the public 5.1.0 toolkit is a separate reviewed release decision
 - [ ] Watch npm download trends + GitHub traffic; note which channel converted for the next release
 - [ ] Follow-up content idea backlog: "How PrizePicks-style DNP rescue actually works", "Batch settlement cache design", "Giving AI agents real odds math via MCP"
 
-## Metrics to record (baseline: ~24 downloads/week pre-launch)
+## Metrics to record
 
-| Metric                              | Baseline | +7 days | +30 days |
-| ----------------------------------- | -------- | ------- | -------- |
-| npm weekly downloads (family total) | ~24      |         |          |
-| GitHub stars                        |          |         |          |
-| Issues/discussions opened           |          |         |          |
-| Docs site uniques                   |          |         |          |
+Measured baseline: 191 package downloads from 2026-07-09 through 2026-07-15
+(complete UTC days). See
+[the source snapshot](adoption-baseline-2026-07-16.md); package downloads are not
+unique users. Release day (day 0) is D, the UTC date when the first reviewed
+5.1.0 package is confirmed live. Capture +7 for D+1 through D+7 on or after D+8,
+and +30 for D+1 through D+30 on or after D+31. Use
+`npm run --silent capture:adoption -- --start YYYY-MM-DD --end YYYY-MM-DD` and retain its
+JSON output as evidence.
+
+| Metric                                      | Baseline | +7 days | +30 days |
+| ------------------------------------------- | -------: | ------- | -------- |
+| npm package downloads (family total)        |      191 |         |          |
+| `@buzzr/mcp` downloads (MCP adoption proxy) |        4 |         |          |
+| GitHub stars                                |        1 |         |          |
+| GitHub unique cloners (trailing 14 days)    |       37 |         |          |
+| GitHub repo page views (trailing 14 days)   |        1 |         |          |
+| GitHub repo unique viewers (trailing 14 days) |      1 |         |          |
+| Issues opened (excluding pull requests)     |        0 |         |          |
+| MCP Registry records matching Buzzr         |        0 |         |          |
+
+Also retain clones, top referrers, and top paths from each JSON snapshot. The
+GitHub traffic values are rolling 14-day repository metrics, not cumulative
+release windows. Referrers are incomplete attribution signals, and GitHub repo
+views do not measure the Pages docs site. GitHub Pages has no first-party
+analytics configured here, so do not report docs-site visits or uniques unless
+a separate reviewed analytics source is added later.

@@ -1,8 +1,9 @@
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
-import { main } from '../src/cli';
+import { isDirectInvocation, main } from '../src/cli';
 
 const entry = {
   entryId: 'cli-main-entry',
@@ -137,5 +138,17 @@ describe('@buzzr/dfs-cli main()', () => {
   test('ignores unknown flags rather than crashing', async () => {
     const code = await main(['--unknown', '-x']);
     expect(code).toBe(1);
+  });
+
+  test('recognizes npm bin symlinks and URL-encoded paths as direct invocation', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'dfs cli-direct-'));
+    const realCli = join(dir, 'real cli.js');
+    const linkedCli = join(dir, 'dfs-grade');
+    writeFileSync(realCli, '#!/usr/bin/env node\n');
+    symlinkSync(realCli, linkedCli);
+
+    expect(isDirectInvocation(pathToFileURL(realCli).href, linkedCli)).toBe(true);
+    expect(isDirectInvocation(pathToFileURL(realCli).href, join(dir, 'other-cli'))).toBe(false);
+    expect(isDirectInvocation(pathToFileURL(realCli).href, undefined)).toBe(false);
   });
 });

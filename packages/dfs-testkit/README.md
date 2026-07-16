@@ -67,16 +67,30 @@ Fixtures emit v4-canonical shapes (`actual`, `status`, per-leg `legId` keys), so
 | You want to…                                          | Reach for                                                                                       |
 | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
 | Write unit tests for your own settlement integration  | **this package**                                                                                  |
-| Prove your wiring grades identically to Buzzr's       | [`@buzzr/dfs-engine-test-vectors`](https://www.npmjs.com/package/@buzzr/dfs-engine-test-vectors)  |
+| Replay versioned engine regression fixtures           | [`@buzzr/dfs-engine-test-vectors`](https://www.npmjs.com/package/@buzzr/dfs-engine-test-vectors)  |
 | Grade entries in production code                      | [`@buzzr/dfs-engine`](https://www.npmjs.com/package/@buzzr/dfs-engine)                            |
 | Grade entries from the command line                   | [`@buzzr/dfs-cli`](https://www.npmjs.com/package/@buzzr/dfs-cli)                                  |
 
+The regression fixtures are review gates for a matching engine version, not official operator conformance.
+
 ## Links
 
-- [Engine API docs](https://buzzr-app.github.io/dfs-engine/)
+- [All-package API index](../../docs/api-reference.md)
+- [Generated root-export reference](https://buzzr-app.github.io/dfs-engine/modules/_buzzr_dfs-testkit.html)
 - [Monorepo & full package family](https://github.com/Buzzr-app/dfs-engine)
 - [Issues](https://github.com/Buzzr-app/dfs-engine/issues)
 
+## Compatibility and support
+
+Node.js >= 22 is supported. Import the supported API from `@buzzr/dfs-testkit`.
+Deep `src/*` and `dist/*` imports are unsupported. The package is intended for
+development and test dependencies and uses the compatible `@buzzr/dfs-engine`
+range declared in its package manifest.
+
+Report vulnerabilities privately through [SECURITY.md](../../SECURITY.md). The
+[versioning and support policy](../../docs/versioning-and-support.md) defines the
+supported runtime and SemVer contract.
+
 ## License
 
-MIT
+[MIT](../../LICENSE)

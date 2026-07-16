@@ -1,0 +1,174 @@
+{
+  "schemaVersion": "1",
+  "transport": "stdio",
+  "framing": "newline-delimited JSON-RPC 2.0",
+  "discovery": {
+    "initialize": {
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+          "protocolVersion": "2025-06-18",
+          "capabilities": {},
+          "clientInfo": {
+            "name": "buzzr-machine-readable-example",
+            "version": "1.0.0"
+          }
+        }
+      },
+      "expect": {
+        "serverInfo": {
+          "name": "buzzr",
+          "version": "$PACKAGE_VERSION"
+        },
+        "capabilities": {
+          "tools": {
+            "listChanged": true
+          }
+        }
+      }
+    },
+    "initialized": {
+      "jsonrpc": "2.0",
+      "method": "notifications/initialized"
+    },
+    "toolsList": {
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/list"
+      },
+      "expect": {
+        "toolNames": [
+          "grade_dfs_entry",
+          "grade_dfs_entries",
+          "validate_dfs_entry",
+          "list_book_policies",
+          "fair_line",
+          "closing_line_value",
+          "parlay_value",
+          "kelly_stake",
+          "summarize_bet_history",
+          "predict_game_buzz",
+          "rank_games"
+        ]
+      }
+    }
+  },
+  "workflows": [
+    {
+      "id": "safe-single-entry-settlement",
+      "intent": "Inspect policy provenance, validate supplied entry data, then settle one entry.",
+      "calls": [
+        {
+          "request": {
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {
+              "name": "list_book_policies",
+              "arguments": {}
+            }
+          },
+          "expect": {
+            "count": 6,
+            "books.0.id": "prizepicks",
+            "books.0.status": "experimental",
+            "books.0.verification.status": "partial",
+            "books.0.executable": true
+          }
+        },
+        {
+          "request": {
+            "jsonrpc": "2.0",
+            "id": 4,
+            "method": "tools/call",
+            "params": {
+              "name": "validate_dfs_entry",
+              "arguments": {
+                "entry": {
+                  "entryId": "skill-example",
+                  "bookId": "prizepicks",
+                  "playTypeId": "power",
+                  "stake": 10,
+                  "displayedMultiplier": 3,
+                  "legs": [
+                    {
+                      "legId": "leg-1",
+                      "playerName": "Player One",
+                      "league": "NBA",
+                      "propType": "points",
+                      "line": 25.5,
+                      "direction": "over",
+                      "actual": 31
+                    },
+                    {
+                      "legId": "leg-2",
+                      "playerName": "Player Two",
+                      "league": "NBA",
+                      "propType": "points",
+                      "line": 27.5,
+                      "direction": "over",
+                      "actual": 33
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "expect": {
+            "ok": true,
+            "errors": [],
+            "warnings": []
+          }
+        },
+        {
+          "request": {
+            "jsonrpc": "2.0",
+            "id": 5,
+            "method": "tools/call",
+            "params": {
+              "name": "grade_dfs_entry",
+              "arguments": {
+                "entryId": "skill-example",
+                "bookId": "prizepicks",
+                "playTypeId": "power",
+                "stake": 10,
+                "displayedMultiplier": 3,
+                "legs": [
+                  {
+                    "legId": "leg-1",
+                    "playerName": "Player One",
+                    "league": "NBA",
+                    "propType": "points",
+                    "line": 25.5,
+                    "direction": "over",
+                    "actual": 31
+                  },
+                  {
+                    "legId": "leg-2",
+                    "playerName": "Player Two",
+                    "league": "NBA",
+                    "propType": "points",
+                    "line": 27.5,
+                    "direction": "over",
+                    "actual": 33
+                  }
+                ]
+              }
+            }
+          },
+          "expect": {
+            "entryId": "skill-example",
+            "status": "won",
+            "payout.total": 30,
+            "policyStatus": "experimental",
+            "policyVerification.status": "partial",
+            "validation.ok": true
+          }
+        }
+      ]
+    }
+  ]
+}

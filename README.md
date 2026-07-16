@@ -5,7 +5,7 @@
 [![node](https://img.shields.io/node/v/@buzzr/dfs-engine)](https://github.com/Buzzr-app/dfs-engine)
 [![docs](https://img.shields.io/badge/docs-typedoc-blue)](https://buzzr-app.github.io/dfs-engine/)
 
-**Pure-TypeScript, zero-dependency engines for sports betting and DFS apps** — auditable pick'em settlement, sportsbook odds math, and transparent game-entertainment scoring. Every package is a set of pure functions: no I/O, no framework lock-in, no native deps. Feed data in, get deterministic, explainable decisions out — with validation reports and audit trails, because settling money on `if (points > line)` is how disputes happen. Built and used in production by Buzzr, a sports social app.
+**Pure-TypeScript, zero-dependency engines for sports betting and DFS apps** — auditable pick'em settlement, sportsbook odds math, and transparent game-entertainment scoring. The three core engines are pure and perform no I/O; provider contracts inject data, while the CLI and MCP packages are thin boundary wrappers. Feed data in, get deterministic, explainable decisions out — with validation reports and audit trails, because settling money on `if (points > line)` is how disputes happen. The packages originated in Buzzr, a sports social app; the exact app integration snapshot is documented below.
 
 ## The packages
 
@@ -14,15 +14,15 @@
 | [`@buzzr/dfs-engine`](https://www.npmjs.com/package/@buzzr/dfs-engine)                            | DFS settlement OS: book policies, grading, payouts, audit trails, batch settlement   | `npm i @buzzr/dfs-engine`                  |
 | [`@buzzr/bets-core`](https://www.npmjs.com/package/@buzzr/bets-core)                              | Odds math: no-vig fair lines, parlays, EV, Kelly staking, CLV, period analytics      | `npm i @buzzr/bets-core`                   |
 | [`@buzzr/entertainment-engine`](https://www.npmjs.com/package/@buzzr/entertainment-engine)        | Transparent buzz scoring, hybrid ML predictions, personalized game recommendations   | `npm i @buzzr/entertainment-engine`        |
-| [`@buzzr/mcp`](https://www.npmjs.com/package/@buzzr/mcp)                                          | MCP server exposing the engines to AI agents (8 tools)                               | `npx -y @buzzr/mcp`                        |
+| [`@buzzr/mcp`](https://www.npmjs.com/package/@buzzr/mcp)                                          | MCP server exposing the engines to AI agents (11 tools)                              | `npx -y @buzzr/mcp@5.1.0`                  |
 | [`@buzzr/dfs-cli`](https://www.npmjs.com/package/@buzzr/dfs-cli)                                  | Grade a DFS entry from JSON on the command line                                      | `npm i -g @buzzr/dfs-cli`                  |
 | [`@buzzr/dfs-react`](https://www.npmjs.com/package/@buzzr/dfs-react)                              | Settlement → UI view-models (React/Vue/Svelte/vanilla; no React dep)                 | `npm i @buzzr/dfs-react`                   |
 | [`@buzzr/dfs-testkit`](https://www.npmjs.com/package/@buzzr/dfs-testkit)                          | Fixture builders + mock stat providers for tests                                     | `npm i -D @buzzr/dfs-testkit`              |
 | [`@buzzr/dfs-provider-espn`](https://www.npmjs.com/package/@buzzr/dfs-provider-espn)              | ESPN-shaped stat provider contract                                                   | `npm i @buzzr/dfs-provider-espn`           |
 | [`@buzzr/dfs-provider-sportradar`](https://www.npmjs.com/package/@buzzr/dfs-provider-sportradar)  | Sportradar-shaped stat provider contract                                             | `npm i @buzzr/dfs-provider-sportradar`     |
-| [`@buzzr/dfs-engine-test-vectors`](https://www.npmjs.com/package/@buzzr/dfs-engine-test-vectors)  | Golden fixtures proving your integration grades identically to Buzzr's               | `npm i -D @buzzr/dfs-engine-test-vectors`  |
+| [`@buzzr/dfs-engine-test-vectors`](https://www.npmjs.com/package/@buzzr/dfs-engine-test-vectors)  | Engine regression fixtures for the matching package version                          | `npm i -D @buzzr/dfs-engine-test-vectors`  |
 
-All packages: TypeScript-first with full `.d.ts`, ESM + CJS builds (the CLI is ESM-only), Node >= 22, MIT, zero runtime dependencies outside the family.
+All packages are TypeScript-first with full `.d.ts`, Node >= 22, and MIT licensing. The core engines have zero external runtime dependencies and ship ESM + CJS; the CLI is ESM-only, and the MCP server necessarily depends on the official MCP SDK plus Zod.
 
 ## Architecture
 
@@ -88,7 +88,9 @@ const result = await engine.settleEntry(entry, { statProviderId: 'my-stats' });
 const batch = await engine.settleEntries(entries, { statProviderId: 'my-stats' });
 ```
 
-Book policies for PrizePicks- and Underdog-style play types are built in and versioned; custom books plug in via `defineBookPolicy`, and v5 adds policy validation plus a draft prediction-market (Kalshi-style) policy.
+Built-in operator-named policies are independent compatibility profiles, not official rules engines. PrizePicks is an experimental, partially verified profile; Underdog is experimental and unverified. The displayed lineup terms are authoritative. Custom books plug in via `defineBookPolicy`, and draft fixtures are not registered for settlement.
+
+The test-vector package publishes engine regression fixtures for the matching engine version. They are not official operator conformance.
 
 ### Price a bet — `@buzzr/bets-core`
 
@@ -146,17 +148,29 @@ Add to your MCP client config (Claude Desktop, Claude Code, Cursor, …):
   "mcpServers": {
     "buzzr": {
       "command": "npx",
-      "args": ["-y", "@buzzr/mcp"]
+      "args": ["-y", "@buzzr/mcp@5.1.0"]
     }
   }
 }
 ```
 
-The server exposes the engines as 8 tools — settle entries, price parlays, compute EV/Kelly, score games — so agents get book-accurate math instead of hallucinated numbers.
+The server exposes 11 tools for DFS validation and settlement, odds and bet-history math, and game scoring. It performs deterministic computation only; it does not fetch operator accounts, live odds, or box scores. See the [MCP install, client configuration, tool catalog, and error contracts](packages/mcp/README.md).
 
-## Used in production by Buzzr
+## Verified Buzzr app integration
 
-These packages are extracted from — and power — the Buzzr sports app: DFS slip grading, sportsbook bet tracking, and the buzz scores on every game card run through exactly this code. The app is the first consumer of every release, so the published API is the one we live with ourselves.
+The Buzzr mobile app’s `release/ios-2.0.0` branch vendors `@buzzr/bets-core`, `@buzzr/dfs-engine`, and `@buzzr/entertainment-engine` as local 5.0.0 tarballs and imports all three. That verified snapshot is not automatically upgraded to the public 5.1.0 toolkit; an app update remains a separate, deliberate release task.
+
+The live consumer is [Buzzr Sports on the App Store](https://apps.apple.com/us/app/buzzr-sports/id6760628256).
+
+## Codex skill
+
+The repository-owned [Buzzr Sports Engine skill](skills/buzzr-sports-engine/SKILL.md) routes DFS, odds, history, and game-scoring work to the 11 MCP tools and records operator-safety limits.
+
+```sh
+npx skills add https://github.com/Buzzr-app/dfs-engine --skill buzzr-sports-engine
+```
+
+After installation, configure the local server with the [MCP client instructions](packages/mcp/README.md). Pin a reviewed published `@buzzr/mcp` version when repeatability matters.
 
 ## Development
 
@@ -173,10 +187,9 @@ Before publishing or cutting a release, run:
 
 ```bash
 npm run verify
-npm run audit:high
 ```
 
-`verify` runs typecheck, lint, format check, tests, coverage, build, docs, export smoke tests, package size checks, and a dry-run pack across all packages.
+`verify` runs typecheck, lint, formatting, tests, coverage, build, packed-package and real-client proofs, the repository skill proof, API docs, public-doc and local-link contracts, export and package smoke checks, release-workflow and MCP Registry metadata checks, and the high-severity dependency audit. CI additionally checks external links on Node 22.
 
 ## Reporting bugs
 
@@ -186,10 +199,16 @@ For settlement correctness or security-sensitive issues, follow [SECURITY.md](SE
 
 ## Links
 
-- [API docs (typedoc)](https://buzzr-app.github.io/dfs-engine/)
+- [Generated API docs for all ten packages (TypeDoc)](https://buzzr-app.github.io/dfs-engine/)
 - [Issues](https://github.com/Buzzr-app/dfs-engine/issues)
 - [AGENTS.md](AGENTS.md) — how AI coding agents should use this repo
 - [llms.txt](llms.txt) — machine-readable package index
+- [Architecture and data flow](docs/architecture.md) — package layers and execution paths
+- [Security, privacy, and threat model](docs/security-and-privacy.md) — trust boundaries and controls
+- [Versioning, compatibility, and support](docs/versioning-and-support.md) — SemVer, migrations, and app separation
+- [All-package API index](docs/api-reference.md) — supported roots for all ten packages
+- [Buzzr Sports Engine skill](skills/buzzr-sports-engine/SKILL.md) — Codex workflow and safety contract
+- [MCP configuration](packages/mcp/README.md) — install and client setup
 
 ## License
 

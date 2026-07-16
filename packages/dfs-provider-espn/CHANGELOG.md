@@ -1,5 +1,12 @@
 # @buzzr/dfs-provider-espn
 
+## 5.0.0
+
+### Major Changes
+
+- Synchronized the ESPN-shaped stat-provider adapter with
+  `@buzzr/dfs-engine@^5.0.0`; its public loader and provider APIs were unchanged.
+
 ## 4.0.0
 
 ### Major Changes

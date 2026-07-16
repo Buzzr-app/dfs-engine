@@ -1,5 +1,5 @@
 /**
- * @buzzr/mcp — MCP server exposing the @buzzr sports engines to AI agents.
+ * The `@buzzr/mcp` server exposes the Buzzr sports engines to AI agents.
  *
  * Run `npx @buzzr/mcp` (bin: buzzr-mcp) for a stdio server, or import
  * `createBuzzrMcpServer` to embed the tool catalog in your own server.
@@ -15,11 +15,19 @@ export {
 
 export {
   dfsTools,
+  gradeDfsEntriesTool,
   gradeDfsEntryTool,
   listBookPoliciesTool,
   validateDfsEntryTool,
 } from './tools/dfs';
-export { fairLineTool, kellyStakeTool, oddsTools, parlayValueTool } from './tools/odds';
+export { historyTools, summarizeBetHistoryTool } from './tools/history';
+export {
+  closingLineValueTool,
+  fairLineTool,
+  kellyStakeTool,
+  oddsTools,
+  parlayValueTool,
+} from './tools/odds';
 export {
   buzzTools,
   createPredictGameBuzzTool,

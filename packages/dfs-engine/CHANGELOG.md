@@ -1,5 +1,42 @@
 # Changelog
 
+## 5.1.0
+
+### Minor Changes
+
+- 5be07fa: Add effective-dated policy verification, source, payout-table, and immutable snapshot APIs while preserving v5 type compatibility. Correct explicit-status settlement, DNP/tie demotion and refunds, date-aware provider selection, all-removed outcomes, batch-cache annotations, and monetary rounding.
+
+### Corrected
+
+- Reclassified the built-in PrizePicks profile as experimental and partially
+  verified, and the Underdog profile as experimental and unverified. Operator-named
+  profiles are independent compatibility estimates; displayed entry terms and
+  explicit operator rulings remain authoritative.
+- Added effective-dated PrizePicks standard Player Pick payout tables from the
+  first-party sources reviewed on 2026-07-16 while retaining the May 2026
+  compatibility snapshots for historical entry selection.
+- Added immutable policy verification/source snapshots to results and public
+  policy listing, confidence caps for incomplete verification, and explicit
+  explanation codes.
+- Corrected DNP/tie demotion scaling, date-aware provider-row selection,
+  all-push/all-DNP status handling, immutable batch cache annotations, and
+  half-cent payout rounding.
+- Corrected the current two-pick PrizePicks Power outcome with one win and one
+  tied projection to the sourced 1.5x standard payout; one loss plus one tie
+  remains a loss, while a DNP below the two-pick minimum remains a refund.
+- Reject malformed verification notes and runtime date metadata without
+  coercion, while preserving the legacy definition API's shallow nested
+  mutability for minor-version compatibility.
+- Keep zero-loss settlements pending when no payout-table row exists instead
+  of converting missing policy data into a financial loss, prefer
+  outcome-specific rows over generic rows regardless of declaration order,
+  and validate payout-table source dates as strings at runtime.
+
+### Documentation
+
+- Reframed test vectors as engine regression fixtures rather than proof of
+  operator behavior, and documented current source links and compatibility limits.
+
 ## 5.0.0 — Batch Settlement + Declarative Policies
 
 Baselines the whole @buzzr family at v5. No breaking changes to the locked
@@ -80,7 +117,8 @@ Turns the Settlement OS into a book-policy registry instead of a PrizePicks/Unde
 ### Changed
 
 - `DfsEntryInput` now prefers `bookId` and `playTypeId`.
-- PrizePicks and Underdog are still stable built-ins, but their payout/tie/DNP behavior now flows through the policy registry.
+- The bundled PrizePicks and Underdog compatibility behavior flows through the
+  policy registry. Version 5.1.0 corrects their public status and verification metadata.
 - `adaptBuzzrBetInput(...)` emits the v3 entry shape while preserving the current Buzzr `CreateDfsBetInput` migration path.
 - `@buzzr/dfs-testkit` fixture entries now use valid v3 book/play IDs.
 
