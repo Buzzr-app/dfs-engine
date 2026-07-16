@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { execFile } from 'node:child_process';
+import { constants as fsConstants } from 'node:fs';
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -9,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { LATEST_PROTOCOL_VERSION } from '@modelcontextprotocol/sdk/types.js';
+import { JSONRPCMessageSchema, LATEST_PROTOCOL_VERSION } from '@modelcontextprotocol/sdk/types.js';
 
 const execFileAsync = promisify(execFile);
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -29,6 +30,33 @@ const coreToolNames = [
   'predict_game_buzz',
   'rank_games',
 ];
+const maxCapturedBytes = 256 * 1024;
+
+function captureOutput(capture, chunk, label) {
+  if (capture.overflow) {
+    return;
+  }
+  const next = capture.value + chunk.toString();
+  if (Buffer.byteLength(next) > maxCapturedBytes) {
+    capture.overflow = new Error(`${label} exceeded ${maxCapturedBytes} bytes`);
+    return;
+  }
+  capture.value = next;
+}
+
+async function withDeadline(promise, label, timeoutMs = 10_000) {
+  let timeout;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timeout = setTimeout(() => reject(new Error(`${label} timed out`)), timeoutMs);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 function commandEnvironment(cache) {
   return {
@@ -66,103 +94,126 @@ async function exerciseRealClient(consumerDirectory, cache, expectedVersion) {
     env: commandEnvironment(cache),
     stderr: 'pipe',
   });
-  let stderr = '';
+  const stderr = { value: '', overflow: null };
   transport.stderr?.on('data', (chunk) => {
-    stderr += chunk.toString();
+    captureOutput(stderr, chunk, 'Packed MCP stderr');
   });
 
   const client = new Client({ name: 'buzzr-packed-artifact-test', version: '1.0.0' });
-  await client.connect(transport);
   try {
+    await withDeadline(client.connect(transport), 'Packed MCP initialization');
     assert.deepEqual(client.getServerVersion(), { name: 'buzzr', version: expectedVersion });
 
-    const listed = await client.listTools();
+    const listed = await withDeadline(client.listTools(), 'Packed MCP tools/list');
     const listedNames = new Set(listed.tools.map((tool) => tool.name));
     for (const toolName of coreToolNames) {
       assert(listedNames.has(toolName), `Packed MCP is missing ${toolName}`);
     }
 
     const dfs = parseToolResult(
-      await client.callTool({
-        name: 'grade_dfs_entry',
-        arguments: {
-          entryId: 'packed-proof',
-          bookId: 'prizepicks',
-          playTypeId: 'power',
-          stake: 10,
-          displayedMultiplier: 3,
-          legs: [
-            {
-              legId: 'leg-1',
-              playerName: 'Player One',
-              league: 'NBA',
-              propType: 'points',
-              line: 25.5,
-              direction: 'over',
-              actual: 31,
-            },
-            {
-              legId: 'leg-2',
-              playerName: 'Player Two',
-              league: 'NBA',
-              propType: 'points',
-              line: 27.5,
-              direction: 'over',
-              actual: 33,
-            },
-          ],
-        },
-      }),
+      await withDeadline(
+        client.callTool({
+          name: 'grade_dfs_entry',
+          arguments: {
+            entryId: 'packed-proof',
+            bookId: 'prizepicks',
+            playTypeId: 'power',
+            stake: 10,
+            displayedMultiplier: 3,
+            legs: [
+              {
+                legId: 'leg-1',
+                playerName: 'Player One',
+                league: 'NBA',
+                propType: 'points',
+                line: 25.5,
+                direction: 'over',
+                actual: 31,
+              },
+              {
+                legId: 'leg-2',
+                playerName: 'Player Two',
+                league: 'NBA',
+                propType: 'points',
+                line: 27.5,
+                direction: 'over',
+                actual: 33,
+              },
+            ],
+          },
+        }),
+        'Packed MCP DFS call',
+      ),
     );
     assert.equal(dfs.status, 'won');
     assert.equal(dfs.payout.total, 30);
 
     const odds = parseToolResult(
-      await client.callTool({
-        name: 'fair_line',
-        arguments: { selected: -110, opposite: -110 },
-      }),
+      await withDeadline(
+        client.callTool({
+          name: 'fair_line',
+          arguments: { selected: -110, opposite: -110 },
+        }),
+        'Packed MCP odds call',
+      ),
     );
     assert.equal(odds.fairProbability, 0.5);
 
     const entertainment = parseToolResult(
-      await client.callTool({
-        name: 'predict_game_buzz',
-        arguments: {
-          league: 'NBA',
-          homeTeam: 'Lakers',
-          awayTeam: 'Celtics',
-          startsAt: '2030-07-17T19:30:00-04:00',
-          odds: { spread: -1.5, overUnder: 228.5 },
-          narratives: { isRivalry: true, rivalryIntensity: 3 },
-        },
-      }),
+      await withDeadline(
+        client.callTool({
+          name: 'predict_game_buzz',
+          arguments: {
+            league: 'NBA',
+            homeTeam: 'Lakers',
+            awayTeam: 'Celtics',
+            startsAt: '2030-07-17T19:30:00-04:00',
+            odds: { spread: -1.5, overUnder: 228.5 },
+            narratives: { isRivalry: true, rivalryIntensity: 3 },
+          },
+        }),
+        'Packed MCP entertainment call',
+      ),
     );
     assert.equal(typeof entertainment.score, 'number');
 
-    const invalid = await client.callTool({
-      name: 'fair_line',
-      arguments: { selected: 0, opposite: -110 },
-    });
+    const invalid = await withDeadline(
+      client.callTool({
+        name: 'fair_line',
+        arguments: { selected: 0, opposite: -110 },
+      }),
+      'Packed MCP invalid call',
+    );
     assert.equal(invalid.isError, true);
     assert.equal(invalid.content.length, 1);
     assert.equal(invalid.content[0].type, 'text');
     assert.match(invalid.content[0].text, /^MCP error -32602: Input validation error:/);
 
-    const concurrent = await Promise.all(
-      Array.from({ length: 12 }, (_, index) =>
-        client.callTool({
-          name: 'fair_line',
-          arguments: { selected: -110 - index, opposite: -110 },
-        }),
+    const concurrent = await withDeadline(
+      Promise.all(
+        Array.from({ length: 12 }, (_, index) =>
+          client.callTool({
+            name: 'fair_line',
+            arguments: {
+              selected: -110 - index,
+              opposite: -110,
+              selectedSide: `call-${index}`,
+            },
+          }),
+        ),
       ),
+      'Packed MCP concurrent calls',
     );
-    assert(concurrent.every((result) => result.isError !== true));
+    concurrent.forEach((result, index) => {
+      assert.equal(result.isError, undefined);
+      assert.equal(parseToolResult(result).selectedSide, `call-${index}`);
+    });
 
-    return { toolCount: listed.tools.length, stderr: () => stderr };
+    assert.equal(stderr.overflow, null);
+    return { toolCount: listed.tools.length, stderr: () => stderr.value };
   } finally {
-    await client.close();
-    assert.equal(transport.pid, null, 'Packed MCP child process did not shut down');
+    await client.close().catch(() => undefined);
+    await transport.close().catch(() => undefined);
   }
 }
 
@@ -172,13 +223,13 @@ async function exerciseMalformedInput(consumerDirectory, cache, cliPath) {
     env: commandEnvironment(cache),
     stdio: ['pipe', 'pipe', 'pipe'],
   });
-  let stdout = '';
-  let stderr = '';
+  const stdout = { value: '', overflow: null };
+  const stderr = { value: '', overflow: null };
   child.stdout.on('data', (chunk) => {
-    stdout += chunk.toString();
+    captureOutput(stdout, chunk, 'Packed MCP stdout');
   });
   child.stderr.on('data', (chunk) => {
-    stderr += chunk.toString();
+    captureOutput(stderr, chunk, 'Packed MCP stderr');
   });
 
   const closed = new Promise((resolveClose, rejectClose) => {
@@ -193,29 +244,56 @@ async function exerciseMalformedInput(consumerDirectory, cache, cliPath) {
     });
   });
 
-  child.stdin.write('not-json\n');
-  child.stdin.end(
-    `${JSON.stringify({
-      jsonrpc: '2.0',
-      id: 1,
-      method: 'initialize',
-      params: {
-        protocolVersion: LATEST_PROTOCOL_VERSION,
-        capabilities: {},
-        clientInfo: { name: 'buzzr-malformed-input-test', version: '1.0.0' },
-      },
-    })}\n`,
+  const initialize = JSON.stringify({
+    jsonrpc: '2.0',
+    id: 1,
+    method: 'initialize',
+    params: {
+      protocolVersion: LATEST_PROTOCOL_VERSION,
+      capabilities: {},
+      clientInfo: { name: 'buzzr-malformed-input-test', version: '1.0.0' },
+    },
+  });
+  const initialized = JSON.stringify({
+    jsonrpc: '2.0',
+    method: 'notifications/initialized',
+    params: {},
+  });
+  const listTools = JSON.stringify({
+    jsonrpc: '2.0',
+    id: 2,
+    method: 'tools/list',
+    params: {},
+  });
+  const splitAt = Math.floor(initialize.length / 2);
+
+  child.stdin.write(
+    `not-json\n${JSON.stringify({ jsonrpc: '2.0', id: 0, method: 42 })}\n${initialize.slice(0, splitAt)}`,
   );
+  setImmediate(() => {
+    child.stdin.end(`${initialize.slice(splitAt)}\r\n${initialized}\n${listTools}\n{"jsonrpc":`);
+  });
 
   const exit = await closed;
   assert.deepEqual(exit, { code: 0, signal: null });
+  assert.equal(stdout.overflow, null);
+  assert.equal(stderr.overflow, null);
 
-  const lines = stdout.trim().split('\n').filter(Boolean);
-  assert.equal(lines.length, 1, `Expected one JSON-RPC response, received: ${stdout}`);
-  const response = JSON.parse(lines[0]);
-  assert.equal(response.id, 1);
-  assert.equal(response.result.serverInfo.name, 'buzzr');
-  assert.match(stderr, /buzzr MCP server v\S+ listening on stdio/);
+  assert(stdout.value.endsWith('\n'), 'Packed MCP stdout must end on a frame boundary');
+  const lines = stdout.value.slice(0, -1).split('\n');
+  assert.equal(lines.length, 2, `Expected two JSON-RPC responses, received: ${stdout.value}`);
+  assert(
+    lines.every((line) => line.length > 0),
+    'Packed MCP stdout contained a blank frame',
+  );
+  const responses = lines.map((line) => JSONRPCMessageSchema.parse(JSON.parse(line)));
+  assert.deepEqual(
+    responses.map((response) => response.id),
+    [1, 2],
+  );
+  assert.equal(responses[0].result.serverInfo.name, 'buzzr');
+  assert(Array.isArray(responses[1].result.tools));
+  assert.match(stderr.value, /buzzr MCP server v\S+ listening on stdio/);
 }
 
 const temporaryRoot = await mkdtemp(join(tmpdir(), 'buzzr-mcp-packed-'));
@@ -256,18 +334,22 @@ try {
   const installedManifest = JSON.parse(
     await readFile(join(installedPackagePath, 'package.json'), 'utf8'),
   );
+  assert.equal(installedManifest.scripts.prepack, 'npm run build');
   assert.equal(installedManifest.bin.mcp, './dist/cli.js');
   assert.equal(installedManifest.bin['buzzr-mcp'], './dist/cli.js');
 
   const executableSuffix = process.platform === 'win32' ? '.cmd' : '';
-  await access(join(consumerDirectory, 'node_modules', '.bin', `mcp${executableSuffix}`));
-  await access(join(consumerDirectory, 'node_modules', '.bin', `buzzr-mcp${executableSuffix}`));
-
-  const protocol = await exerciseRealClient(
-    consumerDirectory,
-    cache,
-    installedManifest.version,
+  const executableMode = process.platform === 'win32' ? undefined : fsConstants.X_OK;
+  await access(
+    join(consumerDirectory, 'node_modules', '.bin', `mcp${executableSuffix}`),
+    executableMode,
   );
+  await access(
+    join(consumerDirectory, 'node_modules', '.bin', `buzzr-mcp${executableSuffix}`),
+    executableMode,
+  );
+
+  const protocol = await exerciseRealClient(consumerDirectory, cache, installedManifest.version);
   assert.match(protocol.stderr(), /buzzr MCP server v\S+ listening on stdio/);
   await exerciseMalformedInput(
     consumerDirectory,

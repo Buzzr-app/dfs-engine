@@ -1,8 +1,16 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import { allTools, createBuzzrMcpServer, SERVER_NAME, SERVER_VERSION } from '../src/index';
+
+const here = dirname(fileURLToPath(import.meta.url));
+const packageManifest = JSON.parse(readFileSync(resolve(here, '../package.json'), 'utf8')) as {
+  version: string;
+};
 
 const EXPECTED_TOOL_NAMES = [
   'grade_dfs_entry',
@@ -16,6 +24,10 @@ const EXPECTED_TOOL_NAMES = [
 ];
 
 describe('tool catalog', () => {
+  it('advertises the package manifest version', () => {
+    expect(SERVER_VERSION).toBe(packageManifest.version);
+  });
+
   it('ships all eight engine tools', () => {
     expect(allTools.map((tool) => tool.name)).toEqual(EXPECTED_TOOL_NAMES);
   });
