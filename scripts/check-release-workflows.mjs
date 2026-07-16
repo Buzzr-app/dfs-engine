@@ -191,25 +191,49 @@ assert.match(
 const privilegedArtifactValidation = publishJob.indexOf(
   'assert.deepEqual(actualFiles, expectedFiles',
 );
+const privilegedPreflightCounter = publishJob.indexOf('existing_exact_count=0');
+const privilegedPreflightLoop = publishJob.indexOf(
+  "while IFS=$'\\t' read -r package_name",
+  privilegedPreflightCounter,
+);
+const privilegedConditionalMainGate = publishJob.indexOf(
+  'if [[ "$existing_exact_count" -eq 0 ]]; then',
+);
 const privilegedMainCheck = publishJob.indexOf(
   'REMOTE_MAIN="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main"',
 );
-const privilegedPublishLoop = publishJob.indexOf("while IFS=$'\\t' read -r package_name");
+const privilegedPublishLoop = publishJob.indexOf(
+  "while IFS=$'\\t' read -r package_name",
+  privilegedPreflightLoop + 1,
+);
 assert.ok(
   privilegedArtifactValidation >= 0 &&
-    privilegedArtifactValidation < privilegedMainCheck &&
+    privilegedArtifactValidation < privilegedPreflightCounter &&
+    privilegedPreflightCounter < privilegedPreflightLoop &&
+    privilegedPreflightLoop < privilegedConditionalMainGate &&
+    privilegedConditionalMainGate < privilegedMainCheck &&
     privilegedMainCheck < privilegedPublishLoop,
-  'main must be revalidated after artifact validation and immediately before the first irreversible npm publish',
+  'all five versions must be preflighted before a conditional main gate and the first irreversible npm publish',
 );
 assert.match(
-  publishJob.slice(privilegedMainCheck, privilegedPublishLoop),
-  /test "\$REMOTE_MAIN" = "\$EXPECTED_COMMIT"/,
-  'the npm OIDC job must stop before publication if main moved after authorization',
+  publishJob.slice(privilegedPreflightLoop, privilegedConditionalMainGate),
+  /test "\$live_integrity" = "\$integrity"[\s\S]*E404/,
+  'preflight must reject every integrity mismatch and distinguish only an absent version',
+);
+assert.match(
+  publishJob.slice(privilegedConditionalMainGate, privilegedPublishLoop),
+  /if \[\[ "\$existing_exact_count" -eq 0 \]\]; then[\s\S]*test "\$REMOTE_MAIN" = "\$EXPECTED_COMMIT"[\s\S]*fi/,
+  'current main must gate only a brand-new release with no exact artifact already published',
 );
 assert.doesNotMatch(
-  publishJob.slice(privilegedMainCheck, privilegedPublishLoop),
+  publishJob.slice(privilegedPreflightCounter, privilegedPublishLoop),
   /npm publish/,
-  'no npm publication may occur before the final mutable-main gate completes',
+  'preflight and the conditional mutable-main gate must finish before any npm publication',
+);
+assert.match(
+  publishJob.slice(privilegedPublishLoop),
+  /preexisting_exact\["\$package_name"\][\s\S]*npm publish "\$tarball" --ignore-scripts --provenance/,
+  'the publish loop must skip exact existing artifacts and publish only remaining reviewed tarballs',
 );
 for (const variable of [
   'EXPECTED_COMMIT',
