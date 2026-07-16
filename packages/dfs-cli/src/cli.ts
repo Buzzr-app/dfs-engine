@@ -1,4 +1,6 @@
 import { runGradeFromFiles } from './index';
+import { realpathSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 type ParsedArgs = {
   entryPath: string | null;
@@ -50,13 +52,16 @@ export async function main(argv: readonly string[]): Promise<number> {
   }
 }
 
-const isDirectInvocation =
-  typeof process !== 'undefined' &&
-  Array.isArray(process.argv) &&
-  process.argv[1] !== undefined &&
-  import.meta.url === `file://${process.argv[1]}`;
+export function isDirectInvocation(moduleUrl: string, argvPath: string | undefined): boolean {
+  if (!argvPath) return false;
+  try {
+    return realpathSync(fileURLToPath(moduleUrl)) === realpathSync(argvPath);
+  } catch {
+    return false;
+  }
+}
 
-if (isDirectInvocation) {
+if (isDirectInvocation(import.meta.url, process.argv[1])) {
   const code = await main(process.argv.slice(2));
   process.exit(code);
 }
