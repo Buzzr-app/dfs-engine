@@ -104,6 +104,18 @@ for (const [directory, packageName] of publicPackages) {
     `Generated TypeDoc API model must include the ${packageName} package root.`,
   );
   assert.ok(apiIndex.includes(packageName), `docs/api-reference.md must index ${packageName}.`);
+
+  const modulePath = resolve(root, outputDirectory, 'modules', `_buzzr_${directory}.html`);
+  const moduleHtml = await readFile(modulePath, 'utf8').catch((error) => {
+    if (error?.code === 'ENOENT') {
+      assert.fail(`Generated TypeDoc module page is missing for ${packageName}: ${relative(root, modulePath)}`);
+    }
+    throw error;
+  });
+  assert.ok(
+    moduleHtml.includes(`<h1>Module ${packageName}</h1>`),
+    `Generated TypeDoc module page must identify ${packageName}.`,
+  );
 }
 
 const htmlPath = resolve(root, outputDirectory, 'index.html');

@@ -19,7 +19,7 @@
     "lint": "eslint packages/*/src packages/*/tests",
     "format": "prettier --write \"packages/*/{src,tests,examples}/**/*.{ts,json,md}\" \"*.{json,md}\"",
     "format:check": "prettier --check \"packages/*/{src,tests,examples}/**/*.{ts,json,md}\" \"*.{json,md}\"",
-    "docs": "npm run docs --workspace @buzzr/dfs-engine",
+    "docs": "typedoc --options typedoc.json && node scripts/check-api-docs.mjs",
     "bench": "npm run bench --workspace @buzzr/dfs-engine",
     "smoke:exports": "node scripts/smoke-exports.mjs",
     "size:check": "node scripts/check-package-size.mjs",

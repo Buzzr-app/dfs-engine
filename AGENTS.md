@@ -24,8 +24,8 @@ Each package's public API is exactly what `packages/<name>/src/index.ts` exports
 | `@buzzr/dfs-engine-test-vectors` | `packages/dfs-engine-test-vectors`   | `TEST_VECTORS` engine regression fixtures                                                   |
 
 See the [all-package API index](docs/api-reference.md). The generated
-[TypeDoc site](https://buzzr-app.github.io/dfs-engine/) currently covers
-`@buzzr/dfs-engine` only.
+[TypeDoc site](https://buzzr-app.github.io/dfs-engine/) covers the supported
+root exports of all ten public packages.
 
 ## Invariants — do not break these
 

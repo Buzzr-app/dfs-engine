@@ -323,8 +323,8 @@ for (const packageName of packageNames) {
 }
 requirePattern(
   'apiIndex',
-  /TypeDoc[^\n]*currently[^\n]*@buzzr\/dfs-engine[^\n]*only/i,
-  'scope the generated API reference honestly',
+  /TypeDoc[^\n]*all ten public packages/i,
+  'state that generated references cover all ten public packages',
 );
 
 for (const [key, content] of Object.entries(docs)) {

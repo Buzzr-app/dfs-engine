@@ -32,7 +32,7 @@ The Buzzr mobile app’s `release/ios-2.0.0` branch vendors `@buzzr/bets-core`, 
 
 ## Docs
 
-- [API reference (typedoc)](https://buzzr-app.github.io/dfs-engine/): generated from @buzzr/dfs-engine.
+- [API reference (TypeDoc)](https://buzzr-app.github.io/dfs-engine/): generated from the supported root exports of all ten public packages.
 - [Monorepo README](https://github.com/Buzzr-app/dfs-engine/blob/main/README.md): family table, architecture diagram, quick starts.
 - [AGENTS.md](https://github.com/Buzzr-app/dfs-engine/blob/main/AGENTS.md): invariants and workflow for AI coding agents (zero deps, frozen v4 shapes, verify gate).
 - [SECURITY.md](https://github.com/Buzzr-app/dfs-engine/blob/main/SECURITY.md): responsible disclosure for settlement-correctness issues.

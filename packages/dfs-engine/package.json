@@ -26,7 +26,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "bench": "vitest bench --run",
-    "docs": "typedoc",
+    "docs": "npm run docs --prefix ../..",
     "lint": "eslint src tests",
     "format": "prettier --write src tests examples",
     "format:check": "prettier --check src tests examples",

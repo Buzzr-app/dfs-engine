@@ -199,7 +199,7 @@ For settlement correctness or security-sensitive issues, follow [SECURITY.md](SE
 
 ## Links
 
-- [API docs (typedoc)](https://buzzr-app.github.io/dfs-engine/)
+- [Generated API docs for all ten packages (TypeDoc)](https://buzzr-app.github.io/dfs-engine/)
 - [Issues](https://github.com/Buzzr-app/dfs-engine/issues)
 - [AGENTS.md](AGENTS.md) — how AI coding agents should use this repo
 - [llms.txt](llms.txt) — machine-readable package index
