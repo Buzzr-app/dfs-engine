@@ -46,7 +46,7 @@
     "publish:smithery": "node scripts/publish-smithery-bundle.mjs"
   },
   "devDependencies": {
-    "@changesets/cli": "^2.31.0",
+    "@changesets/cli": "^3.0.0",
     "@types/node": "^22.19.19",
     "@vitest/coverage-v8": "^4.1.7",
     "ajv": "8.20.0",
